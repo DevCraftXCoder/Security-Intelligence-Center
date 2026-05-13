@@ -160,7 +160,7 @@ if __name__ == "__main__":
     for name in result["skipped_names"]:
         print(f"  - {name}")
     print()
-    print(f"First 10 newly wrapped tools:")
+    print("First 10 newly wrapped tools:")
     for name in result["wrapped_names"][:10]:
         print(f"  + {name}")
     print(f"  ... ({len(result['wrapped_names'])} total)")
