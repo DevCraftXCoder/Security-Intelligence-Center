@@ -7,6 +7,14 @@
   "bin": {
     "sic": "./bin/sic.js"
   },
+  "scripts": {
+    "scan:secrets": "secretlint \"**/*\"",
+    "scan:secrets:strict": "secretlint --maskSecrets=false \"**/*\""
+  },
+  "devDependencies": {
+    "secretlint": "10.2.1",
+    "@secretlint/secretlint-rule-preset-recommend": "10.2.1"
+  },
   "files": [
     "bin/",
     "assets/",
