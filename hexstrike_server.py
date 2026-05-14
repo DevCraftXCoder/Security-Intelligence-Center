@@ -8942,22 +8942,20 @@ def execute_command(command, use_cache: bool = True) -> Dict[str, Any]:
             cache.set(cache_key, {}, result)
         return result
 
-    # --- Legacy string path (shell=True) — only for non-user-input commands ---
-    # Check cache first
-    if use_cache:
-        cached_result = cache.get(command, {})
-        if cached_result:
-            return cached_result
-
-    # Execute command
-    executor = EnhancedCommandExecutor(command)
-    result = executor.execute()
-
-    # Cache successful results
-    if use_cache and result.get("success", False):
-        cache.set(command, {}, result)
-
-    return result
+    # --- Legacy string path — convert to list and re-enter the safe branch ---
+    # shlex.split() routes through the list path above, which enforces scope and
+    # uses shell=False. This closes the scope-enforcer bypass (P0-1 / 2026-05-13 audit).
+    import shlex as _shlex
+    try:
+        cmd_parts = _shlex.split(command)
+    except ValueError:
+        return {
+            "success": False,
+            "output": "",
+            "error": "Invalid command string — could not parse safely",
+            "return_code": -1,
+        }
+    return execute_command(cmd_parts, use_cache=use_cache)
 
 
 # ---------------------------------------------------------------------------
@@ -18126,10 +18124,7 @@ def handle_unhandled_exception(e: Exception):
     if getattr(e, "code", None) == 429 or type(e).__name__ == "RateLimitExceeded":
         return jsonify({"error": "rate_limit_exceeded", "detail": "Too many requests."}), 429
     logger.error("Unhandled exception: %s", e, exc_info=True)
-    if os.environ.get("SIC_ENV", "production") != "development":
-        return jsonify({"error": "Internal server error"}), 500
-    import traceback as _tb
-    return jsonify({"error": str(e), "traceback": _tb.format_exc()}), 500
+    return jsonify({"error": "internal_error"}), 500
 
 
 if __name__ == "__main__":

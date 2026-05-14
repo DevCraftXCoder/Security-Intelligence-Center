@@ -17,6 +17,7 @@ Architecture: MCP Client for AI agent communication with HexStrike server
 Framework: FastMCP integration for tool orchestration
 """
 
+import os
 import sys
 import argparse
 import logging
@@ -581,9 +582,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
     @mcp.tool()
     def pacu_exploitation(session_name: str = "hexstrike_session", modules: str = "",
                          data_services: str = "", regions: str = "",
-                         additional_args: str = "") -> Dict[str, Any]:
+                         additional_args: str = "",
+                         confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute Pacu for AWS exploitation framework.
+        [EXPLOIT] Execute Pacu for AWS exploitation framework.
 
         Args:
             session_name: Pacu session name
@@ -591,11 +593,19 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             data_services: Data services to enumerate
             regions: AWS regions to target
             additional_args: Additional Pacu arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             AWS exploitation framework results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "session_name": session_name,
                 "modules": modules,
@@ -983,20 +993,29 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def generate_payload(payload_type: str = "buffer", size: int = 1024, pattern: str = "A", filename: str = "") -> Dict[str, Any]:
+    def generate_payload(payload_type: str = "buffer", size: int = 1024, pattern: str = "A", filename: str = "",
+                         confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Generate large payloads for testing and exploitation.
+        [EXPLOIT] Generate large payloads for testing and exploitation.
 
         Args:
             payload_type: Type of payload (buffer, cyclic, random)
             size: Size of the payload in bytes
             pattern: Pattern to use for buffer payloads
             filename: Custom filename (auto-generated if empty)
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Payload generation results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "type": payload_type,
                 "size": size,
@@ -1085,19 +1104,28 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
     # ============================================================================
 
     @mcp.tool()
-    def dirb_scan(url: str, wordlist: str = "/usr/share/wordlists/dirb/common.txt", additional_args: str = "") -> Dict[str, Any]:
+    def dirb_scan(url: str, wordlist: str = "/usr/share/wordlists/dirb/common.txt", additional_args: str = "",
+                  confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute Dirb for directory brute forcing with enhanced logging.
+        [EXPLOIT] Execute Dirb for directory brute forcing with enhanced logging.
 
         Args:
             url: The target URL
             wordlist: Path to wordlist file
             additional_args: Additional Dirb arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Scan results with enhanced telemetry
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "url": url,
                 "wordlist": wordlist,
@@ -1143,19 +1171,28 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def sqlmap_scan(url: str, data: str = "", additional_args: str = "") -> Dict[str, Any]:
+    def sqlmap_scan(url: str, data: str = "", additional_args: str = "",
+                    confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute SQLMap for SQL injection testing with enhanced logging.
+        [EXPLOIT] Execute SQLMap for SQL injection testing with enhanced logging.
 
         Args:
             url: The target URL
             data: POST data for testing
             additional_args: Additional SQLMap arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             SQL injection test results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data_payload = {
                 "url": url,
                 "data": data,
@@ -1173,18 +1210,27 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def metasploit_run(module: str, options: Dict[str, Any] = {}) -> Dict[str, Any]:
+    def metasploit_run(module: str, options: Dict[str, Any] = {},
+                       confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute a Metasploit module with enhanced logging.
+        [EXPLOIT] Execute a Metasploit module with enhanced logging.
 
         Args:
             module: The Metasploit module to use
             options: Dictionary of module options
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Metasploit execution results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "module": module,
                 "options": options
@@ -1208,10 +1254,11 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
         username_file: str = "",
         password: str = "",
         password_file: str = "",
-        additional_args: str = ""
+        additional_args: str = "",
+        confirm_exploit: bool = False
     ) -> Dict[str, Any]:
         """
-        Execute Hydra for password brute forcing with enhanced logging.
+        [EXPLOIT] Execute Hydra for password brute forcing with enhanced logging.
 
         Args:
             target: The target IP or hostname
@@ -1221,11 +1268,19 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             password: Single password to test
             password_file: File containing passwords
             additional_args: Additional Hydra arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Brute force attack results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "target": target,
                 "service": service,
@@ -1251,21 +1306,30 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
         hash_file: str,
         wordlist: str = "/usr/share/wordlists/rockyou.txt",
         format_type: str = "",
-        additional_args: str = ""
+        additional_args: str = "",
+        confirm_exploit: bool = False
     ) -> Dict[str, Any]:
         """
-        Execute John the Ripper for password cracking with enhanced logging.
+        [EXPLOIT] Execute John the Ripper for password cracking with enhanced logging.
 
         Args:
             hash_file: File containing password hashes
             wordlist: Wordlist file to use
             format_type: Hash format type
             additional_args: Additional John arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Password cracking results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "hash_file": hash_file,
                 "wordlist": wordlist,
@@ -1442,9 +1506,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def hashcat_crack(hash_file: str, hash_type: str, attack_mode: str = "0", wordlist: str = "/usr/share/wordlists/rockyou.txt", mask: str = "", additional_args: str = "") -> Dict[str, Any]:
+    def hashcat_crack(hash_file: str, hash_type: str, attack_mode: str = "0", wordlist: str = "/usr/share/wordlists/rockyou.txt", mask: str = "", additional_args: str = "",
+                      confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute Hashcat for advanced password cracking with enhanced logging.
+        [EXPLOIT] Execute Hashcat for advanced password cracking with enhanced logging.
 
         Args:
             hash_file: File containing password hashes
@@ -1453,11 +1518,19 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             wordlist: Wordlist file for dictionary attacks
             mask: Mask for mask attacks
             additional_args: Additional Hashcat arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Password cracking results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "hash_file": hash_file,
                 "hash_type": hash_type,
@@ -1874,9 +1947,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
     def responder_credential_harvest(interface: str = "eth0", analyze: bool = False,
                                    wpad: bool = True, force_wpad_auth: bool = False,
                                    fingerprint: bool = False, duration: int = 300,
-                                   additional_args: str = "") -> Dict[str, Any]:
+                                   additional_args: str = "",
+                                   confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute Responder for credential harvesting with enhanced logging.
+        [EXPLOIT] Execute Responder for credential harvesting with enhanced logging.
 
         Args:
             interface: Network interface to use
@@ -1886,11 +1960,19 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             fingerprint: Fingerprint mode
             duration: Duration to run in seconds
             additional_args: Additional Responder arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Credential harvesting results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "interface": interface,
                 "analyze": analyze,
@@ -1944,9 +2026,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def msfvenom_generate(payload: str, format_type: str = "", output_file: str = "", encoder: str = "", iterations: str = "", additional_args: str = "") -> Dict[str, Any]:
+    def msfvenom_generate(payload: str, format_type: str = "", output_file: str = "", encoder: str = "", iterations: str = "", additional_args: str = "",
+                          confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute MSFVenom for payload generation with enhanced logging.
+        [EXPLOIT] Execute MSFVenom for payload generation with enhanced logging.
 
         Args:
             payload: The payload to generate
@@ -1955,11 +2038,19 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             encoder: Encoder to use
             iterations: Number of encoding iterations
             additional_args: Additional MSFVenom arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Payload generation results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "payload": payload,
                 "format": format_type,
@@ -2268,9 +2359,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
     @mcp.tool()
     def pwntools_exploit(script_content: str = "", target_binary: str = "",
                         target_host: str = "", target_port: int = 0,
-                        exploit_type: str = "local", additional_args: str = "") -> Dict[str, Any]:
+                        exploit_type: str = "local", additional_args: str = "",
+                        confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute Pwntools for exploit development and automation.
+        [EXPLOIT] Execute Pwntools for exploit development and automation.
 
         Args:
             script_content: Python script content using pwntools
@@ -2279,11 +2371,19 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             target_port: Remote port to connect to
             exploit_type: Type of exploit (local, remote, format_string, rop)
             additional_args: Additional arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Exploit execution results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "script_content": script_content,
                 "target_binary": target_binary,
@@ -2368,9 +2468,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
 
     @mcp.tool()
     def gdb_peda_debug(binary: str = "", commands: str = "", attach_pid: int = 0,
-                      core_file: str = "", additional_args: str = "") -> Dict[str, Any]:
+                      core_file: str = "", additional_args: str = "",
+                      confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute GDB with PEDA for enhanced debugging and exploitation.
+        [EXPLOIT] Execute GDB with PEDA for enhanced debugging and exploitation.
 
         Args:
             binary: Binary to debug
@@ -2378,11 +2479,19 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             attach_pid: Process ID to attach to
             core_file: Core dump file to analyze
             additional_args: Additional GDB arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Enhanced debugging results with PEDA
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "binary": binary,
                 "commands": commands,
@@ -2479,9 +2588,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
 
     @mcp.tool()
     def pwninit_setup(binary: str, libc: str = "", ld: str = "",
-                     template_type: str = "python", additional_args: str = "") -> Dict[str, Any]:
+                     template_type: str = "python", additional_args: str = "",
+                     confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute pwninit for CTF binary exploitation setup.
+        [EXPLOIT] Execute pwninit for CTF binary exploitation setup.
 
         Args:
             binary: Binary file to set up
@@ -2489,11 +2599,19 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             ld: Loader file to use
             template_type: Template type (python, c)
             additional_args: Additional pwninit arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             CTF binary exploitation setup results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "binary": binary,
                 "libc": libc,
@@ -3120,20 +3238,29 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
     # ============================================================================
 
     @mcp.tool()
-    def ai_generate_payload(attack_type: str, complexity: str = "basic", technology: str = "", url: str = "") -> Dict[str, Any]:
+    def ai_generate_payload(attack_type: str, complexity: str = "basic", technology: str = "", url: str = "",
+                            confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Generate AI-powered contextual payloads for security testing.
+        [EXPLOIT] Generate AI-powered contextual payloads for security testing.
 
         Args:
             attack_type: Type of attack (xss, sqli, lfi, cmd_injection, ssti, xxe)
             complexity: Complexity level (basic, advanced, bypass)
             technology: Target technology (php, asp, jsp, python, nodejs)
             url: Target URL for context
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Contextual payloads with risk assessment and test cases
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "attack_type": attack_type,
                 "complexity": complexity,
@@ -3165,19 +3292,28 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def ai_test_payload(payload: str, target_url: str, method: str = "GET") -> Dict[str, Any]:
+    def ai_test_payload(payload: str, target_url: str, method: str = "GET",
+                        confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Test generated payload against target with AI analysis.
+        [EXPLOIT] Test generated payload against target with AI analysis.
 
         Args:
             payload: The payload to test
             target_url: Target URL to test against
             method: HTTP method (GET, POST)
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Test results with AI analysis and vulnerability assessment
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "payload": payload,
                 "target_url": target_url,
@@ -3204,18 +3340,27 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def ai_generate_attack_suite(target_url: str, attack_types: str = "xss,sqli,lfi") -> Dict[str, Any]:
+    def ai_generate_attack_suite(target_url: str, attack_types: str = "xss,sqli,lfi",
+                                  confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Generate comprehensive attack suite with multiple payload types.
+        [EXPLOIT] Generate comprehensive attack suite with multiple payload types.
 
         Args:
             target_url: Target URL for testing
             attack_types: Comma-separated list of attack types
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Comprehensive attack suite with multiple payload types
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             attack_list = [attack.strip() for attack in attack_types.split(",")]
             results = {
                 "target_url": target_url,
@@ -3681,9 +3826,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def hashpump_attack(signature: str, data: str, key_length: str, append_data: str, additional_args: str = "") -> Dict[str, Any]:
+    def hashpump_attack(signature: str, data: str, key_length: str, append_data: str, additional_args: str = "",
+                        confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Execute HashPump for hash length extension attacks with enhanced logging.
+        [EXPLOIT] Execute HashPump for hash length extension attacks with enhanced logging.
 
         Args:
             signature: Original hash signature
@@ -3691,11 +3837,19 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             key_length: Length of secret key
             append_data: Data to append
             additional_args: Additional HashPump arguments
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Hash length extension attack results
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "signature": signature,
                 "data": data,
@@ -4500,9 +4654,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def generate_exploit_from_cve(cve_id: str, target_os: str = "", target_arch: str = "x64", exploit_type: str = "poc", evasion_level: str = "none") -> Dict[str, Any]:
+    def generate_exploit_from_cve(cve_id: str, target_os: str = "", target_arch: str = "x64", exploit_type: str = "poc", evasion_level: str = "none",
+                                  confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Generate working exploits from CVE information using AI-powered analysis.
+        [EXPLOIT] Generate working exploits from CVE information using AI-powered analysis.
 
         Args:
             cve_id: CVE identifier (e.g., CVE-2024-1234)
@@ -4510,6 +4665,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             target_arch: Target architecture (x86, x64, arm, any)
             exploit_type: Type of exploit to generate (poc, weaponized, stealth)
             evasion_level: Evasion sophistication (none, basic, advanced)
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Generated exploit code with testing instructions and evasion techniques
@@ -4518,6 +4674,13 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             generate_exploit_from_cve("CVE-2024-1234", "linux", "x64", "weaponized", "advanced")
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "cve_id": cve_id,
                 "target_os": target_os,
@@ -4543,14 +4706,16 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def discover_attack_chains(target_software: str, attack_depth: int = 3, include_zero_days: bool = False) -> Dict[str, Any]:
+    def discover_attack_chains(target_software: str, attack_depth: int = 3, include_zero_days: bool = False,
+                               confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Discover multi-stage attack chains for target software with vulnerability correlation.
+        [EXPLOIT] Discover multi-stage attack chains for target software with vulnerability correlation.
 
         Args:
             target_software: Target software/system (e.g., "Apache HTTP Server", "Windows Server 2019")
             attack_depth: Maximum number of stages in attack chain (1-5)
             include_zero_days: Include potential zero-day vulnerabilities in analysis
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Attack chains with vulnerability combinations, success probabilities, and exploit availability
@@ -4559,6 +4724,13 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             discover_attack_chains("Apache HTTP Server 2.4", 4, True)
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             data = {
                 "target_software": target_software,
                 "attack_depth": min(max(attack_depth, 1), 5),  # Clamp between 1-5
@@ -4672,15 +4844,17 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def advanced_payload_generation(attack_type: str, target_context: str = "", evasion_level: str = "standard", custom_constraints: str = "") -> Dict[str, Any]:
+    def advanced_payload_generation(attack_type: str, target_context: str = "", evasion_level: str = "standard", custom_constraints: str = "",
+                                    confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Generate advanced payloads with AI-powered evasion techniques and contextual adaptation.
+        [EXPLOIT] Generate advanced payloads with AI-powered evasion techniques and contextual adaptation.
 
         Args:
             attack_type: Type of attack (rce, privilege_escalation, persistence, exfiltration, xss, sqli)
             target_context: Target environment details (OS, software versions, security controls)
             evasion_level: Evasion sophistication (basic, standard, advanced, nation-state)
             custom_constraints: Custom payload constraints (size limits, character restrictions, etc.)
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             Advanced payloads with multiple evasion techniques and deployment instructions
@@ -4689,6 +4863,13 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             advanced_payload_generation("rce", "Windows 11 + Defender + AppLocker", "nation-state", "max_size:256,no_quotes")
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             valid_attack_types = ["rce", "privilege_escalation", "persistence", "exfiltration", "xss", "sqli", "lfi", "ssrf"]
             valid_evasion_levels = ["basic", "standard", "advanced", "nation-state"]
 
@@ -5201,18 +5382,27 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return {"success": False, "error": str(e)}
 
     @mcp.tool()
-    def create_attack_chain_ai(target: str, objective: str = "comprehensive") -> Dict[str, Any]:
+    def create_attack_chain_ai(target: str, objective: str = "comprehensive",
+                               confirm_exploit: bool = False) -> Dict[str, Any]:
         """
-        Create an intelligent attack chain using AI-driven tool sequencing and optimization.
+        [EXPLOIT] Create an intelligent attack chain using AI-driven tool sequencing and optimization.
 
         Args:
             target: Target for the attack chain
             objective: Attack objective - "comprehensive", "quick", or "stealth"
+            confirm_exploit: Must be True to execute (safety gate).
 
         Returns:
             AI-generated attack chain with success probability and time estimates
         """
         try:
+            # Exploit gate — set ALLOW_EXPLOITS=1 in env and pass confirm_exploit=True to proceed
+            if os.environ.get("ALLOW_EXPLOITS", "").lower() not in ("1", "true", "yes"):
+                return {"success": False, "error": "EXPLOIT_GATE_CLOSED",
+                        "message": "Offensive tool disabled. Set ALLOW_EXPLOITS=1 in server environment."}
+            if not confirm_exploit:
+                return {"success": False, "error": "CONFIRMATION_REQUIRED",
+                        "message": "Pass confirm_exploit=True to confirm intentional exploit execution."}
             logger.info(f"⚔️  Creating AI-driven attack chain for {target}")
 
             data = {
