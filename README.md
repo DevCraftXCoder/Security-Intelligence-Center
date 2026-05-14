@@ -15,7 +15,7 @@
 
 **An AI-powered pentesting MCP framework with 150+ security tools and 12+ autonomous agents for authorized security testing, CTF challenges, and defensive research.**
 
-[SIC Engine](#sic-engine) | [Installation](#installation) | [API Reference](#api-reference)
+[SIC Engine](#sic-engine) | [Run with npx](#run-with-npx) | [API Reference](#api-reference)
 
 </div>
 
@@ -23,7 +23,7 @@
 
 ## Overview
 
-SIC is an AI-powered penetration testing framework that runs as a local server, exposing a comprehensive API and MCP interface for integration with AI clients (Claude, GPT, Copilot, Cursor, etc.).
+SIC is an AI-powered penetration testing framework that runs as a local server, exposing a comprehensive API and MCP interface for integration with AI clients (Claude Code, Copilot, Cursor, and any MCP-compatible client).
 
 ---
 
@@ -98,22 +98,19 @@ docker compose up -d
 
 # Verify health
 curl http://127.0.0.1:9888/health
-
-# Register with PM2 (optional)
-pm2 start "docker compose -f docker/sic-scanner/docker-compose.yml up" --name sic-scanner
 ```
 
 ---
 
 ## SIC Engine
 
-AI-powered penetration testing framework with MCP protocol support. Connects to Claude, GPT, Copilot, Cursor, or any MCP-compatible AI client.
+AI-powered penetration testing framework with MCP protocol support. Connects to Claude Code, Copilot, Cursor, or any MCP-compatible AI client.
 
 ### Architecture
 
 ```mermaid
 graph TD
-    A[AI Agent - Claude/GPT/Copilot] -->|MCP Protocol| B[SIC MCP Server v6.0]
+    A[AI Agent - LLM/Copilot/Cursor] -->|MCP Protocol| B[SIC MCP Server v6.0]
 
     B --> C[Intelligent Decision Engine]
     B --> D[12+ Autonomous AI Agents]
@@ -210,69 +207,28 @@ theHarvester, Shodan, SpiderFoot, Recon-ng, Maltego, and more.
 
 ---
 
-## Installation
+## Run with npx
 
-### SIC Engine
-
-```bash
-git clone https://github.com/DevCraftXCoder/sic.git
-cd sic
-pip install -r requirements.txt
-python sic_launcher.py
-```
-
-Default: `http://127.0.0.1:5000`
+One command · no install · latest beta
 
 ```bash
-# Verify
-curl http://127.0.0.1:5000/health
-
-# Debug mode
-python sic_launcher.py --debug
-
-# Custom port
-python sic_launcher.py --port 5001
-
-# Register with PM2
-pm2 start sic_launcher.py --name sic-server --interpreter python
+# Latest beta tag
+npx sic-security@beta
 ```
 
-### PowerShell Install
-
-Load the helper functions in any PowerShell session by dot-sourcing the bundled profile:
-
-```powershell
-. "C:\path\to\sic\install\sic-profile.ps1"
+```bash
+# Pin a version
+npx sic-security@6.0.0-beta.1
 ```
 
-To load automatically on every PowerShell session, open your profile file and add the line permanently:
-
-```powershell
-notepad $PROFILE
+```bash
+# Direct from the repo
+npx github:DevCraftXCoder/sic
 ```
-
-Then add this line inside the file (adjust the path to match your clone location):
-
-```powershell
-. "C:\Za\sic\install\sic-profile.ps1"
-```
-
-#### Helper Functions
-
-| Function | Usage | Description |
-|----------|-------|-------------|
-| `sic-scan` | `sic-scan -Target 192.168.1.1 [-Type web]` | Submit a smart scan via `/api/intelligence/smart-scan` |
-| `sic-health` | `sic-health` | GET `/health` — full server health and telemetry |
-| `sic-incidents` | `sic-incidents` | GET `/api/incidents` — list open incidents |
-| `sic-fix` | `sic-fix <finding-id>` | POST `/api/command` — AI-assisted remediation for a finding |
-| `sic-version` | `sic-version` | Show server version and status (from `/health`) |
-
-All helpers target `http://127.0.0.1:9888` by default (the `SIC_PORT` default). Override by setting `$SIC_BASE` before dot-sourcing.
-
 
 ### AI Client Integration
 
-**Claude Desktop / Cursor:**
+**Claude Code / Cursor:**
 ```json
 {
   "mcpServers": {
