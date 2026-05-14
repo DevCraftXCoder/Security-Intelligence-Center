@@ -11,6 +11,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
+import threading
+
+import requests as _requests
 
 from flask import Blueprint, jsonify, redirect, request
 
@@ -34,10 +39,17 @@ billing_bp = Blueprint("sic_billing", __name__, url_prefix="/api/billing")
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Email validation
+# ---------------------------------------------------------------------------
+
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+
+# ---------------------------------------------------------------------------
 # Tier metadata
 # ---------------------------------------------------------------------------
 
 _VALID_PAID_TIERS = frozenset({"team", "studio"})
+_ALL_VALID_TIERS = frozenset({"community", "team", "studio"})
 
 # Stripe subscription statuses that map to an active paid subscription.
 _ACTIVE_STATUSES = frozenset({"active", "trialing"})
@@ -48,6 +60,34 @@ _TIER_LABEL_MAP: dict[str, str] = {
     "studio": "studio",
     "community": "community",
 }
+
+
+# ---------------------------------------------------------------------------
+# Discord billing alert (P1-2)
+# ---------------------------------------------------------------------------
+
+
+def _discord_billing_alert(msg: str) -> None:
+    """Fire a non-blocking Discord notification for billing failures.
+
+    Uses DISCORD_WEBHOOK_URL env var (shared with scan_alerts.py).
+    Silently no-ops when the env var is unset.
+    """
+    url = os.environ.get("DISCORD_WEBHOOK_URL")
+    if not url:
+        return
+
+    def _post() -> None:
+        try:
+            _requests.post(
+                url,
+                json={"content": msg},
+                timeout=4,
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("discord billing alert failed (non-critical)")
+
+    threading.Thread(target=_post, daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -474,6 +514,16 @@ def _handle_payment_failed(event, email: str | None) -> None:
         "payment failed — marked past_due for email=%.6s***", email[:6]
     )
 
+    # P1-2: Alert billing failures to Discord so the operator is notified.
+    amount_due: int = obj.get("amount_due", 0)
+    failure_msg: str = obj.get("last_payment_error", {}).get("message", "unknown") if obj.get("last_payment_error") else "unknown"
+    _discord_billing_alert(
+        f"**Payment failed** for customer `{customer_id}` "
+        f"| amount: ${amount_due / 100:.2f} "
+        f"| reason: {failure_msg} "
+        f"| event: {event.get('id', '?')}"
+    )
+
 
 # ---------------------------------------------------------------------------
 # Public (unauthenticated) checkout — for visitors on sic-signup.html
@@ -495,14 +545,12 @@ def public_checkout():
         402  {"error": "billing_unavailable"}
         500  {"error": "internal_error"}
     """
-    import re as _re  # noqa: PLC0415
-
     init_db()
     body = request.get_json(silent=True) or {}
     tier = body.get("tier")
     email = (body.get("email") or "").strip().lower()
 
-    if not email or not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+    if not email or not _EMAIL_RE.match(email):
         return jsonify(
             {"error": "missing_email", "detail": "A valid email is required."}
         ), 400
@@ -543,6 +591,9 @@ def public_checkout():
 @billing_bp.get("/public-checkout-success")
 def public_checkout_success():
     """Redirect after Stripe checkout — return user to sic-signup with success state."""
-    tier = request.args.get("tier", "team")
+    tier = request.args.get("tier", "community")
+    # Validate against known tiers — prevent open redirect via unvalidated query param.
+    if tier not in _ALL_VALID_TIERS:
+        tier = "community"
     base = _base_url()
     return redirect(f"{base}/sic-signup?billing=success&tier={tier}")

@@ -147,8 +147,5 @@ def construct_webhook_event(payload: bytes, sig_header: str) -> object:
     return stripe.Webhook.construct_event(payload, sig_header, _webhook_secret())
 
 
-def retrieve_subscription(subscription_id: str) -> object:
-    """Fetch a Stripe Subscription object by ID."""
-    stripe = _stripe()
-    stripe.api_key = _secret_key()
-    return stripe.Subscription.retrieve(subscription_id)
+# retrieve_subscription was removed (dead code — zero callers confirmed by grep).
+# If needed in future, use: stripe.Subscription.retrieve(subscription_id)

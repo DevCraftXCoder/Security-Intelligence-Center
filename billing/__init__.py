@@ -15,8 +15,23 @@ Usage (from other modules):
 from __future__ import annotations
 
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Startup guard: STRIPE_WEBHOOK_SECRET must be set before billing is loaded.
+# Raising here causes blueprint registration to fail visibly rather than
+# allowing the server to run in a state where all webhooks are silently broken.
+# ---------------------------------------------------------------------------
+_webhook_secret_value = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+if not _webhook_secret_value:
+    raise RuntimeError(
+        "STRIPE_WEBHOOK_SECRET must be set before starting billing routes. "
+        "Without it, webhook signature verification is impossible and all "
+        "tier-upgrade events will be rejected.  Set the env var and restart."
+    )
+del _webhook_secret_value  # do not keep secret in module-level scope
 
 # Re-export public names at package level
 try:

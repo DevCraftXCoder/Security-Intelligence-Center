@@ -33,9 +33,13 @@ def _db_path() -> Path:
 
 
 def _connect() -> sqlite3.Connection:
-    """Return a sqlite3 connection with Row factory enabled."""
+    """Return a sqlite3 connection with Row factory and WAL mode enabled."""
     conn = sqlite3.connect(str(_db_path()))
     conn.row_factory = sqlite3.Row
+    # WAL mode allows concurrent reads and a single writer without blocking.
+    # busy_timeout prevents immediate SQLITE_BUSY errors under concurrent writes.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 

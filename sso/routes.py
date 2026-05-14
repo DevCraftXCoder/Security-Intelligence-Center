@@ -33,24 +33,27 @@ logger = logging.getLogger(__name__)
 sso_bp = Blueprint("sic_sso", __name__)
 
 # ---------------------------------------------------------------------------
-# Feature-gate: apply @require_tier("studio") if feature_gates is available
+# Feature-gate: require feature_gates to be importable — fail CLOSED if not.
 # ---------------------------------------------------------------------------
 try:
     from feature_gates import require_tier as _require_tier  # noqa: PLC0415
 
     _tier_decorator = _require_tier("studio")
     logger.debug("feature_gates loaded — SSO routes will be gated behind studio tier")
-except ImportError:
-    # TODO: gate behind studio tier — apply @require_tier("studio") once feature_gates is on path
-    _tier_decorator = None
-    logger.debug("feature_gates not yet available — SSO routes untiered (add @require_tier('studio') once importable)")
+except ImportError as _fg_err:
+    # Fail closed: if feature_gates is not importable the server must not start
+    # with SSO routes accessible to all tiers.  Raise immediately so the caller
+    # (hexstrike_server.py Phase 5 blueprint registration) sees the error.
+    raise RuntimeError(
+        "feature_gates module is required for SSO tier enforcement but could not be "
+        f"imported: {_fg_err}.  Ensure feature_gates.py is on sys.path before "
+        "registering the SSO blueprint."
+    ) from _fg_err
 
 
 def _studio_gated(f):
-    """Apply studio-tier gate if feature_gates is available; else pass-through."""
-    if _tier_decorator is not None:
-        return _tier_decorator(f)
-    return f
+    """Wrap *f* with the studio-tier gate from feature_gates.require_tier."""
+    return _tier_decorator(f)
 
 
 # ---------------------------------------------------------------------------
