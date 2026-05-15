@@ -102,3 +102,5 @@ brotli>=1.2.0               # CVE-2025-6176
 # 5. Browser Agent requires Chrome/Chromium and ChromeDriver installation
 #
 # For complete installation instructions and setup guides, see README.md
+
+sentry-sdk>=2.0.0

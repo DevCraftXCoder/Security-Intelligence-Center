@@ -28,6 +28,7 @@ import traceback
 import threading
 import time
 import hashlib
+
 import base64
 import queue
 from concurrent.futures import ThreadPoolExecutor
@@ -69,6 +70,14 @@ try:
 except ImportError:
     HAS_MITMPROXY = False
 from scope_enforcer import get_enforcer
+import sentry_sdk as _sentry_sdk
+
+_sentry_dsn = os.environ.get("SENTRY_DSN", "")
+if _sentry_dsn:
+    _sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=0.1,
+    )
 
 # ============================================================================
 # LOGGING CONFIGURATION (MUST BE FIRST)
