@@ -1061,7 +1061,8 @@ select.sic-input {
   transition: opacity 700ms ease;
 }
 
-html.theme-galaxy #galaxy-canvas {
+html.theme-galaxy #galaxy-canvas,
+html.theme-glitch #galaxy-canvas {
   opacity: 1;
 }
 
@@ -1135,7 +1136,30 @@ html.theme-navy {
   color: var(--sic-text);
 }
 
-html.theme-galaxy .sic-theme-toggle {
+html.theme-galaxy .sic-theme-toggle,
+html.theme-glitch .sic-theme-toggle {
   color: var(--sic-accent);
   border-color: rgba(233, 69, 96, 0.5);
 }
+
+/* ─── Letter Glitch theme ───────────────────────────────────────────────────── */
+html.theme-glitch {
+  --sic-bg: #0a0204;
+  --sic-surface: #160408;
+  --sic-surface-2: #1e060c;
+  --sic-border: #3a0d18;
+  --sic-text: #f0c8d0;
+  --sic-text-muted: #a05060;
+}
+
+#glitch-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 600ms ease;
+  background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,1) 100%);
+}
+
+html.theme-glitch #glitch-vignette { opacity: 1; }

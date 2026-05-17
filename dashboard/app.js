@@ -810,6 +810,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // ─── Theme engine (Galaxy / Navy) ────────────────────────────────────────────
 
 let _galaxyRaf = null;
+let _glitchInterval = null;
 
 function initTheme() {
   const saved = localStorage.getItem("sic-bg-theme") || "navy";
@@ -818,10 +819,12 @@ function initTheme() {
 
 function applyTheme(theme) {
   const root = document.documentElement;
-  root.classList.remove("theme-navy", "theme-galaxy");
+  root.classList.remove("theme-navy", "theme-galaxy", "theme-glitch");
   root.classList.add("theme-" + theme);
   if (theme === "galaxy") {
     startGalaxy();
+  } else if (theme === "glitch") {
+    startLetterGlitch();
   } else {
     stopGalaxy();
   }
@@ -829,16 +832,27 @@ function applyTheme(theme) {
 }
 
 function toggleTheme() {
-  const current = document.documentElement.classList.contains("theme-galaxy") ? "galaxy" : "navy";
-  const next = current === "galaxy" ? "navy" : "galaxy";
+  const root = document.documentElement;
+  let current = "navy";
+  if (root.classList.contains("theme-galaxy")) current = "galaxy";
+  else if (root.classList.contains("theme-glitch")) current = "glitch";
+  const next = current === "navy" ? "galaxy" : current === "galaxy" ? "glitch" : "navy";
   localStorage.setItem("sic-bg-theme", next);
   applyTheme(next);
 }
 
 function updateThemeToggleLabel(theme) {
   document.querySelectorAll(".sic-theme-toggle").forEach(btn => {
-    btn.textContent = theme === "galaxy" ? "⬡ Navy" : "✦ Galaxy";
-    btn.title = theme === "galaxy" ? "Switch to Default Navy" : "Switch to Galaxy";
+    if (theme === "navy") {
+      btn.textContent = "✦ Galaxy";
+      btn.title = "Switch to Galaxy";
+    } else if (theme === "galaxy") {
+      btn.textContent = "⬡ Glitch";
+      btn.title = "Switch to Letter Glitch";
+    } else {
+      btn.textContent = "◈ Navy";
+      btn.title = "Switch to Default Navy";
+    }
   });
 }
 
@@ -914,11 +928,98 @@ function stopGalaxy() {
     cancelAnimationFrame(_galaxyRaf);
     _galaxyRaf = null;
   }
+  if (_glitchInterval) {
+    clearTimeout(_glitchInterval);
+    _glitchInterval = null;
+  }
   const canvas = document.getElementById("galaxy-canvas");
   if (canvas) {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
+}
+
+// ─── Letter Glitch background ─────────────────────────────────────────────────
+
+function startLetterGlitch() {
+  stopGalaxy(); // cancel galaxy rAF if active
+
+  const canvas = document.getElementById("galaxy-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$&*()-_+=/[]{};:<>.,0123456789";
+  const glitchColors = ["#1a0408", "#e94560", "#4a0f1e"];
+  const charWidth = 10;
+  const charHeight = 20;
+
+  let cols, rows, grid, colorIndices, nextColorIndices, transitionProgress;
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols = Math.ceil(canvas.width / charWidth);
+    rows = Math.ceil(canvas.height / charHeight);
+    grid = Array.from({ length: cols }, () =>
+      Array.from({ length: rows }, () => characters[Math.floor(Math.random() * characters.length)])
+    );
+    colorIndices = Array.from({ length: cols }, () =>
+      Array.from({ length: rows }, () => Math.floor(Math.random() * glitchColors.length))
+    );
+    nextColorIndices = colorIndices.map(col => [...col]);
+    transitionProgress = Array.from({ length: cols }, () =>
+      Array.from({ length: rows }, () => 1)
+    );
+  }
+
+  function lerpColor(a, b, t) {
+    const h = c => [parseInt(c.slice(1,3),16), parseInt(c.slice(3,5),16), parseInt(c.slice(5,7),16)];
+    const [r1,g1,b1] = h(a), [r2,g2,b2] = h(b);
+    return `rgb(${Math.round(r1+(r2-r1)*t)},${Math.round(g1+(g2-g1)*t)},${Math.round(b1+(b2-b1)*t)})`;
+  }
+
+  function tick() {
+    if (!document.documentElement.classList.contains("theme-glitch")) {
+      stopGalaxy();
+      return;
+    }
+
+    // Resource saving — skip draw when tab is hidden, poll at 200ms
+    if (document.hidden) {
+      _glitchInterval = setTimeout(tick, 200);
+      return;
+    }
+
+    const totalCells = cols * rows;
+    const numToUpdate = Math.max(1, Math.floor(totalCells * 0.05));
+    for (let i = 0; i < numToUpdate; i++) {
+      const col = Math.floor(Math.random() * cols);
+      const row = Math.floor(Math.random() * rows);
+      grid[col][row] = characters[Math.floor(Math.random() * characters.length)];
+      nextColorIndices[col][row] = Math.floor(Math.random() * glitchColors.length);
+      transitionProgress[col][row] = 0;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = "16px monospace";
+    ctx.textBaseline = "top";
+
+    for (let col = 0; col < cols; col++) {
+      for (let row = 0; row < rows; row++) {
+        const p = Math.min(1, (transitionProgress[col][row] || 1) + 0.05);
+        transitionProgress[col][row] = p;
+        if (p >= 1) colorIndices[col][row] = nextColorIndices[col][row];
+        ctx.fillStyle = lerpColor(glitchColors[colorIndices[col][row]], glitchColors[nextColorIndices[col][row]], p);
+        ctx.fillText(grid[col][row], col * charWidth, row * charHeight);
+      }
+    }
+
+    _glitchInterval = setTimeout(tick, 50);
+  }
+
+  resize();
+  window.addEventListener("resize", resize);
+  tick();
 }
 
 // ─── Logo upload ──────────────────────────────────────────────────────────────
