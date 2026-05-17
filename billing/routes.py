@@ -9,6 +9,8 @@ Routes:
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -49,6 +51,13 @@ _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 # ---------------------------------------------------------------------------
 
 _VALID_PAID_TIERS = frozenset({"team", "studio"})
+
+
+def _secrets_equal(a: str, b: str) -> bool:
+    return hmac.compare_digest(
+        hashlib.sha256(a.encode()).digest(),
+        hashlib.sha256(b.encode()).digest(),
+    )
 _ALL_VALID_TIERS = frozenset({"community", "team", "studio"})
 
 # Stripe subscription statuses that map to an active paid subscription.
@@ -530,21 +539,32 @@ def _handle_payment_failed(event, email: str | None) -> None:
 # ---------------------------------------------------------------------------
 
 
+_BILLING_API_KEY = os.getenv("BILLING_API_KEY", "")
+
+
 @billing_bp.post("/public-checkout")
 def public_checkout():
-    """Public (unauthenticated) checkout — for visitors on the sic-signup page.
+    """Public checkout — called from francois-landing CF Worker.
 
     Body JSON:
         {"email": "user@example.com", "tier": "team" | "studio"}
 
     Rate limited by IP via before_request (no per-route limiter needed here).
+    Requires X-Billing-Key header matching BILLING_API_KEY env var.
 
     Returns:
         200  {"checkout_url": "https://checkout.stripe.com/..."}
         400  {"error": "invalid_tier"} | {"error": "missing_email"}
+        401  {"error": "unauthorized"}
         402  {"error": "billing_unavailable"}
         500  {"error": "internal_error"}
     """
+    # Machine-to-machine auth — CF Worker must send the shared secret
+    if _BILLING_API_KEY:
+        incoming = request.headers.get("X-Billing-Key", "")
+        if not incoming or not _secrets_equal(incoming, _BILLING_API_KEY):
+            return jsonify({"error": "unauthorized"}), 401
+
     init_db()
     body = request.get_json(silent=True) or {}
     tier = body.get("tier")
