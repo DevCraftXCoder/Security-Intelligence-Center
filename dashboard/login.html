@@ -10,25 +10,9 @@
 <canvas id="galaxy-canvas"></canvas>
 <div id="glitch-vignette"></div>
 
-<div class="sic-control-bar" id="control-bar" role="region" aria-label="Background and logo controls" aria-hidden="true">
-  <div class="sic-control-bar__inner">
-    <span class="sic-control-bar__label">LIVE BG</span>
-    <div class="sic-control-bar__segment" role="group" aria-label="Background theme">
-      <button class="sic-control-bar__btn" data-theme="glitch" type="button">Glitch</button>
-      <button class="sic-control-bar__btn" data-theme="galaxy" type="button">Galaxy</button>
-      <button class="sic-control-bar__btn" data-theme="navy" type="button">Navy (Static)</button>
-    </div>
-    <span class="sic-control-bar__divider" aria-hidden="true"></span>
-    <span class="sic-control-bar__label">LOGO</span>
-    <button class="sic-control-bar__btn sic-control-bar__btn--primary" id="logo-upload-btn" type="button">Upload Logo</button>
-    <button class="sic-control-bar__close" id="control-bar-close" type="button" aria-label="Close (Esc)" title="Close (Esc)">&times;</button>
-  </div>
-</div>
-
 <main class="sic-form-page">
-  <div class="sic-login-logo" id="logo-toggle" role="button" tabindex="0"
-       aria-label="Toggle settings bar" aria-expanded="false" aria-controls="control-bar"
-       title="Click to toggle settings">
+  <div class="sic-login-logo" id="login-bg-cycle" role="button" tabindex="0"
+       title="Click to cycle background">
     <span class="sic-header__logo" id="logo-text">SIC</span>
     <img class="sic-login-logo__img" id="logo-img" alt="SIC Logo" style="display:none">
     <input type="file" id="logo-file" accept="image/*" style="display:none" aria-hidden="true">

@@ -283,6 +283,25 @@ function initLogin() {
       msg.innerHTML = `<div class="sic-error">${escapeHtml(reason)}</div>`;
     }
   });
+
+  // Clicking the centered logo cycles: Glitch → Galaxy → Navy → Glitch
+  const cycleBtn = document.getElementById("login-bg-cycle");
+  if (cycleBtn) {
+    const BG_CYCLE = ["glitch", "galaxy", "navy"];
+    function cycleBg() {
+      const cur = localStorage.getItem("sic-bg-theme") || "navy";
+      const next = BG_CYCLE[(BG_CYCLE.indexOf(cur) + 1) % BG_CYCLE.length];
+      localStorage.setItem("sic-bg-theme", next);
+      applyTheme(next);
+    }
+    cycleBtn.addEventListener("click", (e) => {
+      if (e.target.closest("input")) return;
+      cycleBg();
+    });
+    cycleBtn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); cycleBg(); }
+    });
+  }
 }
 
 // ─── Posture Grid page ─────────────────────────────────────────────────────
@@ -1027,7 +1046,7 @@ function startLetterGlitch() {
 // ─── Logo upload ──────────────────────────────────────────────────────────────
 
 function initLogoUpload() {
-  const logoWrap = document.querySelector(".sic-header__logo-wrap");
+  const logoWrap = document.querySelector(".sic-header__logo-wrap, .sic-login-logo");
   if (!logoWrap) return;
 
   const logoText = document.getElementById("logo-text");
