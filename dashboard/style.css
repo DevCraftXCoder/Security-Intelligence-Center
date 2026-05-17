@@ -1163,3 +1163,144 @@ html.theme-glitch {
 }
 
 html.theme-glitch #glitch-vignette { opacity: 1; }
+
+/* ─── Logo toggle (clickable) ────────────────────────────────────────────────── */
+.sic-header__logo-wrap[role="button"] {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.sic-header__logo-wrap[role="button"]:hover {
+  opacity: 0.85;
+  transform: scale(1.02);
+}
+
+.sic-header__logo-wrap[role="button"]:focus-visible {
+  outline: 2px solid var(--sic-accent, #e94560);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+/* ─── Control bar (hidden by default, toggled by logo click) ──────────────────── */
+.sic-control-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: none;
+  padding: 10px 16px;
+  background: rgba(10, 10, 16, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--sic-border);
+}
+
+.sic-control-bar.is-open {
+  display: block;
+  animation: sic-bar-slide-down 200ms ease-out;
+}
+
+@keyframes sic-bar-slide-down {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+.sic-control-bar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  max-width: 1100px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+}
+
+.sic-control-bar__label {
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  color: var(--sic-text-muted);
+  text-transform: uppercase;
+}
+
+.sic-control-bar__segment {
+  display: inline-flex;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--sic-border);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.sic-control-bar__btn {
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 14px;
+  cursor: pointer;
+  color: var(--sic-text-muted);
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  transition: background 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+
+.sic-control-bar__btn:hover {
+  color: var(--sic-text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sic-control-bar__btn:focus-visible {
+  outline: 2px solid var(--sic-accent, #e94560);
+  outline-offset: 2px;
+}
+
+.sic-control-bar__btn.is-active {
+  background: var(--sic-accent, #e94560);
+  color: #fff;
+}
+
+.sic-control-bar__btn--primary {
+  background: #f4f4f6;
+  color: #0a0a0a;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 5px 14px;
+}
+
+.sic-control-bar__btn--primary:hover {
+  background: var(--sic-accent, #e94560);
+  color: #fff;
+}
+
+.sic-control-bar__divider {
+  width: 1px;
+  height: 18px;
+  background: var(--sic-border);
+}
+
+.sic-control-bar__close {
+  margin-left: 8px;
+  background: transparent;
+  border: 1px solid var(--sic-border);
+  border-radius: 4px;
+  color: var(--sic-text-muted);
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 14px;
+  line-height: 1;
+  font-family: var(--sic-font-mono);
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.sic-control-bar__close:hover {
+  border-color: var(--sic-accent, #e94560);
+  color: var(--sic-text);
+}
+
+/* Legacy controls — superseded by .sic-control-bar */
+.sic-theme-toggle,
+.sic-logo-upload-btn {
+  display: none !important;
+}

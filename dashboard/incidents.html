@@ -13,10 +13,9 @@
 
   <header class="sic-header">
     <div class="sic-header__brand">
-      <div class="sic-header__logo-wrap">
+      <div class="sic-header__logo-wrap" id="logo-toggle" role="button" tabindex="0" aria-label="Toggle settings bar" aria-expanded="false" aria-controls="control-bar" title="Click to toggle settings">
         <span class="sic-header__logo" id="logo-text">SIC</span>
         <img class="sic-header__logo-img" id="logo-img" alt="SIC Logo" style="display:none">
-        <button class="sic-logo-upload-btn" id="logo-upload-btn" title="Upload custom logo">&#8679;</button>
         <input type="file" id="logo-file" accept="image/*" style="display:none" aria-hidden="true">
       </div>
       <span class="sic-header__tagline">Security Intelligence Center</span>
@@ -28,11 +27,25 @@
       <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">AI Fix</a>
     </nav>
     <div class="sic-user">
-      <button class="sic-theme-toggle" onclick="toggleTheme()">✦ Galaxy</button>
       <span id="user-email" class="mono">—</span>
       <button id="logout-btn" class="sic-btn sic-btn--ghost">Sign out</button>
     </div>
   </header>
+
+  <div class="sic-control-bar" id="control-bar" role="region" aria-label="Background and logo controls" aria-hidden="true">
+    <div class="sic-control-bar__inner">
+      <span class="sic-control-bar__label">LIVE BG</span>
+      <div class="sic-control-bar__segment" role="group" aria-label="Background theme">
+        <button class="sic-control-bar__btn" data-theme="glitch" type="button">Glitch</button>
+        <button class="sic-control-bar__btn" data-theme="galaxy" type="button">Galaxy</button>
+        <button class="sic-control-bar__btn" data-theme="navy" type="button">Navy (Static)</button>
+      </div>
+      <span class="sic-control-bar__divider" aria-hidden="true"></span>
+      <span class="sic-control-bar__label">LOGO</span>
+      <button class="sic-control-bar__btn sic-control-bar__btn--primary" id="logo-upload-btn" type="button">Upload Logo</button>
+      <button class="sic-control-bar__close" id="control-bar-close" type="button" aria-label="Close (Esc)" title="Close (Esc)">&times;</button>
+    </div>
+  </div>
 
   <div class="sic-page-head">
     <h2 class="sic-page-head__title">Incident Console</h2>

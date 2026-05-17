@@ -792,6 +792,7 @@ async function initAiFix() {
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   initLogoUpload();
+  initControlBar();
   const page = document.body.dataset.page;
   switch (page) {
     case "login":     initLogin(); break;
@@ -829,6 +830,7 @@ function applyTheme(theme) {
     stopGalaxy();
   }
   updateThemeToggleLabel(theme);
+  updateControlBarActive(theme);
 }
 
 function toggleTheme() {
@@ -1084,4 +1086,58 @@ async function initDashboard() {
   loadStats();
   loadRecent();
   loadHealth();
+}
+
+// ─── Control bar (logo-toggle settings) ──────────────────────────────────────
+
+function initControlBar() {
+  const bar = document.getElementById("control-bar");
+  const logoToggle = document.getElementById("logo-toggle");
+  if (!bar || !logoToggle) return;
+
+  function setOpen(open) {
+    bar.classList.toggle("is-open", open);
+    bar.setAttribute("aria-hidden", open ? "false" : "true");
+    logoToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function toggle() {
+    setOpen(!bar.classList.contains("is-open"));
+  }
+
+  logoToggle.addEventListener("click", (e) => {
+    if (e.target.closest("input")) return;
+    toggle();
+  });
+
+  logoToggle.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle();
+    }
+  });
+
+  const closeBtn = document.getElementById("control-bar-close");
+  if (closeBtn) closeBtn.addEventListener("click", () => setOpen(false));
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && bar.classList.contains("is-open")) setOpen(false);
+  });
+
+  bar.querySelectorAll(".sic-control-bar__btn[data-theme]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const theme = btn.dataset.theme;
+      localStorage.setItem("sic-bg-theme", theme);
+      applyTheme(theme);
+    });
+  });
+
+  const saved = localStorage.getItem("sic-bg-theme") || "navy";
+  updateControlBarActive(saved);
+}
+
+function updateControlBarActive(theme) {
+  document.querySelectorAll(".sic-control-bar__btn[data-theme]").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.theme === theme);
+  });
 }
