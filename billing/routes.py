@@ -406,12 +406,12 @@ def _handle_checkout_completed(event, email: str | None) -> None:
     meta = obj.get("metadata") or {}
     tier = _TIER_LABEL_MAP.get(meta.get("sic_tier", "").lower(), "community")
     if tier == "community":
-        # Fallback: try to look up subscription for tier
-        logger.info(
-            "checkout sic_tier metadata missing for event %s; defaulting to 'team'",
-            event.get("id"),
+        # Fallback: metadata missing or unrecognised — default to community (lowest tier).
+        # Previously defaulted to "team" which silently over-provisioned access.
+        logger.warning(
+            "checkout.session.completed: sic_tier metadata missing or invalid for event %s — defaulting to community",
+            event.get("id", "unknown"),
         )
-        tier = "team"  # safe default — operator should always set sic_tier metadata
 
     upsert_subscription(
         email=email,

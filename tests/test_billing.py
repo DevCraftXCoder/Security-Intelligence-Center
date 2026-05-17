@@ -412,3 +412,48 @@ class TestDiscordBillingAlert:
         with patch.dict(_os.environ, {}, clear=True):
             # Should not raise even when DISCORD_WEBHOOK_URL is absent
             _discord_billing_alert("test message")
+
+
+# ---------------------------------------------------------------------------
+# 8. Missing sic_tier in metadata defaults to community
+# ---------------------------------------------------------------------------
+
+
+class TestMissingSicTierDefaultsToCommunity:
+    def test_checkout_missing_sic_tier_defaults_to_community(self, client) -> None:
+        """checkout.session.completed with no sic_tier in metadata must provision community tier."""
+        c, db_path, env = client
+        secret = env["STRIPE_WEBHOOK_SECRET"]
+
+        # Metadata has sic_email but NO sic_tier
+        event_data = {
+            "metadata": {"sic_email": "notieruser@example.com"},
+            "customer": "cus_notier",
+            "subscription": "sub_notier",
+        }
+        payload = _make_stripe_payload("checkout.session.completed", event_data)
+        event_dict = json.loads(payload)
+
+        with patch("billing.routes.construct_webhook_event") as mock_cwe:
+            mock_cwe.return_value = event_dict
+
+            resp = c.post(
+                "/api/billing/webhook",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Stripe-Signature": _stripe_sig(payload, secret),
+                },
+            )
+
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data.get("ok") is True
+
+        from billing.db import get_subscription  # noqa: PLC0415
+
+        sub = get_subscription("notieruser@example.com")
+        assert sub is not None, "Subscription row must be created even without sic_tier"
+        assert sub["tier"] == "community", (
+            f"Expected tier='community' when sic_tier missing, got tier='{sub['tier']}'"
+        )
