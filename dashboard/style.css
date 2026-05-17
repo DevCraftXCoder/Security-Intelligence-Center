@@ -1048,3 +1048,94 @@ select.sic-input {
   font-size: 11px;
   padding: 3px 10px;
 }
+
+/* ─── Galaxy canvas background ─────────────────────────────────────────────── */
+#galaxy-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+
+html.theme-galaxy #galaxy-canvas {
+  opacity: 1;
+}
+
+/* ─── Navy theme overrides ──────────────────────────────────────────────────── */
+html.theme-navy {
+  --sic-bg: #0d1b2a;
+  --sic-surface: #102236;
+  --sic-surface-2: #163044;
+  --sic-border: #1e3a52;
+  --sic-text: #d8e8f8;
+  --sic-text-muted: #7a9ab8;
+}
+
+/* ─── Logo upload ───────────────────────────────────────────────────────────── */
+.sic-header__logo-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sic-header__logo-img {
+  max-height: 36px;
+  max-width: 120px;
+  object-fit: contain;
+  cursor: pointer;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+.sic-logo-upload-btn {
+  background: var(--sic-surface-2);
+  border: 1px solid var(--sic-border);
+  border-radius: 3px;
+  padding: 2px 6px;
+  cursor: pointer;
+  color: var(--sic-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0;
+  transition: opacity 150ms ease, border-color 120ms ease, color 120ms ease;
+  flex-shrink: 0;
+}
+
+.sic-header__logo-wrap:hover .sic-logo-upload-btn {
+  opacity: 1;
+}
+
+.sic-logo-upload-btn:hover {
+  color: var(--sic-text);
+  border-color: var(--sic-accent);
+}
+
+/* ─── Theme toggle button ───────────────────────────────────────────────────── */
+.sic-theme-toggle {
+  background: transparent;
+  border: 1px solid var(--sic-border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--sic-text-muted);
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  transition: border-color 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+
+.sic-theme-toggle:hover {
+  border-color: var(--sic-accent);
+  color: var(--sic-text);
+}
+
+html.theme-galaxy .sic-theme-toggle {
+  color: var(--sic-accent);
+  border-color: rgba(233, 69, 96, 0.5);
+}

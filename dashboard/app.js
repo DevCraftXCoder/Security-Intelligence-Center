@@ -790,6 +790,8 @@ async function initAiFix() {
 // ─── Page router ───────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
+  initTheme();
+  initLogoUpload();
   const page = document.body.dataset.page;
   switch (page) {
     case "login":     initLogin(); break;
@@ -804,6 +806,175 @@ document.addEventListener("DOMContentLoaded", () => {
       break;
   }
 });
+
+// ─── Theme engine (Galaxy / Navy) ────────────────────────────────────────────
+
+let _galaxyRaf = null;
+
+function initTheme() {
+  const saved = localStorage.getItem("sic-bg-theme") || "navy";
+  applyTheme(saved);
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  root.classList.remove("theme-navy", "theme-galaxy");
+  root.classList.add("theme-" + theme);
+  if (theme === "galaxy") {
+    startGalaxy();
+  } else {
+    stopGalaxy();
+  }
+  updateThemeToggleLabel(theme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.classList.contains("theme-galaxy") ? "galaxy" : "navy";
+  const next = current === "galaxy" ? "navy" : "galaxy";
+  localStorage.setItem("sic-bg-theme", next);
+  applyTheme(next);
+}
+
+function updateThemeToggleLabel(theme) {
+  document.querySelectorAll(".sic-theme-toggle").forEach(btn => {
+    btn.textContent = theme === "galaxy" ? "⬡ Navy" : "✦ Galaxy";
+    btn.title = theme === "galaxy" ? "Switch to Default Navy" : "Switch to Galaxy";
+  });
+}
+
+function startGalaxy() {
+  const canvas = document.getElementById("galaxy-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  let stars = [];
+  let w, h;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+
+  function initStars() {
+    stars = Array.from({ length: 220 }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      r: Math.random() * 1.4 + 0.2,
+      speed: Math.random() * 0.25 + 0.05,
+      alpha: Math.random() * 0.7 + 0.2,
+      twinkleSpeed: Math.random() * 0.02 + 0.005,
+      twinklePhase: Math.random() * Math.PI * 2,
+    }));
+  }
+
+  function draw(ts) {
+    if (!document.documentElement.classList.contains("theme-galaxy")) {
+      stopGalaxy();
+      return;
+    }
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#07111e";
+    ctx.fillRect(0, 0, w, h);
+
+    const grad = ctx.createRadialGradient(w * 0.3, h * 0.4, 0, w * 0.3, h * 0.4, w * 0.45);
+    grad.addColorStop(0, "rgba(30, 60, 120, 0.18)");
+    grad.addColorStop(1, "transparent");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    const grad2 = ctx.createRadialGradient(w * 0.75, h * 0.65, 0, w * 0.75, h * 0.65, w * 0.35);
+    grad2.addColorStop(0, "rgba(80, 20, 80, 0.12)");
+    grad2.addColorStop(1, "transparent");
+    ctx.fillStyle = grad2;
+    ctx.fillRect(0, 0, w, h);
+
+    const t = ts * 0.001;
+    for (const s of stars) {
+      s.y += s.speed;
+      if (s.y > h) { s.y = 0; s.x = Math.random() * w; }
+      const twinkle = s.alpha * (0.6 + 0.4 * Math.sin(t * s.twinkleSpeed * 60 + s.twinklePhase));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(200, 220, 255, " + twinkle + ")";
+      ctx.fill();
+    }
+
+    _galaxyRaf = requestAnimationFrame(draw);
+  }
+
+  if (_galaxyRaf) cancelAnimationFrame(_galaxyRaf);
+  resize();
+  initStars();
+  window.addEventListener("resize", () => { resize(); initStars(); });
+  _galaxyRaf = requestAnimationFrame(draw);
+}
+
+function stopGalaxy() {
+  if (_galaxyRaf) {
+    cancelAnimationFrame(_galaxyRaf);
+    _galaxyRaf = null;
+  }
+  const canvas = document.getElementById("galaxy-canvas");
+  if (canvas) {
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+// ─── Logo upload ──────────────────────────────────────────────────────────────
+
+function initLogoUpload() {
+  const logoWrap = document.querySelector(".sic-header__logo-wrap");
+  if (!logoWrap) return;
+
+  const logoText = document.getElementById("logo-text");
+  const logoImg  = document.getElementById("logo-img");
+  const uploadBtn = document.getElementById("logo-upload-btn");
+  const fileInput = document.getElementById("logo-file");
+
+  const saved = localStorage.getItem("sic-custom-logo");
+  if (saved && logoImg && logoText) {
+    logoImg.src = saved;
+    logoImg.style.display = "inline-block";
+    logoText.style.display = "none";
+  }
+
+  if (!uploadBtn || !fileInput) return;
+
+  uploadBtn.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Logo image must be under 2MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      localStorage.setItem("sic-custom-logo", dataUrl);
+      if (logoImg) {
+        logoImg.src = dataUrl;
+        logoImg.style.display = "inline-block";
+      }
+      if (logoText) logoText.style.display = "none";
+    };
+    reader.readAsDataURL(file);
+  });
+
+  if (logoImg) {
+    logoImg.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (confirm("Reset to default SIC logo?")) {
+        localStorage.removeItem("sic-custom-logo");
+        logoImg.style.display = "none";
+        logoImg.src = "";
+        if (logoText) logoText.style.display = "";
+      }
+    });
+  }
+}
 
 async function initDashboard() {
   const me = await initHeader("dashboard");

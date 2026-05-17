@@ -7,11 +7,17 @@
 <link rel="stylesheet" href="/dashboard/style.css">
 </head>
 <body data-page="aifix">
+<canvas id="galaxy-canvas"></canvas>
 <div class="sic-shell">
 
   <header class="sic-header">
     <div class="sic-header__brand">
-      <span class="sic-header__logo">SIC</span>
+      <div class="sic-header__logo-wrap">
+        <span class="sic-header__logo" id="logo-text">SIC</span>
+        <img class="sic-header__logo-img" id="logo-img" alt="SIC Logo" style="display:none">
+        <button class="sic-logo-upload-btn" id="logo-upload-btn" title="Upload custom logo">&#8679;</button>
+        <input type="file" id="logo-file" accept="image/*" style="display:none" aria-hidden="true">
+      </div>
       <span class="sic-header__tagline">Security Intelligence Center</span>
     </div>
     <nav class="sic-nav" aria-label="Main navigation">
@@ -21,6 +27,7 @@
       <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">AI Fix</a>
     </nav>
     <div class="sic-user">
+      <button class="sic-theme-toggle" onclick="toggleTheme()">✦ Galaxy</button>
       <span id="user-email" class="mono">—</span>
       <button id="logout-btn" class="sic-btn sic-btn--ghost">Sign out</button>
     </div>
