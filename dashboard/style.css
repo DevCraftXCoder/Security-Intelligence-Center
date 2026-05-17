@@ -1304,3 +1304,40 @@ html.theme-glitch #glitch-vignette { opacity: 1; }
 .sic-logo-upload-btn {
   display: none !important;
 }
+
+/* ─── Login page: large centered clickable logo ──────────────────────────── */
+.sic-login-logo {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  transition: opacity 130ms ease, transform 130ms ease;
+}
+.sic-login-logo:hover { opacity: 0.8; transform: scale(1.04); }
+.sic-login-logo:focus-visible {
+  outline: 2px solid var(--sic-accent, #e94560);
+  outline-offset: 6px;
+  border-radius: 10px;
+}
+.sic-login-logo .sic-header__logo {
+  font-size: 52px;
+  letter-spacing: 2px;
+}
+.sic-login-logo__img {
+  max-height: 140px;
+  max-width: 280px;
+  object-fit: contain;
+  border-radius: 10px;
+  filter: drop-shadow(0 4px 18px rgba(233,69,96,0.35));
+}
+
+/* Control bar on login page — fixed top since there's no sic-shell scroll root */
+[data-page="login"] .sic-control-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+}

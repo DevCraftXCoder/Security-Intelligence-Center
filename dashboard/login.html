@@ -9,10 +9,33 @@
 <body data-page="login">
 <canvas id="galaxy-canvas"></canvas>
 <div id="glitch-vignette"></div>
+
+<div class="sic-control-bar" id="control-bar" role="region" aria-label="Background and logo controls" aria-hidden="true">
+  <div class="sic-control-bar__inner">
+    <span class="sic-control-bar__label">LIVE BG</span>
+    <div class="sic-control-bar__segment" role="group" aria-label="Background theme">
+      <button class="sic-control-bar__btn" data-theme="glitch" type="button">Glitch</button>
+      <button class="sic-control-bar__btn" data-theme="galaxy" type="button">Galaxy</button>
+      <button class="sic-control-bar__btn" data-theme="navy" type="button">Navy (Static)</button>
+    </div>
+    <span class="sic-control-bar__divider" aria-hidden="true"></span>
+    <span class="sic-control-bar__label">LOGO</span>
+    <button class="sic-control-bar__btn sic-control-bar__btn--primary" id="logo-upload-btn" type="button">Upload Logo</button>
+    <button class="sic-control-bar__close" id="control-bar-close" type="button" aria-label="Close (Esc)" title="Close (Esc)">&times;</button>
+  </div>
+</div>
+
 <main class="sic-form-page">
+  <div class="sic-login-logo" id="logo-toggle" role="button" tabindex="0"
+       aria-label="Toggle settings bar" aria-expanded="false" aria-controls="control-bar"
+       title="Click to toggle settings">
+    <span class="sic-header__logo" id="logo-text">SIC</span>
+    <img class="sic-login-logo__img" id="logo-img" alt="SIC Logo" style="display:none">
+    <input type="file" id="logo-file" accept="image/*" style="display:none" aria-hidden="true">
+  </div>
+
   <form id="login-form" class="sic-form" autocomplete="email">
-    <h1>SIC</h1>
-    <p class="sic-stat__label">Security Intelligence Center</p>
+    <p class="sic-stat__label" style="text-align:center;margin-bottom:4px">Security Intelligence Center</p>
     <label for="email">Admin email</label>
     <input id="email" name="email" type="email" class="sic-input" required autofocus>
     <button type="submit" class="sic-btn sic-btn--primary">Send magic link</button>
