@@ -35,7 +35,7 @@ SIC runs 150+ real offensive security tools (nmap, sqlmap, nuclei, hydra, etc.) 
 ### How It Works
 
 ```
-AI Client (Claude, GPT, Copilot, Cursor)
+AI Client (Claude Code, GPT, Copilot, Cursor)
   │
   ▼ (MCP Protocol)
 SIC MCP Server
@@ -196,133 +196,23 @@ CyberChef, John the Ripper, Hashcat, Stegsolve, memory/disk forensics toolkit, a
 theHarvester, Shodan, SpiderFoot, Recon-ng, Maltego, and more.
 </details>
 
-### Advanced Capabilities
+## Recent Additions
 
-- **Intelligent Decision Engine** — AI-driven tool selection based on target context
-- **Parameter Optimization** — Automatic tuning per tool/target combination
-- **Attack Chain Discovery** — Links vulnerabilities into exploitable chains
-- **Smart Caching** — Avoids redundant scans, caches intermediate results
-- **Resource Management** — CPU/memory-aware scheduling
-- **Error Recovery** — Automatic retry with fallback strategies
-
----
+- Standalone billing server with machine-to-machine API key auth (`X-Billing-Key`)
+- Sentry SDK integrated into HexStrike server for error tracking
+- Login page: large centered clickable logo, background cycles on click
+- Settings panel hidden behind logo-toggle control bar
+- Letter Glitch background added as 3rd theme option (alongside galaxy + navy)
+- Logo upload + background toggle — customize dashboard appearance
+- Published `npx sic-security@beta` for quick install
 
 ## Run with npx
 
-One command · no install · latest beta
-
 ```bash
-# Latest beta tag
 npx sic-security@beta
 ```
 
-```bash
-# Pin a version
-npx sic-security@6.0.0-beta.1
-```
+## Authorized Use Only
 
-```bash
-# Direct from the repo
-npx github:DevCraftXCoder/sic
-```
+> SIC is designed exclusively for authorized security testing. All operations must target systems you own or have explicit written permission to test. The IP allowlist enforces this at the network layer — scans from unauthorized IPs are blocked regardless of credentials.
 
-### AI Client Integration
-
-**Claude Code / Cursor:**
-```json
-{
-  "mcpServers": {
-    "sic": {
-      "command": "python",
-      "args": ["/path/to/sic/sic_mcp.py"]
-    }
-  }
-}
-```
-
-**VS Code Copilot:**
-```json
-{
-  "mcp.servers": {
-    "sic": {
-      "command": "python",
-      "args": ["/path/to/sic/sic_mcp.py"]
-    }
-  }
-}
-```
-
----
-
-## API Reference
-
-### SIC Engine Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Full system health + telemetry |
-| `/api/tools` | GET | List all available tools |
-| `/api/tools/<name>` | GET | Tool detail and status |
-| `/api/scan` | POST | Run a targeted scan |
-| `/api/agents` | GET | List AI agents |
-| `/api/agents/<name>/run` | POST | Execute an agent task |
-| `/api/processes` | GET | List running processes |
-| `/api/processes/<id>` | DELETE | Kill a process |
-| `/api/cache/clear` | POST | Clear scan cache |
-
-### Common MCP Tools
-
-```
-# Network
-sic_nmap_scan(target, flags)
-sic_masscan(target, ports)
-sic_port_scan(target)
-
-# Web
-sic_nikto_scan(target)
-sic_sqlmap(target, params)
-sic_directory_bruteforce(target, wordlist)
-
-# Recon
-sic_subdomain_enum(domain)
-sic_whois(domain)
-sic_dns_lookup(domain)
-
-# Vulnerability
-sic_nuclei_scan(target, templates)
-sic_cve_lookup(cve_id)
-sic_exploit_search(query)
-```
-
----
-
-## Security & Responsible Use
-
-SIC is an **offensive security toolkit** for professionals. It generates real exploits, runs real scans, and can cause real damage if misused.
-
-- All tools run locally — no telemetry, no data exfiltration
-- API key auth protects the server
-- Smart caching stores results locally — clear with `/api/cache/clear`
-- Exploit generation and CVE research are first-class features
-
-This is a private tool shared among trusted peers. If you have access, you already know the rules: **test only what you're authorized to test.**
-
----
-
-## Recent Additions
-
-- **Standalone billing server** — `billing_server.py` with X-Billing-Key machine-to-machine auth; machine-to-machine checkout secured with exact-match allowlist
-- **Sentry SDK integration** — Exception tracking initialized in `hexstrike_server.py` for production observability
-- **Dashboard login overhaul** — Logo upload + toggle, Letter Glitch/galaxy/navy background selector; settings hidden behind logo-toggle control bar
-- **P0 audit remediation** — 5 critical findings from 2026-05-13 production audit patched
-- **npx install support** — `npx sic-security@beta` one-command install documented
-- **Security hardening (v6.0.0)** — 38 tool routes patched for shell injection safety; zero injection vectors remain
-- **Per-service API tokens** — Individual tokens per integrated service with expiry warnings
-- **Rate limiting** — All endpoints rate-limited; 25 CVEs addressed via pip-audit dependency audit
-- **Zero-Trust IP Allowlisting** — All admin operations locked behind IP allowlisting; IPv6 prefix matching requires minimum /64 specificity
-
----
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
