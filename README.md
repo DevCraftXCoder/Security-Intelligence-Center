@@ -23,7 +23,7 @@
 
 ## Overview
 
-SIC is an Intelligence-driven penetration testing framework that runs as a local server, exposing a comprehensive API and MCP interface for integration with AI clients (Claude Code, Copilot, Cursor, and any MCP-compatible client).
+SIC is an Intelligence-driven penetration testing framework that runs as a local server, exposing a comprehensive API and MCP interface for integration with automation clients (Claude Code, Copilot, Cursor, and any MCP-compatible client).
 
 ---
 
@@ -35,7 +35,7 @@ SIC runs 150+ real offensive security tools (nmap, sqlmap, nuclei, hydra, etc.) 
 ### How It Works
 
 ```
-AI Client (Claude Code, GPT, Copilot, Cursor)
+Automation Client (Claude Code, GPT, Copilot, Cursor)
   │
   ▼ (MCP Protocol)
 SIC MCP Server
@@ -104,7 +104,7 @@ curl http://127.0.0.1:9888/health
 
 ## SIC Engine
 
-Intelligence-driven penetration testing framework with MCP protocol support. Connects to Claude Code, Copilot, Cursor, or any MCP-compatible AI client.
+Intelligence-driven penetration testing framework with MCP protocol support. Connects to Claude Code, Copilot, Cursor, or any MCP-compatible automation client.
 
 ### Architecture
 
@@ -113,7 +113,7 @@ graph TD
     A[AI Agent - LLM/Copilot/Cursor] -->|MCP Protocol| B[SIC MCP Server v6.0]
 
     B --> C[Intelligent Decision Engine]
-    B --> D[12+ Autonomous AI Agents]
+    B --> D[12+ Autonomous Agents]
     B --> E[Modern Visual Engine]
 
     C --> F[Tool Selection AI]
@@ -136,12 +136,12 @@ graph TD
 
 ### How It Works
 
-1. AI client sends commands via MCP protocol
+1. automation client sends commands via MCP protocol
 2. Decision engine selects optimal tools and parameters
 3. Security tools execute scans, exploits, and analysis
 4. Results formatted and returned through MCP with visual output
 
-### AI Agents
+### Automation Agents
 
 | Agent | Capability |
 |-------|-----------|
