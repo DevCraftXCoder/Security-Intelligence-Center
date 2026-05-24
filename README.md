@@ -13,7 +13,7 @@
 [![Tools](https://img.shields.io/badge/Security%20Tools-150%2B-brightgreen.svg)](#security-tools-arsenal)
 [![Agents](https://img.shields.io/badge/AI%20Agents-12%2B-purple.svg)](#ai-agents)
 
-**An AI-powered pentesting MCP framework with 150+ security tools and 12+ autonomous agents for authorized security testing, CTF challenges, and defensive research.**
+**An Intelligence-driven pentesting MCP framework with 150+ security tools and 12+ autonomous agents for authorized security testing, CTF challenges, and defensive research.**
 
 [SIC Engine](#sic-engine) | [Run with npx](#run-with-npx) | [API Reference](#api-reference)
 
@@ -23,7 +23,7 @@
 
 ## Overview
 
-SIC is an AI-powered penetration testing framework that runs as a local server, exposing a comprehensive API and MCP interface for integration with AI clients (Claude Code, Copilot, Cursor, and any MCP-compatible client).
+SIC is an Intelligence-driven penetration testing framework that runs as a local server, exposing a comprehensive API and MCP interface for integration with AI clients (Claude Code, Copilot, Cursor, and any MCP-compatible client).
 
 ---
 
@@ -104,7 +104,7 @@ curl http://127.0.0.1:9888/health
 
 ## SIC Engine
 
-AI-powered penetration testing framework with MCP protocol support. Connects to Claude Code, Copilot, Cursor, or any MCP-compatible AI client.
+Intelligence-driven penetration testing framework with MCP protocol support. Connects to Claude Code, Copilot, Cursor, or any MCP-compatible AI client.
 
 ### Architecture
 
