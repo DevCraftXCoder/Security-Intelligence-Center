@@ -4,18 +4,18 @@
 
 # SIC — Security Intelligence Center
 
-### AI-Powered Pentesting MCP Framework for Authorized Security Testing
+### Penetration Testing MCP Framework for Authorized Security Testing
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](#ai-client-integration)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](#mcp-integration)
 [![Version](https://img.shields.io/badge/Version-6.0.0-orange.svg)](#)
 [![Tools](https://img.shields.io/badge/Security%20Tools-150%2B-brightgreen.svg)](#security-tools-arsenal)
-[![Agents](https://img.shields.io/badge/AI%20Agents-12%2B-purple.svg)](#ai-agents)
+[![Agents](https://img.shields.io/badge/Agents-12%2B-purple.svg)](#agents)
 
-**An Intelligence-driven pentesting MCP framework with 150+ security tools and 12+ autonomous agents for authorized security testing, CTF challenges, and defensive research.**
+**A penetration testing MCP framework with 150+ security tools and 12+ specialized agents for authorized security testing, CTF challenges, and defensive research.**
 
-[SIC Engine](#sic-engine) | [Run with npx](#run-with-npx) | [API Reference](#api-reference)
+[SIC Engine](#sic-engine) | [Quick Start](#quick-start) | [API Reference](#api-reference)
 
 </div>
 
@@ -23,100 +23,60 @@
 
 ## Overview
 
-SIC is an Intelligence-driven penetration testing framework that runs as a local server, exposing a comprehensive API and MCP interface for integration with automation clients (Claude Code, Copilot, Cursor, and any MCP-compatible client).
+SIC runs as a local server, exposing a Flask REST API and MCP interface for integration with any MCP-compatible client (Claude Code, Copilot, Cursor). All operations are IP-allowlisted to the home network — unauthorized IPs are rejected at the application layer regardless of credentials.
 
 ---
 
-
 ## Architecture
-
-SIC runs 150+ real offensive security tools (nmap, sqlmap, nuclei, hydra, etc.) — fully sandboxed in a hardened Docker container with multiple security layers.
 
 ### How It Works
 
 ```
-Automation Client (Claude Code, GPT, Copilot, Cursor)
+MCP Client (Claude Code / Copilot / Cursor)
   │
   ▼ (MCP Protocol)
-SIC MCP Server
+hexstrike_mcp.py  (FastMCP server)
+  │
+  ▼ (HTTP — loopback only)
+hexstrike_server.py  (Flask REST API — 127.0.0.1:9888)
   │  ├─ Intelligent decision engine
   │  ├─ Tool selection & parameter optimization
-  │  └─ Attack chain discovery
+  │  ├─ Scope enforcer (scope_enforcer.py)
+  │  ├─ Auth & IP allowlist (auth.py)
+  │  └─ 150+ security tools (installed on host)
   │
-  ▼
-127.0.0.1:9888 (loopback only — never exposed)
-  │
-  ▼
-Docker Container (sic-scanner)
-  │  ├─ Scope enforcer (ALLOWED_TARGETS whitelist)
-  │  ├─ Dry-run gate (on by default)
-  │  └─ Tool execution (150+ tools)
-  │
-  ▼
-./output/ (results only — source baked into image)
+  ├─ billing_server.py  (Flask — :9015, X-Billing-Key auth)
+  └─ hexstrike_launcher.py  (CLI entry point)
 ```
 
-### Container Isolation
+### Application-Layer Security Controls
 
-The Docker container enforces 12 security controls:
-
-| Control | Setting | Purpose |
-|---------|---------|---------|
-| Port binding | `127.0.0.1:9888` | Never reachable from network |
-| User | `scanner` (uid 1001) | Non-root, no privilege escalation |
-| Capabilities | `cap_drop: ALL` | Zero Linux capabilities |
-| Privilege escalation | `no-new-privileges: true` | Blocks setuid/setgid |
-| CPU limit | 2 cores | Prevents self-DoS |
-| Memory limit | 2 GB | Bounded resource usage |
-| DNS | `127.0.0.1` only | Blocks external hostname resolution |
-| Network | `scanner-net` bridge (internal on Linux) | No cross-container routes |
-| Scanner mode | `SCANNER_MODE=sandbox` | Restricts target scope at app layer |
-| Allowed targets | `target.example.com,192.168.1.0/24` | Whitelist-only scanning |
-| Request budget | `MAX_REQUESTS_PER_SCAN=500` | Prevents runaway scans |
-| Dry-run default | `DRY_RUN_DEFAULT=true` | Must explicitly opt into live scans |
-| Scan timeout | `300s` hard wall | Kills scans after 5 minutes |
-| Volume mounts | `./output` only | Source code baked into image, never mounted |
-
-### Multi-Stage Build
-
-The Dockerfile uses 3 stages to keep the image lean and the build fast:
-
-| Stage | Base | What It Builds |
-|-------|------|---------------|
-| `go-builder` | `golang:1.24-alpine` | 13 Go tools (ffuf, gobuster, nuclei, httpx, subfinder, katana, etc.) |
-| `py-builder` | `python:3.12-slim` | 30+ Python packages (sqlmap, dirsearch, theHarvester, pwntools, etc.) |
-| `runtime` | `python:3.12-slim` | Final image — all tools + HexStrike API server |
-
-Heavy packages (angr, autorecon, spiderfoot) are stubbed — the System Tab runs `which <tool>` to show availability, so stubs satisfy that without the OOM risk.
-
-### Running It
-
-```bash
-# Start the sandboxed container
-cd docker/sic-scanner
-docker compose up -d
-
-# Verify health
-curl http://127.0.0.1:9888/health
-```
+| Control | Implementation | Purpose |
+|---------|---------------|---------|
+| IP allowlisting | `auth.py` — home network CIDR check | Blocks all external IPs regardless of credentials |
+| Scope enforcement | `scope_enforcer.py` — ALLOWED_TARGETS | Whitelist-only target scanning |
+| Loopback binding | `127.0.0.1:9888` | API never reachable from network |
+| IPv6 prefix | min `/64` specificity | Prevents broad-prefix bypass |
+| Audit log | `audit_log.py` | All operations logged with actor + timestamp |
+| Billing quota | `billing_server.py` | Per-tool, per-session request budgets |
 
 ---
 
 ## SIC Engine
 
-Intelligence-driven penetration testing framework with MCP protocol support. Connects to Claude Code, Copilot, Cursor, or any MCP-compatible automation client.
+MCP framework with tool orchestration, agent dispatch, and visual output. Connects to Claude Code, Copilot, Cursor, or any MCP-compatible client.
 
 ### Architecture
 
 ```mermaid
 graph TD
-    A[AI Agent - LLM/Copilot/Cursor] -->|MCP Protocol| B[SIC MCP Server v6.0]
+    A[MCP Client - Claude Code / Copilot / Cursor] -->|MCP Protocol| B[SIC MCP Server v6.0]
 
     B --> C[Intelligent Decision Engine]
-    B --> D[12+ Autonomous Agents]
+    B --> D[12+ Specialized Agents]
     B --> E[Modern Visual Engine]
 
-    C --> F[Tool Selection AI]
+    C --> F[Tool Selection]
     C --> G[Parameter Optimization]
     C --> H[Attack Chain Discovery]
 
@@ -136,12 +96,12 @@ graph TD
 
 ### How It Works
 
-1. automation client sends commands via MCP protocol
+1. MCP client sends commands via MCP protocol
 2. Decision engine selects optimal tools and parameters
 3. Security tools execute scans, exploits, and analysis
 4. Results formatted and returned through MCP with visual output
 
-### Automation Agents
+### Agents
 
 | Agent | Capability |
 |-------|-----------|
@@ -196,6 +156,40 @@ CyberChef, John the Ripper, Hashcat, Stegsolve, memory/disk forensics toolkit, a
 theHarvester, Shodan, SpiderFoot, Recon-ng, Maltego, and more.
 </details>
 
+---
+
+## Quick Start
+
+```bash
+# Start the full server (MCP + REST API)
+python hexstrike_server.py
+
+# MCP-only mode (for Claude Code / Cursor integration)
+python hexstrike_mcp.py
+
+# CLI launcher
+python hexstrike_launcher.py
+
+# Standalone billing server (managed by PM2 on :9015)
+python billing_server.py
+
+# Verify health
+curl http://127.0.0.1:9888/health
+```
+
+Add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "sic": {
+      "command": "python",
+      "args": ["path/to/hexstrike_mcp.py"]
+    }
+  }
+}
+```
+
 ## Recent Additions
 
 - Standalone billing server with machine-to-machine API key auth (`X-Billing-Key`)
@@ -214,5 +208,4 @@ npx sic-security@beta
 
 ## Authorized Use Only
 
-> SIC is designed exclusively for authorized security testing. All operations must target systems you own or have explicit written permission to test. The IP allowlist enforces this at the network layer — scans from unauthorized IPs are blocked regardless of credentials.
-
+> SIC is designed exclusively for authorized security testing. All operations must target systems you own or have explicit written permission to test. The IP allowlist enforces this at the application layer — requests from unauthorized IPs are blocked regardless of credentials.
