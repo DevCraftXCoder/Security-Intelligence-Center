@@ -6,30 +6,9 @@
 ![Local First](https://img.shields.io/badge/Local--First-111111?style=flat&logo=homeassistant&logoColor=white)
 ![Tools](https://img.shields.io/badge/150%2B_Security_Tools-e94560?style=flat&logoColor=white)
 
-**AI-powered penetration testing framework — MCP interface, 150+ security tools, 12 specialized agents, Docker-sandboxed execution.**
+**Penetration testing framework — MCP interface, 150+ security tools, 12 specialized agents, Docker-sandboxed execution.**
 
-> Runs as a local server exposing a REST API and MCP interface for direct integration with Claude, Cursor, or any MCP-compatible AI client. Point your AI at real security tooling — recon, exploitation, post-exploitation, bug bounty, CTF — all sandboxed in Docker with IP allowlisting.
-
-## Architecture
-
-```
-AI Client (Claude / Cursor / any MCP host)
-  └── MCP Interface  ──────────────────────────────┐
-        │                                           │
-        ▼                                           ▼
-  REST API (:8080)                         Tool Registry (150+)
-    ├── Agent Dispatcher (12 agents)            ├── Recon & OSINT
-    ├── Billing & Quota                         ├── Exploitation
-    ├── Incident Tracker                        ├── Post-Exploitation
-    └── Session Manager                         ├── Bug Bounty Toolkit
-                                                ├── CTF Utilities
-                                                └── Vulnerability Intel
-                          │
-                          ▼
-              Docker Sandbox (IP allowlisted)
-                ├── Tool execution environment
-                └── Network-isolated container
-```
+> Runs as a local server exposing a REST API and MCP interface for direct integration with Claude, Cursor, or any MCP-compatible client. Connect your toolchain to purpose-built security tooling — recon, exploitation, post-exploitation, bug bounty, CTF — all sandboxed in Docker with IP allowlisting.
 
 ## Tech Stack
 
@@ -62,10 +41,10 @@ AI Client (Claude / Cursor / any MCP host)
 
 ## Key Features
 
-- **MCP-native** — drop into any MCP-compatible AI client with zero config
+- **MCP-native** — integrates with any MCP-compatible client with zero configuration
 - **REST API** — full programmatic access for automation pipelines
 - **Docker sandboxing** — all tool execution isolated, IP allowlisted to home network
-- **12 specialized agents** — each owns a phase of the kill chain
+- **12 specialized agents** — each owns a distinct phase of the engagement lifecycle
 - **150+ tools** — covers recon through reporting across all engagement types
 - **Billing module** — built-in quota tracking per tool, per agent, per session
 - **Incident tracker** — log findings, track severity, export reports
