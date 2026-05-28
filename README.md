@@ -190,8 +190,45 @@ Add to your MCP client config:
 }
 ```
 
+## sic_to_audit.py v2 — Audit Report Bridge
+
+`sic_to_audit.py` maps SIC, Nuclei, Trivy, and Checkov output to the 42-item 3SIXTYCO. security audit checklist and emits a self-contained HTML report with `window.AUDIT.fill()` pre-injected. v2 is a ground-up rework of the v1 regex-only bridge.
+
+### Top 5 v2 Improvements
+
+1. **Structured JSON parsers for Nuclei, Trivy, and Checkov**
+   v1 ran regex against flattened text. v2 parses the native JSON of each tool — Nuclei `template-id` + `info.severity`, Trivy `Vulnerabilities` / `Secrets` / `Misconfigurations`, Checkov `failed_checks` — and emits typed `StructuredFinding` objects with item-ID mapping, source attribution, and severity. The result: real findings instead of false positives from prose matches in logs.
+
+2. **Severity-weighted FAIL / WARN / PASS with confidence tiers**
+   Critical/high structured findings flip an item to **FAIL** with `[source] name: description` evidence. Medium findings (or 1–2 regex hits) downgrade to **WARN** with a `MEDIUM FINDING` prefix for manual review. Three or more regex hits escalate to **FAIL** with `HIGH` confidence. The 42-item checklist now reflects actual risk, not match count.
+
+3. **NDJSON + multi-format ingestion (one file, many tools)**
+   `load_results_file()` accepts a single JSON object, JSON array, NDJSON (one object per line), or two objects concatenated with whitespace — so you can `>> append` raw scanner output from multiple tools into one file and feed it in directly. Falls back to wrapping unstructured text in a synthetic record so nothing gets dropped.
+
+4. **Auto tool detection + SIC smart-scan recursion**
+   `_detect_tool()` heuristically identifies Nuclei / Trivy / Checkov / SIC smart-scan blobs by shape (`template-id`, `Results` + `SchemaVersion`, `failed_checks`, `tools_executed`). Smart-scan results are recursed into, so a single SIC smart-scan response unpacks into all child tool findings — no manual tool-by-tool wiring.
+
+5. **Embedded scan-metadata bar + filled HTML in one file**
+   `inject_fill()` rewrites the audit template with a `<script>` block that calls `window.AUDIT.fill()` on `DOMContentLoaded` and pins a fixed scan-info bar (date, target, tools used, tool count, duration) to the bottom-right of the report. The output is a single portable HTML — open in any browser, no server, no follow-up steps.
+
+### Usage
+
+```bash
+# Live SIC smart-scan -> HTML report
+python sic_to_audit.py --target https://example.com --output report.html
+
+# Offline: feed existing JSON / NDJSON from any combination of tools
+python sic_to_audit.py --results sic-results.json --output report.html
+
+# Dry-run — print the fill dict without writing HTML
+python sic_to_audit.py --target https://example.com --dry-run
+```
+
+---
+
 ## Recent Additions
 
+- `sic_to_audit.py` v2 — structured tool parsing, severity weighting, NDJSON ingestion (see above)
 - Standalone billing server with machine-to-machine API key auth (`X-Billing-Key`)
 - Sentry SDK integrated into HexStrike server for error tracking
 - Login page: large centered clickable logo, background cycles on click
