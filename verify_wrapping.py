@@ -1,7 +1,7 @@
 """Verify all @mcp.tool() functions have try as first code statement."""
 import ast
 
-with open("C:/Za/sic/hexstrike_mcp.py", encoding="utf-8") as f:
+with open("C:/Za/sic/mcp_server.py", encoding="utf-8") as f:
     source = f.read()
 
 tree = ast.parse(source)

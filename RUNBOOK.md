@@ -20,7 +20,7 @@
 2. Set `SIC_SECRET_KEY` to a 32+ char random value (`python -c "import secrets; print(secrets.token_hex(32))"`)
 3. Set `SIC_IP_ALLOWLIST` to your home network CIDR (e.g. `192.168.1.0/24,10.0.0.1/32`)
 4. Set `SIC_COMMAND_ALLOWLIST` to the binaries you permit (e.g. `nmap,gobuster,nuclei,nikto`)
-5. Verify boot: `python hexstrike_server.py` — if env vars are missing, server will print FATAL and exit
+5. Verify boot: `python server.py` — if env vars are missing, server will print FATAL and exit
 6. Confirm health: `curl http://127.0.0.1:9888/health`
 
 ## Audit Logs
@@ -59,7 +59,7 @@ The server sends itself `SIGTERM` and exits cleanly. Use PM2 or systemd to auto-
 
 ```bash
 pm2 restart sic          # if managed by PM2
-python hexstrike_server.py  # manual
+python server.py  # manual
 ```
 
 ## Checking Logs

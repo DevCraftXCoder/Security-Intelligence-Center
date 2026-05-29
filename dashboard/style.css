@@ -1,6 +1,6 @@
 /* SIC Dashboard — stylesheet
  * The --sic-accent color is dynamically injected at runtime.
- * See GET /dashboard/style.css route in hexstrike_server.py.
+ * See GET /dashboard/style.css route in server.py.
  * Set SIC_ACCENT_COLOR env var to override the default accent.
  */
 

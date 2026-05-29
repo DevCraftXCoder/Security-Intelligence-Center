@@ -176,7 +176,7 @@ class TestSendScanAlertMagicLink:
 
 
 class TestGetRealIp:
-    """Unit tests for _get_real_ip in hexstrike_server (via imported helper)."""
+    """Unit tests for _get_real_ip in server (via imported helper)."""
 
     def test_xff_header_takes_priority(self) -> None:
         """_get_real_ip should return the leftmost XFF entry."""
@@ -184,7 +184,7 @@ class TestGetRealIp:
 
         # Import server module's helper directly
 
-        # We cannot import hexstrike_server directly (heavy deps), so test
+        # We cannot import server directly (heavy deps), so test
         # the logic inline by reproducing the same function.
         def _get_real_ip_impl(xff: str | None, remote_addr: str) -> str:
             if xff:

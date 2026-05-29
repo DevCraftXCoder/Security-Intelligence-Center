@@ -6,7 +6,7 @@ const path = require("path");
 const fs = require("fs");
 
 const ROOT = path.resolve(__dirname, "..");
-const LAUNCHER = path.join(ROOT, "hexstrike_launcher.py");
+const LAUNCHER = path.join(ROOT, "launcher.py");
 const MIN_PYTHON = [3, 8];
 
 // ── find Python 3.8+ ──────────────────────────────────────────────────────────

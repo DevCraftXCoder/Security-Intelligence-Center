@@ -8,7 +8,7 @@ build/
 .env
 .env.local
 venv/
-hexstrike_env/
+sic_env/
 .venv/
 
 # Output / scan results

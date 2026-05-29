@@ -145,8 +145,8 @@ def wrap_tools(input_path: str, output_path: str) -> dict:
 
 
 if __name__ == "__main__":
-    input_file = "C:/Za/sic/hexstrike_mcp.py"
-    output_file = "C:/Za/sic/hexstrike_mcp.py"
+    input_file = "C:/Za/sic/mcp_server.py"
+    output_file = "C:/Za/sic/mcp_server.py"
 
     print(f"Processing {input_file}...")
     result = wrap_tools(input_file, output_file)

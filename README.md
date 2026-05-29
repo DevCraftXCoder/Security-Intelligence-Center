@@ -35,10 +35,10 @@ SIC runs as a local server, exposing a Flask REST API and MCP interface for inte
 MCP Client (Claude Code / Copilot / Cursor)
   │
   ▼ (MCP Protocol)
-hexstrike_mcp.py  (FastMCP server)
+mcp_server.py  (FastMCP server)
   │
   ▼ (HTTP — loopback only)
-hexstrike_server.py  (Flask REST API — 127.0.0.1:9888)
+server.py  (Flask REST API — 127.0.0.1:9888)
   │  ├─ Intelligent decision engine
   │  ├─ Tool selection & parameter optimization
   │  ├─ Scope enforcer (scope_enforcer.py)
@@ -46,7 +46,7 @@ hexstrike_server.py  (Flask REST API — 127.0.0.1:9888)
   │  └─ 150+ security tools (installed on host)
   │
   ├─ billing_server.py  (Flask — :9015, X-Billing-Key auth)
-  └─ hexstrike_launcher.py  (CLI entry point)
+  └─ launcher.py  (CLI entry point)
 ```
 
 ### Application-Layer Security Controls
@@ -162,13 +162,13 @@ theHarvester, Shodan, SpiderFoot, Recon-ng, Maltego, and more.
 
 ```bash
 # Start the full server (MCP + REST API)
-python hexstrike_server.py
+python server.py
 
 # MCP-only mode (for Claude Code / Cursor integration)
-python hexstrike_mcp.py
+python mcp_server.py
 
 # CLI launcher
-python hexstrike_launcher.py
+python launcher.py
 
 # Standalone billing server (managed by PM2 on :9015)
 python billing_server.py
@@ -184,7 +184,7 @@ Add to your MCP client config:
   "mcpServers": {
     "sic": {
       "command": "python",
-      "args": ["path/to/hexstrike_mcp.py"]
+      "args": ["path/to/mcp_server.py"]
     }
   }
 }

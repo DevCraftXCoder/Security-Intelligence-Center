@@ -70,7 +70,7 @@ curl -s -X POST http://127.0.0.1:9888/api/ai/grade \
 
 ## Notes
 
-- SIC server must be running: `cd sic && python hexstrike_server.py`
+- SIC server must be running: `cd sic && python server.py`
 - PDF export requires team/studio tier and WeasyPrint installed (`pip install weasyprint`)
 - AI grading requires `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` in environment
 - Default port: 9888 (override with `SIC_PORT` env var)

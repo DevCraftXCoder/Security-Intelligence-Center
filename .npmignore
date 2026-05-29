@@ -8,7 +8,7 @@ _runs/
 __pycache__/
 *.pyc
 *.pyo
-hexstrike_env/
+sic_env/
 .venv/
 venv/
 

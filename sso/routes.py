@@ -43,7 +43,7 @@ try:
 except ImportError as _fg_err:
     # Fail closed: if feature_gates is not importable the server must not start
     # with SSO routes accessible to all tiers.  Raise immediately so the caller
-    # (hexstrike_server.py Phase 5 blueprint registration) sees the error.
+    # (server.py Phase 5 blueprint registration) sees the error.
     raise RuntimeError(
         "feature_gates module is required for SSO tier enforcement but could not be "
         f"imported: {_fg_err}.  Ensure feature_gates.py is on sys.path before "

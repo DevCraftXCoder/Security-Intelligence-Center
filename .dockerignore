@@ -1,6 +1,6 @@
-# Docker build context: hexstrike-ai/
+# Docker build context: sic/
 # This file is read by Docker when building from docker/sic-scanner/docker-compose.yml
-# (build context is set to ../../hexstrike-ai — Docker reads .dockerignore from the context root)
+# (build context is set to ../../sic — Docker reads .dockerignore from the context root)
 
 # Exclude version control
 .git
@@ -14,7 +14,7 @@ __pycache__
 .Python
 
 # Exclude the virtual environment — deps are installed by pip in the Docker build
-hexstrike-env/
+sic_env/
 venv/
 .venv/
 env/
@@ -24,6 +24,6 @@ env/
 *.env.local
 
 # Exclude dev artefacts and logs
-hexstrike.log
+sic.log
 *.log
 _runs/

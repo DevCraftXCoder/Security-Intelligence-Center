@@ -18,9 +18,9 @@
   "files": [
     "bin/",
     "assets/",
-    "hexstrike_launcher.py",
-    "hexstrike_server.py",
-    "hexstrike_mcp.py",
+    "launcher.py",
+    "server.py",
+    "mcp_server.py",
     "scan_alerts.py",
     "scope_enforcer.py",
     "requirements.txt",

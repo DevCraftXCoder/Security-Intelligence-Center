@@ -291,7 +291,7 @@ def _fire_magic_link_email(details: dict[str, Any]) -> None:
         logger.debug("_fire_magic_link_email: missing email or link in details")
         return
 
-    from_addr = os.environ.get("SIC_ALERT_FROM", "sic-alerts@hexstrike.ai")
+    from_addr = os.environ.get("SIC_ALERT_FROM", "sic-alerts@frxncois.com")
     subject = "Your SIC login link"
     html_body = (
         "<html><body>"
@@ -394,7 +394,7 @@ def _fire_email(event: str, details: dict[str, Any]) -> None:
     if not recipients:
         return
 
-    from_addr = os.environ.get("SIC_ALERT_FROM", "sic-alerts@hexstrike.ai")
+    from_addr = os.environ.get("SIC_ALERT_FROM", "sic-alerts@frxncois.com")
     title = _TITLES.get(event, event)
     subject = f"[SIC] {title}"
 
