@@ -345,16 +345,33 @@ _CONTROL_DESCRIPTIONS = {
 }
 
 
-def _llm_map_findings(findings, gateway_key):
+def _llm_map_findings(findings, gateway_key=None, openrouter_key=None):
     """
-    Call LLM Gateway to get control mappings for findings that the static table
-    couldn't confidently classify. Returns {finding_index: (control_id, confidence)}.
-    Only called when LLM_GATEWAY_KEY is available in env.
+    Call an LLM to get control mappings for findings the static table can't classify well.
+    Returns {finding_index: (control_id, confidence)}.
+
+    Priority:
+      1. LLM Gateway (LLM_GATEWAY_KEY) — internal, rate-limited, logged
+      2. OpenRouter direct (OPENROUTER_API_KEY) — fallback when running inside SIC env
     """
-    if not findings or not gateway_key:
+    if not findings:
         return {}
 
-    # Build a compact representation of each finding for the prompt
+    # Resolve which backend to use
+    if gateway_key:
+        url   = "https://llm.frxncois.workers.dev/v1/chat/completions"
+        auth  = gateway_key
+        model = "anthropic/claude-haiku-4.5"
+        label = "LLM Gateway"
+    elif openrouter_key:
+        url   = "https://openrouter.ai/api/v1/chat/completions"
+        auth  = openrouter_key
+        model = "anthropic/claude-haiku-4.5"
+        label = "OpenRouter"
+    else:
+        return {}
+
+    # Build compact finding representations for the prompt
     finding_list = []
     for idx, f in enumerate(findings):
         name = f.get("name") or f.get("vulnerabilityName") or f.get("Title") or "Unknown"
@@ -379,17 +396,17 @@ def _llm_map_findings(findings, gateway_key):
     )
 
     payload = json.dumps({
-        "model": "anthropic/claude-haiku-4.5",
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 1024,
     }).encode()
 
     req = urllib.request.Request(
-        "https://llm.frxncois.workers.dev/v1/chat/completions",
+        url,
         data=payload,
         headers={
             "Content-Type":  "application/json",
-            "Authorization": f"Bearer {gateway_key}",
+            "Authorization": f"Bearer {auth}",
             "HTTP-Referer":  "https://frxncois.com",
             "X-Title":       "sic_to_audit",
         },
@@ -399,16 +416,16 @@ def _llm_map_findings(findings, gateway_key):
         with urllib.request.urlopen(req, timeout=30) as resp:
             body = json.loads(resp.read())
         text = body["choices"][0]["message"]["content"].strip()
-        # Strip markdown code fences if model wrapped JSON
         text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         result = json.loads(text)
+        print(f"[sic_to_audit] LLM mapping via {label} — {len(result)} response(s)", file=sys.stderr)
         return {
             int(k): (v["control"], float(v.get("confidence", 0.5)))
             for k, v in result.items()
             if v.get("control") in _CONTROL_DESCRIPTIONS
         }
     except Exception as e:
-        print(f"[sic_to_audit] LLM mapping skipped: {e}", file=sys.stderr)
+        print(f"[sic_to_audit] LLM mapping skipped ({label}): {e}", file=sys.stderr)
         return {}
 
 
@@ -416,11 +433,12 @@ def _llm_map_findings(findings, gateway_key):
 # Fill data builder
 # ---------------------------------------------------------------------------
 
-def build_fill_data(findings, gateway_key=None):
+def build_fill_data(findings, gateway_key=None, openrouter_key=None):
     """
     Each finding -> that control FAILS.
     Controls with no findings -> pass: null (manual review required).
-    LLM mapping (when gateway_key provided) overrides heuristic on high-confidence hits.
+    LLM mapping overrides heuristic on confidence >= 0.75 hits.
+    Uses LLM Gateway if gateway_key set, else OpenRouter if openrouter_key set.
     """
     # Static heuristic pass first
     heuristic_map = {}
@@ -429,7 +447,8 @@ def build_fill_data(findings, gateway_key=None):
         heuristic_map[idx] = (cid, note)
 
     # LLM override pass — only upgrade mappings with confidence >= 0.75
-    llm_map = _llm_map_findings(findings, gateway_key) if gateway_key else {}
+    use_llm = gateway_key or openrouter_key
+    llm_map = _llm_map_findings(findings, gateway_key=gateway_key, openrouter_key=openrouter_key) if use_llm else {}
     if llm_map:
         print(f"[sic_to_audit] LLM mapped {len(llm_map)} finding(s)", file=sys.stderr)
 
@@ -526,17 +545,20 @@ def main():
                         help="Output HTML file path")
     args = parser.parse_args()
 
-    gateway_key = os.environ.get("LLM_GATEWAY_KEY")
+    gateway_key    = os.environ.get("LLM_GATEWAY_KEY")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
     if gateway_key:
-        print("[sic_to_audit] LLM_GATEWAY_KEY found — LLM mapping enabled")
+        print("[sic_to_audit] LLM mapping: LLM Gateway")
+    elif openrouter_key:
+        print("[sic_to_audit] LLM mapping: OpenRouter (fallback)")
     else:
-        print("[sic_to_audit] LLM_GATEWAY_KEY not set — using heuristic mapping only")
+        print("[sic_to_audit] LLM mapping: disabled (set LLM_GATEWAY_KEY or OPENROUTER_API_KEY)")
 
     print(f"[sic_to_audit] Loading {args.results}")
     findings = load_findings(args.results)
     print(f"[sic_to_audit] {len(findings)} findings parsed")
 
-    fill_data = build_fill_data(findings, gateway_key=gateway_key)
+    fill_data = build_fill_data(findings, gateway_key=gateway_key, openrouter_key=openrouter_key)
     failed = sum(1 for v in fill_data.values() if v["pass"] is False)
     manual = sum(1 for v in fill_data.values() if v["pass"] is None)
     passed = sum(1 for v in fill_data.values() if v["pass"] is True)
