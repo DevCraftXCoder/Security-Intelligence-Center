@@ -50,30 +50,6 @@
 - **Incident tracker** — log findings, track severity, export reports
 - **Local-first** — no cloud dependency, no data leaves your machine
 
-## Quick Start
-
-```bash
-# Start the full server (MCP + REST API)
-python hexstrike_server.py
-
-# MCP-only mode (for Claude / Cursor integration)
-python hexstrike_mcp.py
-
-# CLI launcher
-python hexstrike_launcher.py
-```
-
-Add to your MCP client config:
-
-```json
-{
-  "mcpServers": {
-    "sic": {
-      "command": "python",
-      "args": ["path/to/hexstrike_mcp.py"]
-    }
-  }
-}
 ```
 
 ## Tool Categories
