@@ -27,12 +27,66 @@ DEFAULT_TEMPLATE = "C:/Za/templates/soc-handoff/soc-handoff-template-blank.html"
 # ---------------------------------------------------------------------------
 
 def _collect(obj):
+    """Recursively collect dicts that look like individual findings.
+
+    Handles three schemas beyond the generic nuclei/smart-scan format:
+    - trivy: Results[].Vulnerabilities[] with VulnerabilityID/Severity/Title/Description
+    - checkov: results.failed_checks[] with check_id/severity/resource/check_result
+    """
     if isinstance(obj, list):
         out = []
         for item in obj:
             out.extend(_collect(item))
         return out
     if isinstance(obj, dict):
+        # trivy: top-level Results array containing Vulnerabilities sub-arrays
+        if "Results" in obj and isinstance(obj["Results"], list):
+            out = []
+            for result in obj["Results"]:
+                vulns = result.get("Vulnerabilities") or []
+                for v in vulns:
+                    out.append({
+                        "name":            v.get("VulnerabilityID") or v.get("Title") or "Unknown CVE",
+                        "vulnerabilityName": v.get("Title") or v.get("VulnerabilityID") or "",
+                        "severity":        (v.get("Severity") or "unknown").lower(),
+                        "description":     v.get("Description") or "",
+                        "template-id":     v.get("VulnerabilityID") or "",
+                        "tags":            ["cve", "vulnerability"],
+                        "references":      v.get("References") or [],
+                        "_source":         "trivy",
+                    })
+            if out:
+                return out
+
+        # checkov: results.failed_checks[] (may appear as top-level results key)
+        failed = (
+            (obj.get("results") or {}).get("failed_checks")
+            if isinstance(obj.get("results"), dict)
+            else None
+        )
+        if isinstance(failed, list) and failed:
+            out = []
+            for fc in failed:
+                sev = str(fc.get("severity") or "medium").lower()
+                if sev not in ("critical", "high", "medium", "low", "info"):
+                    sev = "medium"
+                out.append({
+                    "name":        fc.get("check_id") or "CKV_UNKNOWN",
+                    "Title":       fc.get("check_id") or "Checkov finding",
+                    "severity":    sev,
+                    "description": (
+                        f"Resource: {fc.get('resource') or 'unknown'}. "
+                        f"File: {(fc.get('repo_file_path') or fc.get('file_path') or '')}. "
+                        f"Lines: {fc.get('file_line_range') or ''}."
+                    ),
+                    "checkID":     fc.get("check_id") or "",
+                    "tags":        ["misconfig", "iac"],
+                    "_source":     "checkov",
+                })
+            if out:
+                return out
+
+        # Generic nuclei / smart-scan findings
         finding_keys = {"severity", "Severity", "vulnerabilityName", "name",
                         "template-id", "templateID", "Title", "checkID"}
         if finding_keys & obj.keys():
@@ -114,6 +168,63 @@ def _ref(f):
 
 
 # ---------------------------------------------------------------------------
+# Week-over-week snapshot loader
+# ---------------------------------------------------------------------------
+
+def _load_prior_snapshots(project, runs_dir):
+    """
+    Find the most recent prior SOC report for this project in runs_dir/qa/,
+    extract its snapshots array, and return it (or [] if none found).
+    The snapshot structure matches the SOC template's week-navigation schema:
+      [{score, checked, notes, evidence, timestamps, signoff}, ...]  (oldest first)
+    """
+    qa_dir = Path(runs_dir) / "qa"
+    if not qa_dir.exists():
+        return []
+
+    slug_pattern = re.sub(r"[^a-z0-9]+", "-", project.lower()).strip("-")
+    # Find all prior SOC HTML files for this project, sorted newest first
+    candidates = sorted(
+        qa_dir.glob(f"{project}-soc-*.html"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    # Also try slug-based names
+    if not candidates:
+        candidates = sorted(
+            qa_dir.glob(f"*soc*.html"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        candidates = [p for p in candidates if slug_pattern in p.name.lower()]
+
+    for candidate in candidates:
+        try:
+            html = candidate.read_text(encoding="utf-8", errors="replace")
+            m = re.search(
+                r'<script[^>]+id=["\']project-data["\'][^>]*>([\s\S]*?)</script>',
+                html,
+            )
+            if not m:
+                continue
+            pd = json.loads(m.group(1))
+            snapshots = pd.get("snapshots")
+            if isinstance(snapshots, list):
+                return snapshots
+            # No snapshots key yet — extract just the score as a single prior entry
+            controls = pd.get("controls", [])
+            items = [i for s in controls for i in s.get("items", [])]
+            if items:
+                done = sum(1 for i in items if i.get("done"))
+                score = round(done / len(items) * 100)
+                return [{"score": score, "checked": {}, "notes": {}, "evidence": {},
+                         "timestamps": {}, "signoff": {"name": "", "role": ""}}]
+        except Exception:
+            continue
+    return []
+
+
+# ---------------------------------------------------------------------------
 # project-data builder
 # ---------------------------------------------------------------------------
 
@@ -138,7 +249,7 @@ SEV_TAG = {
 }
 
 
-def build_project_data(findings, project, slug, scan_path, now_iso):
+def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=None):
     # Group findings by canonical severity
     buckets = {s: [] for s in SEV_ORDER}
     for f in findings:
@@ -263,6 +374,17 @@ def build_project_data(findings, project, slug, scan_path, now_iso):
         "controls":   controls,
     }
 
+    # Week-over-week: load prior snapshots and inject as history
+    prior_snapshots = _load_prior_snapshots(project, runs_dir) if runs_dir else []
+    if prior_snapshots:
+        # Append prior weeks at offset -N ... -1; current week at 0 will be set
+        # by the template's save-snapshot logic on first interaction.
+        project_data["snapshots"] = prior_snapshots
+        print(f"[sic_to_soc] Loaded {len(prior_snapshots)} prior snapshot(s) for week-over-week diff",
+              file=sys.stderr)
+    else:
+        project_data["snapshots"] = []
+
     return project_data
 
 
@@ -318,7 +440,8 @@ def main():
     findings = load_findings(args.scan)
     print(f"[sic_to_soc] {len(findings)} findings parsed")
 
-    project_data = build_project_data(findings, args.project, slug, args.scan, now)
+    runs_dir = str(Path(args.output).parent.parent)  # _runs/qa/../ = _runs/
+    project_data = build_project_data(findings, args.project, slug, args.scan, now, runs_dir=runs_dir)
     total_controls = sum(len(s["items"]) for s in project_data["controls"])
     crit = project_data["caseMetadata"]["severity"]
     print(f"[sic_to_soc] Severity: {crit}  Controls: {total_controls} across {len(project_data['controls'])} section(s)")

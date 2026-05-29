@@ -16,7 +16,9 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
+import urllib.request
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -216,13 +218,67 @@ def load_findings(path):
 
 
 def _collect(obj):
-    """Recursively collect dicts that look like individual findings."""
+    """Recursively collect dicts that look like individual findings.
+
+    Handles three schemas beyond the generic nuclei/smart-scan format:
+    - trivy: Results[].Vulnerabilities[] with VulnerabilityID/Severity/Title/Description
+    - checkov: results.failed_checks[] with check_id/severity/resource/check_result
+    """
     if isinstance(obj, list):
         out = []
         for item in obj:
             out.extend(_collect(item))
         return out
     if isinstance(obj, dict):
+        # trivy: top-level Results array containing Vulnerabilities sub-arrays
+        if "Results" in obj and isinstance(obj["Results"], list):
+            out = []
+            for result in obj["Results"]:
+                vulns = result.get("Vulnerabilities") or []
+                for v in vulns:
+                    # Normalise to the shared finding schema
+                    out.append({
+                        "name":            v.get("VulnerabilityID") or v.get("Title") or "Unknown CVE",
+                        "vulnerabilityName": v.get("Title") or v.get("VulnerabilityID") or "",
+                        "severity":        (v.get("Severity") or "unknown").lower(),
+                        "description":     v.get("Description") or "",
+                        "template-id":     v.get("VulnerabilityID") or "",
+                        "tags":            ["cve", "vulnerability"],
+                        "references":      v.get("References") or [],
+                        "_source":         "trivy",
+                    })
+            if out:
+                return out
+
+        # checkov: results.failed_checks[] (may appear as top-level results key)
+        failed = (
+            (obj.get("results") or {}).get("failed_checks")
+            if isinstance(obj.get("results"), dict)
+            else None
+        )
+        if isinstance(failed, list) and failed:
+            out = []
+            for fc in failed:
+                sev = str(fc.get("severity") or "medium").lower()
+                if sev not in ("critical", "high", "medium", "low", "info"):
+                    sev = "medium"
+                out.append({
+                    "name":        fc.get("check_id") or "CKV_UNKNOWN",
+                    "Title":       fc.get("check_id") or "Checkov finding",
+                    "severity":    sev,
+                    "description": (
+                        f"Resource: {fc.get('resource') or 'unknown'}. "
+                        f"File: {(fc.get('repo_file_path') or fc.get('file_path') or '')}. "
+                        f"Lines: {fc.get('file_line_range') or ''}."
+                    ),
+                    "checkID":     fc.get("check_id") or "",
+                    "tags":        ["misconfig", "iac"],
+                    "_source":     "checkov",
+                })
+            if out:
+                return out
+
+        # Generic nuclei / smart-scan findings
         finding_keys = {"severity", "Severity", "vulnerabilityName", "name",
                         "template-id", "templateID", "Title", "checkID"}
         if finding_keys & obj.keys():
@@ -240,17 +296,152 @@ def _collect(obj):
 
 
 # ---------------------------------------------------------------------------
+# LLM-assisted control mapping
+# ---------------------------------------------------------------------------
+
+_CONTROL_DESCRIPTIONS = {
+    "sp-01": "Authentication architecture — auth system design, MFA, session tokens",
+    "sp-02": "Access control / IDOR / BOLA — authorization, ownership checks, mass assignment",
+    "sp-03": "OAuth / OIDC / open redirect — third-party auth flows, PKCE, redirect validation",
+    "sp-04": "Remote code execution / injection — RCE, LFI, XXE, command injection, deserialization",
+    "sp-05": "Cloud IAM / privilege escalation — cloud roles, IMDS, over-privileged accounts",
+    "sp-06": "Cryptography — weak ciphers, TLS config, certificate issues",
+    "s-01":  "Input validation — unvalidated user input across all entry points",
+    "s-02":  "Session management — cookie flags, session fixation, token lifecycle",
+    "s-03":  "API security / injection — SQLi, NoSQLi, BOLA, API authentication",
+    "s-04":  "Error handling — stack traces in responses, information disclosure",
+    "s-05":  "Secrets management — hardcoded credentials, token exposure, API key leaks",
+    "s-06":  "Dependency vulnerabilities — third-party CVEs, outdated packages",
+    "sm-01": "Security headers — missing or misconfigured HTTP security headers",
+    "sm-02": "Client-side security — XSS, CSRF, DOM injection, content injection",
+    "sm-03": "SSRF — server-side request forgery, internal network access",
+    "sm-04": "JWT security — alg:none, weak signing, claim validation",
+    "sm-05": "File handling — path traversal, unsafe file operations",
+    "sm-06": "Logging / PII — sensitive data in logs, missing audit trail",
+    "app-01": "Container security — Docker misconfig, privileged containers, K8s security",
+    "app-02": "Supply chain — SBOMs, dependency integrity, build pipeline security",
+    "app-03": "Known CVEs — unpatched vulnerabilities, EOL components",
+    "app-04": "Infrastructure as code — Terraform/Helm misconfigurations",
+    "app-05": "Secrets in code — hardcoded values, .env exposure, git history",
+    "app-06": "File upload security — malicious uploads, MIME validation, storage exposure",
+    "ap-01":  "Monitoring and alerting — security event detection, SIEM integration",
+    "ap-02":  "Incident response — runbooks, escalation paths, breach procedures",
+    "ap-03":  "CI/CD pipeline security — GitHub Actions, pipeline injection, secrets in CI",
+    "ap-04":  "Network segmentation — firewall rules, VPC config, exposure minimization",
+    "ap-05":  "Backup and recovery — data backup integrity, restore testing",
+    "ap-06":  "Vendor risk — third-party service security, SLA, data handling",
+    "a-01":   "WAF / DDoS protection — edge protection, rate limiting at perimeter",
+    "a-02":   "Data encryption at rest — database encryption, storage encryption",
+    "a-03":   "CORS / CSP / security headers — browser-enforced protections",
+    "a-04":   "Penetration testing — scheduled testing, findings tracking",
+    "a-05":   "Token revocation — refresh token rotation, logout invalidation",
+    "a-06":   "Zero trust / least privilege — access scoping, privilege minimization",
+    "bp-01":  "DNS security — DNSSEC, subdomain takeover, DNS hijacking",
+    "bp-02":  "Security scanning — SAST/DAST coverage, misconfiguration scanning",
+    "bp-03":  "Geo-blocking / IP controls — geographic access restrictions",
+    "bp-04":  "Security training — developer awareness, phishing resistance",
+    "bp-05":  "Vulnerability disclosure — responsible disclosure policy, bug bounty",
+    "bp-06":  "Audit log retention — log archival, tamper-evident logging",
+}
+
+
+def _llm_map_findings(findings, gateway_key):
+    """
+    Call LLM Gateway to get control mappings for findings that the static table
+    couldn't confidently classify. Returns {finding_index: (control_id, confidence)}.
+    Only called when LLM_GATEWAY_KEY is available in env.
+    """
+    if not findings or not gateway_key:
+        return {}
+
+    # Build a compact representation of each finding for the prompt
+    finding_list = []
+    for idx, f in enumerate(findings):
+        name = f.get("name") or f.get("vulnerabilityName") or f.get("Title") or "Unknown"
+        desc = (f.get("description") or f.get("details") or "")[:150]
+        tags = ", ".join(_tags(f)[:5])
+        sev  = _sev(f)
+        finding_list.append(
+            f"{idx}: name={name!r} severity={sev} tags=[{tags}] desc={desc!r}"
+        )
+
+    control_list = "\n".join(
+        f"  {cid}: {desc}" for cid, desc in _CONTROL_DESCRIPTIONS.items()
+    )
+
+    prompt = (
+        "You are a security control mapper. Given a list of security findings and a "
+        "list of control IDs with descriptions, return a JSON object mapping each "
+        "finding index to the BEST matching control ID and a confidence float (0.0-1.0).\n\n"
+        "Respond ONLY with a JSON object like: {\"0\": {\"control\": \"sp-02\", \"confidence\": 0.91}, ...}\n\n"
+        f"Controls:\n{control_list}\n\n"
+        f"Findings:\n" + "\n".join(finding_list)
+    )
+
+    payload = json.dumps({
+        "model": "anthropic/claude-haiku-4.5",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1024,
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://llm.frxncois.workers.dev/v1/chat/completions",
+        data=payload,
+        headers={
+            "Content-Type":  "application/json",
+            "Authorization": f"Bearer {gateway_key}",
+            "HTTP-Referer":  "https://frxncois.com",
+            "X-Title":       "sic_to_audit",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = json.loads(resp.read())
+        text = body["choices"][0]["message"]["content"].strip()
+        # Strip markdown code fences if model wrapped JSON
+        text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        result = json.loads(text)
+        return {
+            int(k): (v["control"], float(v.get("confidence", 0.5)))
+            for k, v in result.items()
+            if v.get("control") in _CONTROL_DESCRIPTIONS
+        }
+    except Exception as e:
+        print(f"[sic_to_audit] LLM mapping skipped: {e}", file=sys.stderr)
+        return {}
+
+
+# ---------------------------------------------------------------------------
 # Fill data builder
 # ---------------------------------------------------------------------------
 
-def build_fill_data(findings):
+def build_fill_data(findings, gateway_key=None):
     """
     Each finding -> that control FAILS.
     Controls with no findings -> pass: null (manual review required).
+    LLM mapping (when gateway_key provided) overrides heuristic on high-confidence hits.
     """
-    fail_map = {}
-    for f in findings:
+    # Static heuristic pass first
+    heuristic_map = {}
+    for idx, f in enumerate(findings):
         cid, note = map_finding(f)
+        heuristic_map[idx] = (cid, note)
+
+    # LLM override pass — only upgrade mappings with confidence >= 0.75
+    llm_map = _llm_map_findings(findings, gateway_key) if gateway_key else {}
+    if llm_map:
+        print(f"[sic_to_audit] LLM mapped {len(llm_map)} finding(s)", file=sys.stderr)
+
+    fail_map = {}
+    for idx, f in enumerate(findings):
+        h_cid, h_note = heuristic_map[idx]
+        if idx in llm_map:
+            l_cid, conf = llm_map[idx]
+            cid = l_cid if conf >= 0.75 else h_cid
+        else:
+            cid = h_cid
+        note = h_note
         fail_map.setdefault(cid, []).append(note)
 
     fill = {}
@@ -335,11 +526,17 @@ def main():
                         help="Output HTML file path")
     args = parser.parse_args()
 
+    gateway_key = os.environ.get("LLM_GATEWAY_KEY")
+    if gateway_key:
+        print("[sic_to_audit] LLM_GATEWAY_KEY found — LLM mapping enabled")
+    else:
+        print("[sic_to_audit] LLM_GATEWAY_KEY not set — using heuristic mapping only")
+
     print(f"[sic_to_audit] Loading {args.results}")
     findings = load_findings(args.results)
     print(f"[sic_to_audit] {len(findings)} findings parsed")
 
-    fill_data = build_fill_data(findings)
+    fill_data = build_fill_data(findings, gateway_key=gateway_key)
     failed = sum(1 for v in fill_data.values() if v["pass"] is False)
     manual = sum(1 for v in fill_data.values() if v["pass"] is None)
     passed = sum(1 for v in fill_data.values() if v["pass"] is True)
