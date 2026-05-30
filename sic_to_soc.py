@@ -55,8 +55,9 @@ def _collect(obj):
                         "references":      v.get("References") or [],
                         "_source":         "trivy",
                     })
-            if out:
-                return out
+            # Results is authoritative: a vuln-free trivy scan returns [] here
+            # rather than falling through and being mis-read as a single finding.
+            return out
 
         # checkov: results.failed_checks[] (may appear as top-level results key)
         failed = (
@@ -67,9 +68,9 @@ def _collect(obj):
         if isinstance(failed, list) and failed:
             out = []
             for fc in failed:
-                sev = str(fc.get("severity") or "medium").lower()
+                sev = str(fc.get("severity") or "unknown").lower()
                 if sev not in ("critical", "high", "medium", "low", "info"):
-                    sev = "medium"
+                    sev = "unknown"
                 out.append({
                     "name":        fc.get("check_id") or "CKV_UNKNOWN",
                     "Title":       fc.get("check_id") or "Checkov finding",
@@ -94,9 +95,10 @@ def _collect(obj):
             if isinstance(sub, list):
                 return _collect(sub)
             return [obj]
+        # recurse into nested list AND dict values — findings can be dict-nested
         out = []
         for v in obj.values():
-            if isinstance(v, list):
+            if isinstance(v, (list, dict)):
                 out.extend(_collect(v))
         return out
     return []
@@ -171,56 +173,100 @@ def _ref(f):
 # Week-over-week snapshot loader
 # ---------------------------------------------------------------------------
 
-def _load_prior_snapshots(project, runs_dir):
+def _extract_project_data(html):
+    """Pull the project-data JSON out of a prior SOC report.
+
+    Strips HTML comments FIRST — the blank template ships a comment that mentions
+    `<script id="project-data">` (no closing tag), which would otherwise hijack a
+    naive regex and capture the real block's closing </script>. After stripping
+    comments, an id-anchored match is robust to attribute order.
+    Returns the parsed dict, or None.
+    """
+    html_nocomment = re.sub(r"<!--[\s\S]*?-->", "", html)
+    m = re.search(
+        r'<script\b[^>]*\bid=["\']project-data["\'][^>]*>([\s\S]*?)</script>',
+        html_nocomment,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    try:
+        pd = json.loads(m.group(1).strip())
+    except json.JSONDecodeError:
+        return None
+    return pd if isinstance(pd, dict) else None
+
+
+def _load_prior_snapshots(project, slug, runs_dir, exclude=None):
     """
     Find the most recent prior SOC report for this project in runs_dir/qa/,
     extract its snapshots array, and return it (or [] if none found).
     The snapshot structure matches the SOC template's week-navigation schema:
       [{score, checked, notes, evidence, timestamps, signoff}, ...]  (oldest first)
+
+    Globs both display-name and slug-named files, excludes the report currently
+    being written, and logs parse skips to stderr (no silent swallowing).
     """
     qa_dir = Path(runs_dir) / "qa"
     if not qa_dir.exists():
         return []
 
-    slug_pattern = re.sub(r"[^a-z0-9]+", "-", project.lower()).strip("-")
-    # Find all prior SOC HTML files for this project, sorted newest first
-    candidates = sorted(
-        qa_dir.glob(f"{project}-soc-*.html"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    # Also try slug-based names
-    if not candidates:
-        candidates = sorted(
-            qa_dir.glob(f"*soc*.html"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        candidates = [p for p in candidates if slug_pattern in p.name.lower()]
+    exclude_resolved = None
+    if exclude:
+        try:
+            exclude_resolved = Path(exclude).resolve()
+        except Exception:
+            exclude_resolved = None
+
+    # Gather candidates from display-name + slug patterns only (deduped).
+    # A broad "*soc*.html" glob would cross-contaminate this project's history
+    # with OTHER projects' reports, so the fallback is slug-substring-filtered.
+    slug_lower = (slug or "").lower()
+    seen, candidates = set(), []
+
+    def _add(p):
+        try:
+            rp = p.resolve()
+        except Exception:
+            return
+        if rp in seen or rp == exclude_resolved:
+            return
+        seen.add(rp)
+        candidates.append(p)
+
+    for pat in (f"{project}-soc-*.html", f"{slug}-soc-*.html"):
+        for p in qa_dir.glob(pat):
+            _add(p)
+    # Slug-filtered broad fallback only if nothing matched the exact patterns
+    if not candidates and slug_lower:
+        for p in qa_dir.glob("*soc*.html"):
+            if slug_lower in p.name.lower():
+                _add(p)
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
     for candidate in candidates:
         try:
             html = candidate.read_text(encoding="utf-8", errors="replace")
-            m = re.search(
-                r'<script[^>]+id=["\']project-data["\'][^>]*>([\s\S]*?)</script>',
-                html,
-            )
-            if not m:
-                continue
-            pd = json.loads(m.group(1))
-            snapshots = pd.get("snapshots")
-            if isinstance(snapshots, list):
-                return snapshots
-            # No snapshots key yet — extract just the score as a single prior entry
-            controls = pd.get("controls", [])
-            items = [i for s in controls for i in s.get("items", [])]
-            if items:
-                done = sum(1 for i in items if i.get("done"))
-                score = round(done / len(items) * 100)
-                return [{"score": score, "checked": {}, "notes": {}, "evidence": {},
-                         "timestamps": {}, "signoff": {"name": "", "role": ""}}]
-        except Exception:
+        except Exception as e:
+            print(f"[sic_to_soc] could not read prior report {candidate.name}: {e}",
+                  file=sys.stderr)
             continue
+        pd = _extract_project_data(html)
+        if pd is None:
+            print(f"[sic_to_soc] no parseable project-data in {candidate.name}",
+                  file=sys.stderr)
+            continue
+        snapshots = pd.get("snapshots")
+        if isinstance(snapshots, list) and snapshots:
+            return snapshots
+        # No snapshots array yet — derive a single prior entry from the score
+        controls = pd.get("controls", [])
+        items = [i for s in controls for i in s.get("items", [])]
+        if items:
+            done = sum(1 for i in items if i.get("done"))
+            score = round(done / len(items) * 100)
+            return [{"score": score, "checked": {}, "notes": {}, "evidence": {},
+                     "timestamps": {}, "signoff": {"name": "", "role": ""}}]
     return []
 
 
@@ -249,7 +295,8 @@ SEV_TAG = {
 }
 
 
-def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=None):
+def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=None,
+                       output_path=None, score_override=None):
     # Group findings by canonical severity
     buckets = {s: [] for s in SEV_ORDER}
     for f in findings:
@@ -374,16 +421,52 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
         "controls":   controls,
     }
 
-    # Week-over-week: load prior snapshots and inject as history
-    prior_snapshots = _load_prior_snapshots(project, runs_dir) if runs_dir else []
-    if prior_snapshots:
-        # Append prior weeks at offset -N ... -1; current week at 0 will be set
-        # by the template's save-snapshot logic on first interaction.
-        project_data["snapshots"] = prior_snapshots
-        print(f"[sic_to_soc] Loaded {len(prior_snapshots)} prior snapshot(s) for week-over-week diff",
-              file=sys.stderr)
+    # ---- Week-over-week history -------------------------------------------
+    # Current-week posture score: % of items remediated (done). Fresh scans
+    # start at 0% (nothing remediated yet). score_override lets an upstream
+    # runner (e.g. the weekly harness bridge) supply its own weighted score.
+    all_items = [i for s in controls for i in s.get("items", [])]
+    if score_override is not None:
+        current_score = max(0, min(100, int(score_override)))
+    elif all_items:
+        done = sum(1 for i in all_items if i.get("done"))
+        current_score = round(done / len(all_items) * 100)
     else:
-        project_data["snapshots"] = []
+        current_score = 0
+
+    prior_snapshots = (
+        _load_prior_snapshots(project, slug, runs_dir, exclude=output_path)
+        if runs_dir else []
+    )
+    current_snapshot = {
+        "score":      current_score,
+        "checked":    {},
+        "notes":      {},
+        "evidence":   {},
+        "timestamps": {},
+        "signoff":    {"name": "", "role": ""},
+        "week_of":    now_iso[:10],
+    }
+
+    # De-dup by ISO week: replace the trailing snapshot if it's the same week
+    # rather than appending a duplicate (two scans in one week = one snapshot).
+    def _iso_week(date_str):
+        try:
+            return tuple(datetime.fromisoformat(date_str[:10]).isocalendar()[:2])
+        except Exception:
+            return None
+
+    cur_week = _iso_week(now_iso)
+    if (prior_snapshots and cur_week is not None
+            and _iso_week(prior_snapshots[-1].get("week_of", "")) == cur_week):
+        snapshots = prior_snapshots[:-1] + [current_snapshot]
+    else:
+        snapshots = prior_snapshots + [current_snapshot]
+
+    project_data["snapshots"] = snapshots
+    if prior_snapshots:
+        print(f"[sic_to_soc] Week-over-week: {len(prior_snapshots)} prior snapshot(s) "
+              f"+ current (score {current_score})", file=sys.stderr)
 
     return project_data
 
@@ -431,6 +514,9 @@ def main():
                         help=f"SOC handoff HTML template (default: {DEFAULT_TEMPLATE})")
     parser.add_argument("--slug",     default=None,
                         help="URL-safe project slug (derived from --project if omitted)")
+    parser.add_argument("--score",    type=int, default=None,
+                        help="Override current-week posture score (0-100) for the "
+                             "week-over-week snapshot (used by the weekly harness bridge)")
     args = parser.parse_args()
 
     slug = args.slug or re.sub(r"[^a-z0-9]+", "-", args.project.lower()).strip("-")
@@ -441,7 +527,10 @@ def main():
     print(f"[sic_to_soc] {len(findings)} findings parsed")
 
     runs_dir = str(Path(args.output).parent.parent)  # _runs/qa/../ = _runs/
-    project_data = build_project_data(findings, args.project, slug, args.scan, now, runs_dir=runs_dir)
+    project_data = build_project_data(
+        findings, args.project, slug, args.scan, now,
+        runs_dir=runs_dir, output_path=args.output, score_override=args.score,
+    )
     total_controls = sum(len(s["items"]) for s in project_data["controls"])
     crit = project_data["caseMetadata"]["severity"]
     print(f"[sic_to_soc] Severity: {crit}  Controls: {total_controls} across {len(project_data['controls'])} section(s)")

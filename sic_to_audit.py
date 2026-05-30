@@ -247,8 +247,9 @@ def _collect(obj):
                         "references":      v.get("References") or [],
                         "_source":         "trivy",
                     })
-            if out:
-                return out
+            # Results is authoritative: a vuln-free trivy scan returns [] here
+            # rather than falling through and being mis-read as a single finding.
+            return out
 
         # checkov: results.failed_checks[] (may appear as top-level results key)
         failed = (
@@ -259,9 +260,9 @@ def _collect(obj):
         if isinstance(failed, list) and failed:
             out = []
             for fc in failed:
-                sev = str(fc.get("severity") or "medium").lower()
+                sev = str(fc.get("severity") or "unknown").lower()
                 if sev not in ("critical", "high", "medium", "low", "info"):
-                    sev = "medium"
+                    sev = "unknown"
                 out.append({
                     "name":        fc.get("check_id") or "CKV_UNKNOWN",
                     "Title":       fc.get("check_id") or "Checkov finding",
@@ -286,10 +287,10 @@ def _collect(obj):
             if isinstance(sub, list):
                 return _collect(sub)
             return [obj]
-        # recurse into list values
+        # recurse into nested list AND dict values — findings can be dict-nested
         out = []
         for v in obj.values():
-            if isinstance(v, list):
+            if isinstance(v, (list, dict)):
                 out.extend(_collect(v))
         return out
     return []
