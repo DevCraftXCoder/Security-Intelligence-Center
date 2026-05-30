@@ -2,13 +2,13 @@
 
 # SIC — Security Intelligence Center
 
-### Penetration Testing MCP Framework for Authorized Security Testing
+### Penetration Testing & SOC Reporting Framework for Authorized Security Testing
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](#mcp-integration)
 
-**A penetration testing MCP framework with specialized agents for authorized security testing, CTF challenges, and defensive research.**
+**A penetration testing MCP framework with specialized agents for authorized security testing, CTF challenges, defensive research, and automated SOC reporting.**
 
 </div>
 
@@ -16,7 +16,7 @@
 
 ## Overview
 
-SIC runs as a local server exposing an MCP interface for integration with any MCP-compatible client (Claude Code, Copilot, Cursor). All operations are IP-allowlisted to the home network.
+SIC runs as a local server exposing an MCP interface for integration with any MCP-compatible client (Claude Code, Copilot, Cursor). All scan operations are IP-allowlisted to the home network. Scan output flows through a reporting pipeline that produces both a detailed security audit report and a SOC handoff HTML — with week-over-week posture tracking built in.
 
 ---
 
@@ -46,12 +46,70 @@ Add to your MCP client config:
 }
 ```
 
-## Run with npx
+---
+
+## Reporting Pipeline
+
+SIC ships two report generators that convert scan output into production-quality HTML reports.
+
+### `sic_to_audit.py` — 3SIXTYCO. Security Audit Report
+
+Maps SIC scan findings to 42 audit control IDs (7 tiers: SP → BP) with pass/fail/manual status, score ring, and per-item evidence blocks.
+
+Supports nuclei, smart-scan, trivy (`Results[].Vulnerabilities[]`), and checkov (`results.failed_checks[]`). LLM-assisted control mapping via LLM Gateway for high-confidence cross-control assignment.
 
 ```bash
-npx sic-security@beta
+python sic_to_audit.py \
+  --results  _runs/scan-20260529-120000.json \
+  --template /path/to/3sixtyco-security-audit-v1.html \
+  --project  "MyApp" \
+  --output   _runs/qa/MyApp-audit-20260529-120000.html
 ```
+
+### `sic_to_soc.py` — SOC Handoff Report
+
+Generates a SOC handoff HTML from scan findings, grouped into P0–P3 severity sections. Includes week-over-week posture history via a `project-data` snapshots array — consecutive same-week scans dedup into one snapshot; cross-week runs accumulate automatically.
+
+```bash
+python sic_to_soc.py \
+  --scan     _runs/scan-20260529-120000.json \
+  --project  "MyApp" \
+  --output   _runs/qa/MyApp-soc-20260529-120000.html \
+  --template /path/to/soc-handoff-template-blank.html \
+  --score    85          # optional: override posture score for week-0 snapshot
+```
+
+**Output layout**
+
+```
+_runs/
+  scan-<ts>.json                   raw SIC tool output
+  qa/
+    <project>-audit-<ts>.html      3SIXTYCO. audit report (42 controls, scored)
+    <project>-soc-<ts>.html        SOC handoff report (findings by severity, weekly history)
+```
+
+---
+
+## Supported Scan Schemas
+
+| Tool | Schema | Extractor |
+|------|--------|-----------|
+| nuclei / smart-scan | `{severity, name, template-id, ...}` | Generic `_collect()` |
+| trivy | `Results[].Vulnerabilities[]` | trivy-specific branch |
+| checkov | `results.failed_checks[]` | checkov-specific branch |
+| Concatenated JSON | Multiple JSON objects in one file | Streaming decoder |
+
+---
+
+## MCP Integration
+
+SIC exposes 150+ security tools and 12+ specialized agents over MCP. Example tools: `smart-scan`, `nuclei`, `trivy`, `checkov`, `nmap`, `gobuster`, `ffuf`, `sqlmap`, and dedicated CTF, bug bounty, and recon modules.
+
+All tool calls are sandboxed and scope-validated. Unauthorized targets are rejected at the API layer.
+
+---
 
 ## Authorized Use Only
 
-> SIC is designed exclusively for authorized security testing. All operations must target systems you own or have explicit written permission to test.
+> SIC is designed exclusively for authorized security testing. All operations must target systems you own or have explicit written permission to test. Unauthorized scanning is illegal and prohibited.
