@@ -71,10 +71,13 @@ try:
 except ImportError:
     HAS_MITMPROXY = False
 from scope_enforcer import get_enforcer
-import sentry_sdk as _sentry_sdk
+try:
+    import sentry_sdk as _sentry_sdk  # optional — not in requirements-core.txt
+except ImportError:
+    _sentry_sdk = None
 
 _sentry_dsn = os.environ.get("SENTRY_DSN", "")
-if _sentry_dsn:
+if _sentry_dsn and _sentry_sdk:
     _sentry_sdk.init(
         dsn=_sentry_dsn,
         traces_sample_rate=0.1,
@@ -319,6 +322,33 @@ def require_auth() -> None:
                 return jsonify({"error": "insufficient_scope", "required": "write"}), 403  # type: ignore[return-value]
 
     return None  # type: ignore[return-value]
+
+
+@app.after_request
+def add_cors(response):
+    """Allow the SIC dashboard (served from port 9888) to call this server cross-origin."""
+    _CORS_ORIGINS = {
+        "http://localhost:9888",
+        "http://127.0.0.1:9888",
+        "http://localhost:9889",
+        "http://127.0.0.1:9889",
+    }
+    origin = request.headers.get("Origin", "")
+    if origin in _CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Session-Token"
+    return response
+
+
+@app.before_request
+def handle_preflight():
+    """Return 200 for CORS preflight OPTIONS requests so browsers don't block cross-origin calls."""
+    if request.method == "OPTIONS":
+        response = app.make_default_options_response()
+        add_cors(response)
+        return response
 
 
 @app.before_request

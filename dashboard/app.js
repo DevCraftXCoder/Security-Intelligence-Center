@@ -31,12 +31,19 @@ function fmtUptime(seconds) {
 }
 
 // ─── Base URLs ───────────────────────────────────────────────────────────────
-// Main SIC server (same origin). Billing server runs on a separate port.
+// Main SIC server on port 9890 (sic-main PM2 process). Auth routes live here.
+const SIC_MAIN_BASE = window.location.protocol + "//" + window.location.hostname + ":9890";
+// Billing server runs on a separate port.
 const BILLING_BASE = window.location.protocol + "//" + window.location.hostname + ":9015";
 
 // billingFetch — routes to the separate billing server on :9015
 async function billingFetch(path, options) {
   return apiFetch(BILLING_BASE + path, options);
+}
+
+// mainFetch — routes to the main SIC server on :9890 (auth, tools, scan-history)
+async function mainFetch(path, options) {
+  return apiFetch(SIC_MAIN_BASE + path, options);
 }
 
 // ─── apiFetch — centralized fetch with credentials + JSON headers ──────────
@@ -68,16 +75,18 @@ async function fetchJson(url, opts) {
 }
 
 // ─── checkAuth — redirect to login if not authenticated ───────────────────
-// The main SIC server (hexstrike container) may not expose /auth/me.
+// Try the main SIC server (:9890) first for /auth/me.
 // Fall back to the billing server (:9015/api/billing/auth/me) when the
-// primary returns 404, so cross-origin dashboard pages stay functional.
+// primary returns 404 (e.g. sic-main not running), so the dashboard stays
+// functional even if one server is down.
 
 async function checkAuth() {
   try {
-    return await apiFetch("/auth/me");
+    // Primary: main SIC server on port 9890
+    return await mainFetch("/auth/me");
   } catch (e) {
-    if (e.status === 404) {
-      // Main server doesn't support /auth/me — try the billing server instead.
+    if (e.status === 404 || e.status === 0) {
+      // Port 9890 not running or route missing — try billing server fallback
       try {
         return await billingFetch("/api/billing/auth/me");
       } catch (billingErr) {
@@ -291,7 +300,7 @@ function initLogin() {
     const email = form.email.value.trim();
     if (!email) return;
     try {
-      const data = await apiFetch("/auth/request-link", {
+      const data = await mainFetch("/auth/request-link", {
         method: "POST",
         body: { email },
       });

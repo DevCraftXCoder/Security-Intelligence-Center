@@ -87,13 +87,14 @@ _print_banner()
 
 # Now import and run the real server
 if __name__ == "__main__":
-    # Patch sys.argv so argparse in hexstrike_server.py sees our args
-    import hexstrike_server  # noqa: E402 — triggers Flask app creation
+    # Import server.py (the Flask app lives at module scope; its __main__ guard
+    # does NOT fire on import, so we drive app.run() ourselves below).
+    import server  # noqa: E402 — triggers Flask app creation
 
     # The server's __main__ block calls app.run() — we just need to trigger it
     port = int(os.environ.get("HEXSTRIKE_PORT", sys.argv[1] if len(sys.argv) > 1 else 9888))
     print(f"[hexstrike-launcher] Starting on 127.0.0.1:{port}")
-    hexstrike_server.app.run(
+    server.app.run(
         host="127.0.0.1",
         port=port,
         debug=False,
