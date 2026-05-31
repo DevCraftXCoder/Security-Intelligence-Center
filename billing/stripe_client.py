@@ -3,10 +3,12 @@
 All Stripe API calls are centralised here so routes stay thin.
 
 Environment variables consumed (never logged):
-    STRIPE_SECRET_KEY       — Stripe API key (sk_live_... or sk_test_...)
-    STRIPE_PRICE_TEAM       — price_... ID for the Team tier ($29/mo)
-    STRIPE_PRICE_STUDIO     — price_... ID for the Studio tier ($99/mo)
-    STRIPE_WEBHOOK_SECRET   — whsec_... value for webhook signature verification
+    STRIPE_SECRET_KEY            — Stripe API key (sk_live_... or sk_test_...)
+    STRIPE_PRICE_TEAM            — price_... ID for the Team tier ($29/mo)
+    STRIPE_PRICE_STUDIO          — price_... ID for the Studio tier ($99/mo)
+    STRIPE_PRICE_TEAM_YEARLY     — price_... ID for the Team tier ($290/yr)
+    STRIPE_PRICE_STUDIO_YEARLY   — price_... ID for the Studio tier ($990/yr)
+    STRIPE_WEBHOOK_SECRET        — whsec_... value for webhook signature verification
 
 The module imports stripe lazily so the server does not crash on startup
 when the stripe package is not installed.
@@ -19,10 +21,16 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Tier → Stripe Price ID mapping
-_TIER_PRICE_MAP: dict[str, str] = {
-    "team": "STRIPE_PRICE_TEAM",
-    "studio": "STRIPE_PRICE_STUDIO",
+# Tier → interval → env var name for the Stripe Price ID
+_PRICE_IDS: dict[str, dict[str, str]] = {
+    "team": {
+        "month": "STRIPE_PRICE_TEAM",
+        "year": "STRIPE_PRICE_TEAM_YEARLY",
+    },
+    "studio": {
+        "month": "STRIPE_PRICE_STUDIO",
+        "year": "STRIPE_PRICE_STUDIO_YEARLY",
+    },
 }
 
 
@@ -55,17 +63,37 @@ def _secret_key() -> str:
     return key
 
 
-def _price_id(tier: str) -> str:
-    env_var = _TIER_PRICE_MAP.get(tier)
-    if env_var is None:
+def get_price_id(tier: str, interval: str = "month") -> str:
+    """Return the Stripe Price ID for *tier* and *interval*.
+
+    Args:
+        tier:     "team" or "studio"
+        interval: "month" (default) or "year"
+
+    Raises:
+        ValueError:       Unknown tier.
+        EnvironmentError: Required env var not set.
+    """
+    tier = tier.lower()
+    interval = interval if interval in ("month", "year") else "month"
+    tier_map = _PRICE_IDS.get(tier)
+    if tier_map is None:
         raise ValueError(f"Unknown billing tier: {tier!r}")
+    env_var = tier_map[interval]
     price_id = os.environ.get(env_var, "")
     if not price_id:
         raise EnvironmentError(
-            f"{env_var} is not set — cannot create checkout session for tier {tier!r}."
+            f"{env_var} is not set — cannot create checkout session for "
+            f"tier={tier!r} interval={interval!r}."
         )
     logger.debug("%s is set (%d chars)", env_var, len(price_id))
     return price_id
+
+
+# Keep the old private name as an alias so any internal callers don't break
+# during the transition period.
+def _price_id(tier: str) -> str:
+    return get_price_id(tier, "month")
 
 
 def _webhook_secret() -> str:
@@ -90,15 +118,19 @@ def create_checkout_session(
     success_url: str,
     cancel_url: str,
     customer_id: str | None = None,
+    interval: str = "month",
 ) -> object:
-    """Create a Stripe Checkout session for *tier*.
+    """Create a Stripe Checkout session for *tier* and *interval*.
+
+    Args:
+        interval: "month" (default) or "year" — selects the correct Price ID.
 
     Returns the full Stripe Session object on success.
     Raises EnvironmentError / stripe.error.StripeError on failure.
     """
     stripe = _stripe()
     stripe.api_key = _secret_key()
-    price_id = _price_id(tier)
+    price_id = get_price_id(tier, interval)
 
     params: dict = {
         "mode": "subscription",
@@ -107,8 +139,10 @@ def create_checkout_session(
         "customer": customer_id or None,
         "success_url": success_url,
         "cancel_url": cancel_url,
-        "subscription_data": {"metadata": {"sic_email": email, "sic_tier": tier}},
-        "metadata": {"sic_email": email, "sic_tier": tier},
+        "subscription_data": {
+            "metadata": {"sic_email": email, "sic_tier": tier, "interval": interval},
+        },
+        "metadata": {"sic_email": email, "sic_tier": tier, "interval": interval},
     }
     # Strip None values — Stripe SDK raises on explicit None for some fields
     params = {k: v for k, v in params.items() if v is not None}

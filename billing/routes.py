@@ -34,6 +34,7 @@ from .stripe_client import (
     construct_webhook_event,
     create_checkout_session,
     create_portal_session,
+    get_price_id,  # noqa: F401 — exported for tests / admin tooling
 )
 
 billing_bp = Blueprint("sic_billing", __name__, url_prefix="/api/billing")
@@ -533,6 +534,10 @@ def _handle_checkout_completed(event, email: str | None) -> None:
                 _e,
             )
 
+    billing_interval = meta.get("interval", "month")
+    if billing_interval not in ("month", "year"):
+        billing_interval = "month"
+
     upsert_subscription(
         email=email,
         stripe_customer_id=customer_id,
@@ -540,10 +545,12 @@ def _handle_checkout_completed(event, email: str | None) -> None:
         tier=tier,
         status=subscription_status,
         current_period_end=current_period_end,
+        billing_interval=billing_interval,
     )
     logger.info(
-        "provisioned tier=%s status=%s for email=%.6s***",
+        "provisioned tier=%s interval=%s status=%s for email=%.6s***",
         tier,
+        billing_interval,
         subscription_status,
         email[:6],
     )
@@ -734,6 +741,7 @@ def public_checkout():
     body = request.get_json(silent=True) or {}
     tier = body.get("tier")
     email = (body.get("email") or "").strip().lower()
+    interval = (body.get("interval") or "month").strip().lower()
 
     if not email or not _EMAIL_RE.match(email):
         return jsonify(
@@ -746,6 +754,11 @@ def public_checkout():
                 "error": "invalid_tier",
                 "detail": f"tier must be one of: {sorted(_VALID_PAID_TIERS)}",
             }
+        ), 400
+
+    if interval not in ("month", "year"):
+        return jsonify(
+            {"error": "invalid_interval", "detail": "interval must be 'month' or 'year'"}
         ), 400
 
     # Check if this email already has an active subscription
@@ -763,6 +776,7 @@ def public_checkout():
             success_url=success_url,
             cancel_url=cancel_url,
             customer_id=customer_id,
+            interval=interval,
         )
         return jsonify({"checkout_url": session.url}), 200
     except EnvironmentError as exc:

@@ -65,10 +65,22 @@ def init_db() -> None:
                                         CHECK(tier IN ('community', 'team', 'studio')),
                 status                  TEXT,
                 current_period_end      INTEGER,
+                billing_interval        TEXT NOT NULL DEFAULT 'month'
+                                        CHECK(billing_interval IN ('month', 'year')),
                 updated_at              INTEGER NOT NULL
             )
             """
         )
+        # Migration: add billing_interval column to existing DBs (idempotent).
+        try:
+            conn.execute(
+                "ALTER TABLE subscriptions ADD COLUMN billing_interval TEXT NOT NULL "
+                "DEFAULT 'month' CHECK(billing_interval IN ('month', 'year'))"
+            )
+            conn.commit()
+            logger.debug("billing_interval column added via migration")
+        except Exception:  # noqa: BLE001 — column already exists, safe to ignore
+            pass
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS billing_events (
@@ -104,16 +116,18 @@ def upsert_subscription(
     tier: str = "community",
     status: str | None = None,
     current_period_end: int | None = None,
+    billing_interval: str = "month",
 ) -> None:
     """Insert or fully replace a subscription row."""
+    billing_interval = billing_interval if billing_interval in ("month", "year") else "month"
     now = int(time.time())
     with _connect() as conn:
         conn.execute(
             """
             INSERT INTO subscriptions
                 (email, stripe_customer_id, stripe_subscription_id,
-                 tier, status, current_period_end, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 tier, status, current_period_end, billing_interval, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(email) DO UPDATE SET
                 stripe_customer_id     = COALESCE(excluded.stripe_customer_id,
                                                    stripe_customer_id),
@@ -122,6 +136,7 @@ def upsert_subscription(
                 tier                   = excluded.tier,
                 status                 = excluded.status,
                 current_period_end     = excluded.current_period_end,
+                billing_interval       = excluded.billing_interval,
                 updated_at             = excluded.updated_at
             """,
             (
@@ -131,6 +146,7 @@ def upsert_subscription(
                 tier,
                 status,
                 current_period_end,
+                billing_interval,
                 now,
             ),
         )
