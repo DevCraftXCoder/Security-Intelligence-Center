@@ -2,8 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#050505">
 <title>SIC — Billing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
 <link rel="stylesheet" href="/dashboard/style.css">
 <style>
 /* ─── Billing page extras ──────────────────────────────────────────────────── */
@@ -21,7 +27,7 @@
 .billing-plan-card {
   background: var(--sic-surface);
   border: 1px solid var(--sic-border);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -133,7 +139,7 @@
 .billing-action-card {
   background: var(--sic-surface);
   border: 1px solid var(--sic-border);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -145,7 +151,7 @@
   height: 36px;
   background: rgba(233, 69, 96, 0.1);
   border: 1px solid rgba(233, 69, 96, 0.2);
-  border-radius: 6px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -171,7 +177,7 @@
 .billing-invoices {
   background: var(--sic-surface);
   border: 1px solid var(--sic-border);
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
   margin-bottom: 24px;
 }
@@ -197,15 +203,15 @@
 /* ─── Cancel section ───────────────────────────────────────────────────────── */
 .billing-cancel-section {
   background: var(--sic-surface);
-  border: 1px solid rgba(255, 82, 102, 0.25);
-  border-radius: 8px;
+  border: 1px solid rgba(233, 69, 96, 0.25);
+  border-radius: 0;
   padding: 20px;
 }
 
 .billing-cancel-section__title {
   font-size: 13px;
   font-weight: 600;
-  color: #ff5266;
+  color: var(--sic-accent);
   margin: 0 0 8px 0;
   display: flex;
   align-items: center;
@@ -375,7 +381,7 @@
       You keep full access until then. Scan history and reports are preserved for 30 days after downgrade.
       To cancel, open the Customer Portal and select <em>Cancel plan</em>.
     </p>
-    <button id="cancel-portal-btn" class="sic-btn" style="border-color:#ff5266;color:#ff5266">Open Portal to Cancel</button>
+    <button id="cancel-portal-btn" class="sic-btn" style="border-color:var(--sic-accent);color:var(--sic-accent)">Open Portal to Cancel</button>
   </div>
 
 </div>
@@ -393,7 +399,7 @@ const TIER_META = {
     priceDetail: "",
     features: [
       "1 seat",
-      "30-day scan history",
+      "7-day scan history",
       "Basic PDF export",
       "Community support",
     ],
@@ -453,7 +459,7 @@ function buildPlanCard(sub, isActive) {
     .join("");
 
   const renewsHtml = (isActive && periodEnd)
-    ? `<div class="billing-renews">Renews <strong>${fmtUnix(periodEnd)}</strong>${status === "canceled" ? " — <span style='color:#ff5266'>cancels at period end</span>" : ""}</div>`
+    ? `<div class="billing-renews">Renews <strong>${fmtUnix(periodEnd)}</strong>${status === "canceled" ? " — <span style='color:var(--sic-accent)'>cancels at period end</span>" : ""}</div>`
     : "";
 
   return `
