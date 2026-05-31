@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SIC — Billing</title>
+<link rel="stylesheet" href="/dashboard/style.css">
+<style>
+/* ─── Billing page extras ──────────────────────────────────────────────────── */
+.billing-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 768px) {
+  .billing-hero { grid-template-columns: 1fr 1fr; }
+}
+
+.billing-plan-card {
+  background: var(--sic-surface);
+  border: 1px solid var(--sic-border);
+  border-radius: 8px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.billing-plan-card--active {
+  border-color: var(--sic-accent);
+  background: rgba(233, 69, 96, 0.04);
+}
+
+.billing-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+}
+
+.billing-plan-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sic-text-muted);
+}
+
+.billing-plan-badge--active .dot {
+  background: #5acc8a;
+  box-shadow: 0 0 6px rgba(90, 204, 138, 0.5);
+}
+
+.billing-plan-badge--active {
+  color: #5acc8a;
+}
+
+.billing-plan-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--sic-text);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.billing-plan-name svg {
+  flex-shrink: 0;
+}
+
+.billing-plan-price {
+  font-family: var(--sic-font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--sic-accent);
+  line-height: 1;
+}
+
+.billing-plan-price span {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--sic-text-muted);
+}
+
+.billing-plan-features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--sic-text-muted);
+}
+
+.billing-plan-features li::before {
+  content: "✓ ";
+  color: #5acc8a;
+  font-weight: 700;
+}
+
+.billing-renews {
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  color: var(--sic-text-muted);
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--sic-border);
+}
+
+/* ─── Action cards ─────────────────────────────────────────────────────────── */
+.billing-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 600px) {
+  .billing-actions { grid-template-columns: 1fr 1fr; }
+}
+
+@media (min-width: 900px) {
+  .billing-actions { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+.billing-action-card {
+  background: var(--sic-surface);
+  border: 1px solid var(--sic-border);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.billing-action-card__icon {
+  width: 36px;
+  height: 36px;
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.2);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sic-accent);
+  flex-shrink: 0;
+}
+
+.billing-action-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sic-text);
+  margin: 0;
+}
+
+.billing-action-card__desc {
+  font-size: 12px;
+  color: var(--sic-text-muted);
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* ─── Invoice table ────────────────────────────────────────────────────────── */
+.billing-invoices {
+  background: var(--sic-surface);
+  border: 1px solid var(--sic-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.billing-invoices__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--sic-border);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.billing-invoices__title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+  margin: 0;
+}
+
+/* ─── Cancel section ───────────────────────────────────────────────────────── */
+.billing-cancel-section {
+  background: var(--sic-surface);
+  border: 1px solid rgba(255, 82, 102, 0.25);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.billing-cancel-section__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ff5266;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.billing-cancel-section__body {
+  font-size: 13px;
+  color: var(--sic-text-muted);
+  line-height: 1.6;
+  margin: 0 0 16px 0;
+}
+
+/* ─── Loading shimmer ──────────────────────────────────────────────────────── */
+.billing-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--sic-text-muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.billing-loading::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--sic-border);
+  border-top-color: var(--sic-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Tier indicators ──────────────────────────────────────────────────────── */
+.tier-community { color: var(--sic-text-muted); }
+.tier-team      { color: #6cb0ff; }
+.tier-studio    { color: var(--sic-accent); }
+</style>
+</head>
+<body data-page="billing">
+<canvas id="galaxy-canvas"></canvas>
+<div id="glitch-vignette"></div>
+<div class="sic-shell">
+
+  <header class="sic-header">
+    <div class="sic-header__brand">
+      <div class="sic-header__logo-wrap" id="logo-toggle" role="button" tabindex="0" aria-label="Toggle settings bar" aria-expanded="false" aria-controls="control-bar" title="Click to toggle settings">
+        <span class="sic-header__logo" id="logo-text">SIC</span>
+        <img class="sic-header__logo-img" id="logo-img" alt="SIC Logo" style="display:none">
+        <input type="file" id="logo-file" accept="image/*" style="display:none" aria-hidden="true">
+      </div>
+      <span class="sic-header__tagline">Security Intelligence Center</span>
+    </div>
+    <nav class="sic-nav" aria-label="Main navigation">
+      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">Dashboard</a>
+      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">Posture</a>
+      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">Incidents</a>
+      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">AI Fix</a>
+      <a class="sic-nav__link" data-page="billing" href="/dashboard/billing.html">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:4px"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing
+      </a>
+    </nav>
+    <div class="sic-user">
+      <span id="user-email" class="mono">—</span>
+      <button id="logout-btn" class="sic-btn sic-btn--ghost">Sign out</button>
+    </div>
+  </header>
+
+  <div class="sic-control-bar" id="control-bar" role="region" aria-label="Background and logo controls" aria-hidden="true">
+    <div class="sic-control-bar__inner">
+      <span class="sic-control-bar__label">LIVE BG</span>
+      <div class="sic-control-bar__segment" role="group" aria-label="Background theme">
+        <button class="sic-control-bar__btn" data-theme="glitch" type="button">Glitch</button>
+        <button class="sic-control-bar__btn" data-theme="galaxy" type="button">Galaxy</button>
+        <button class="sic-control-bar__btn" data-theme="navy" type="button">Navy (Static)</button>
+      </div>
+      <span class="sic-control-bar__divider" aria-hidden="true"></span>
+      <span class="sic-control-bar__label">LOGO</span>
+      <button class="sic-control-bar__btn sic-control-bar__btn--primary" id="logo-upload-btn" type="button">Upload Logo</button>
+      <button class="sic-control-bar__close" id="control-bar-close" type="button" aria-label="Close (Esc)" title="Close (Esc)">&times;</button>
+    </div>
+  </div>
+
+  <!-- Page head -->
+  <div class="sic-page-head">
+    <div>
+      <h2 class="sic-page-head__title">Billing &amp; Subscription</h2>
+      <p class="sic-page-head__sub">Manage your SIC plan, invoices, and payment method</p>
+    </div>
+    <div id="billing-status-badge"></div>
+  </div>
+
+  <!-- Current plan hero -->
+  <div class="billing-hero" id="billing-hero">
+    <div class="billing-loading">Loading subscription…</div>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="billing-actions">
+
+    <div class="billing-action-card">
+      <div class="billing-action-card__icon" aria-hidden="true">
+        <!-- Credit card icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      </div>
+      <h3 class="billing-action-card__title">Manage Subscription</h3>
+      <p class="billing-action-card__desc">Update payment method, view invoice history, or change your billing details via the Stripe Customer Portal.</p>
+      <button id="portal-btn" class="sic-btn sic-btn--primary" disabled>Open Customer Portal</button>
+      <span id="portal-msg" class="sic-error" style="display:none"></span>
+    </div>
+
+    <div class="billing-action-card">
+      <div class="billing-action-card__icon" aria-hidden="true">
+        <!-- Upgrade arrow icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><line x1="12" y1="6" x2="12" y2="18"/></svg>
+      </div>
+      <h3 class="billing-action-card__title">Upgrade / Downgrade</h3>
+      <p class="billing-action-card__desc">Compare SIC Community, Team ($29/mo), and Studio ($99/mo) plans. Unlock more seats, scan history, and AI features.</p>
+      <a href="/sic-signup" class="sic-btn" style="text-align:center;text-decoration:none;display:block">View Plans</a>
+    </div>
+
+    <div class="billing-action-card">
+      <div class="billing-action-card__icon" aria-hidden="true">
+        <!-- Receipt icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      </div>
+      <h3 class="billing-action-card__title">Invoice History</h3>
+      <p class="billing-action-card__desc">Download past invoices and receipts. All invoices are accessible via the Stripe Customer Portal.</p>
+      <button id="invoices-btn" class="sic-btn" disabled>Load Invoices</button>
+      <span id="invoices-msg" class="sic-error" style="display:none"></span>
+    </div>
+
+  </div>
+
+  <!-- Invoice table -->
+  <div class="billing-invoices" id="invoices-section" style="display:none">
+    <div class="billing-invoices__header">
+      <h3 class="billing-invoices__title">Recent Invoices</h3>
+      <span id="invoices-period" class="mono" style="font-size:11px;color:var(--sic-text-muted)"></span>
+    </div>
+    <table class="sic-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Plan</th>
+        </tr>
+      </thead>
+      <tbody id="invoices-tbody"></tbody>
+    </table>
+    <div id="invoices-empty" class="sic-empty" style="display:none;padding:20px 16px">No invoices found. Invoices appear after your first payment.</div>
+  </div>
+
+  <!-- Cancel section — always visible for paid tiers -->
+  <div class="billing-cancel-section" id="cancel-section" style="display:none">
+    <h3 class="billing-cancel-section__title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Cancel Subscription
+    </h3>
+    <p class="billing-cancel-section__body">
+      Canceling will downgrade your account to <strong>Community</strong> at the end of the current billing period.
+      You keep full access until then. Scan history and reports are preserved for 30 days after downgrade.
+      To cancel, open the Customer Portal and select <em>Cancel plan</em>.
+    </p>
+    <button id="cancel-portal-btn" class="sic-btn" style="border-color:#ff5266;color:#ff5266">Open Portal to Cancel</button>
+  </div>
+
+</div>
+
+<script src="/dashboard/app.js"></script>
+<script>
+"use strict";
+
+// ─── Billing page controller ───────────────────────────────────────────────
+
+const TIER_META = {
+  community: {
+    name: "Community",
+    price: "Free",
+    priceDetail: "",
+    features: [
+      "1 seat",
+      "30-day scan history",
+      "Basic PDF export",
+      "Community support",
+    ],
+    class: "tier-community",
+  },
+  team: {
+    name: "Team",
+    price: "$29",
+    priceDetail: "/ month",
+    features: [
+      "Up to 5 seats",
+      "90-day scan history",
+      "Full PDF export + shareable reports",
+      "AI Fix assistant",
+      "Weekly security briefings",
+      "Priority email support",
+    ],
+    class: "tier-team",
+  },
+  studio: {
+    name: "Studio",
+    price: "$99",
+    priceDetail: "/ month",
+    features: [
+      "Unlimited seats",
+      "Unlimited scan history",
+      "White-label PDF reports",
+      "Custom scan profiles",
+      "SSO / SAML integration",
+      "Dedicated Slack support",
+    ],
+    class: "tier-studio",
+  },
+};
+
+function fmtUnix(ts) {
+  if (!ts) return "—";
+  try {
+    return new Date(ts * 1000).toLocaleDateString(undefined, {
+      year: "numeric", month: "short", day: "numeric",
+    });
+  } catch { return "—"; }
+}
+
+function buildPlanCard(sub, isActive) {
+  const tier = sub.tier || "community";
+  const meta = TIER_META[tier] || TIER_META.community;
+  const status = sub.status;
+  const periodEnd = sub.current_period_end;
+
+  const activeClass = isActive ? "billing-plan-card--active" : "";
+  const badgeClass = isActive ? "billing-plan-badge--active" : "";
+  const badgeLabel = isActive ? "Current plan" : "Available plan";
+
+  const featuresHtml = meta.features
+    .map(f => `<li>${escapeHtml(f)}</li>`)
+    .join("");
+
+  const renewsHtml = (isActive && periodEnd)
+    ? `<div class="billing-renews">Renews <strong>${fmtUnix(periodEnd)}</strong>${status === "canceled" ? " — <span style='color:#ff5266'>cancels at period end</span>" : ""}</div>`
+    : "";
+
+  return `
+    <div class="billing-plan-card ${activeClass}">
+      <span class="billing-plan-badge ${badgeClass}">
+        <span class="dot"></span>${escapeHtml(badgeLabel)}
+      </span>
+      <h3 class="billing-plan-name">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${meta.class}" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        <span class="${meta.class}">${escapeHtml(meta.name)}</span>
+      </h3>
+      <div class="billing-plan-price">
+        ${escapeHtml(meta.price)}
+        ${meta.priceDetail ? `<span>${escapeHtml(meta.priceDetail)}</span>` : ""}
+      </div>
+      <ul class="billing-plan-features">${featuresHtml}</ul>
+      ${renewsHtml}
+    </div>`;
+}
+
+async function loadSubscription() {
+  const hero = document.getElementById("billing-hero");
+  const portalBtn = document.getElementById("portal-btn");
+  const invoicesBtn = document.getElementById("invoices-btn");
+  const cancelSection = document.getElementById("cancel-section");
+  const cancelPortalBtn = document.getElementById("cancel-portal-btn");
+  const statusBadge = document.getElementById("billing-status-badge");
+
+  try {
+    const sub = await apiFetch("/api/billing/subscription");
+
+    const tier = sub.tier || "community";
+    const isPaid = tier === "team" || tier === "studio";
+
+    // Build status badge
+    const statusColor = sub.status === "active" ? "#5acc8a"
+                      : sub.status === "trialing" ? "#6cb0ff"
+                      : sub.status === "past_due" ? "#ff8c42"
+                      : sub.status === "canceled" ? "#888"
+                      : "#888";
+    if (sub.status) {
+      statusBadge.innerHTML = `
+        <span class="sic-status" style="background:rgba(0,0,0,0.3);color:${statusColor};border:1px solid ${statusColor}40;">
+          ${escapeHtml(sub.status.replace("_", " ").toUpperCase())}
+        </span>`;
+    }
+
+    // Build the hero — show current plan + next tier as upgrade suggestion
+    const nextTierKey = tier === "community" ? "team"
+                      : tier === "team" ? "studio"
+                      : null;
+
+    let heroHtml = buildPlanCard(sub, true);
+    if (nextTierKey) {
+      heroHtml += buildPlanCard({ tier: nextTierKey, status: null, current_period_end: null }, false);
+    }
+    hero.innerHTML = heroHtml;
+
+    // Enable portal button only if user has a Stripe customer
+    if (isPaid) {
+      portalBtn.disabled = false;
+      invoicesBtn.disabled = false;
+      cancelSection.style.display = "block";
+    } else {
+      portalBtn.title = "No active subscription — upgrade first";
+    }
+
+    // Wire portal button
+    portalBtn.addEventListener("click", openPortal);
+    cancelPortalBtn.addEventListener("click", openPortal);
+    invoicesBtn.addEventListener("click", loadInvoices);
+
+  } catch (err) {
+    const msg = err.status === 401
+      ? "Not authenticated. Please <a href='/dashboard/login.html' class='sic-link'>sign in</a> to view billing."
+      : "Failed to load subscription details. Is the billing server running on port 9015?";
+    hero.innerHTML = `<div class="sic-error" style="grid-column:1/-1">${msg}</div>`;
+  }
+}
+
+async function openPortal() {
+  const btn = document.getElementById("portal-btn");
+  const cancelBtn = document.getElementById("cancel-portal-btn");
+  const msg = document.getElementById("portal-msg");
+
+  btn.disabled = true;
+  cancelBtn.disabled = true;
+  if (msg) { msg.style.display = "none"; }
+  const originalText = btn.textContent;
+  btn.textContent = "Opening portal…";
+
+  try {
+    const data = await apiFetch("/api/billing/portal", { method: "POST" });
+    if (data && data.portal_url) {
+      window.location.href = data.portal_url;
+    } else {
+      throw new Error("No portal URL returned");
+    }
+  } catch (err) {
+    const errMsg = err.body && err.body.error === "no_stripe_customer"
+      ? "No Stripe customer on file. Subscribe to a paid plan first."
+      : err.body && err.body.error === "billing_unavailable"
+      ? "Billing server misconfigured. Check STRIPE_SECRET_KEY in .env."
+      : "Failed to open portal. Try again.";
+    if (msg) { msg.textContent = errMsg; msg.style.display = "block"; }
+    btn.disabled = false;
+    cancelBtn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+async function loadInvoices() {
+  const btn = document.getElementById("invoices-btn");
+  const section = document.getElementById("invoices-section");
+  const tbody = document.getElementById("invoices-tbody");
+  const empty = document.getElementById("invoices-empty");
+  const invoicesMsg = document.getElementById("invoices-msg");
+
+  btn.disabled = true;
+  btn.textContent = "Loading…";
+
+  // The billing API doesn't expose an invoice list endpoint — we redirect to
+  // the Customer Portal where Stripe provides full invoice history natively.
+  try {
+    const data = await apiFetch("/api/billing/portal", { method: "POST" });
+    if (data && data.portal_url) {
+      // Show a note + link rather than duplicating Stripe's invoice UI
+      section.style.display = "block";
+      tbody.innerHTML = "";
+      empty.style.display = "none";
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="4" style="padding:20px 16px;color:var(--sic-text-muted);font-size:13px">
+            Invoice history is available in the
+            <a href="${escapeHtml(data.portal_url)}" class="sic-link" target="_blank" rel="noopener">Stripe Customer Portal</a>.
+            All invoices can be downloaded as PDFs from there.
+          </td>
+        </tr>`;
+      btn.textContent = "Open Portal for Invoices";
+      btn.disabled = false;
+      btn.onclick = () => window.open(data.portal_url, "_blank");
+    }
+  } catch (err) {
+    if (invoicesMsg) {
+      invoicesMsg.textContent = "Could not load invoices. Open the Customer Portal to view invoice history.";
+      invoicesMsg.style.display = "block";
+    }
+    btn.textContent = "Load Invoices";
+    btn.disabled = false;
+  }
+}
+
+// Boot
+document.addEventListener("DOMContentLoaded", loadSubscription);
+</script>
+</body>
+</html>

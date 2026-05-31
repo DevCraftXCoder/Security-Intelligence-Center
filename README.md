@@ -140,6 +140,36 @@ _runs/
 
 ---
 
+## Stripe Billing
+
+SIC billing runs as a standalone Flask server on port 9015 (`billing_server.py`). Two subscription tiers are pre-configured in Stripe test mode:
+
+| Plan | Price | Stripe Product |
+|------|-------|----------------|
+| Team | $29 / month | `prod_URLViBAWBPAsCx` |
+| Studio | $99 / month | `prod_URLVVFcQ637BJM` |
+
+Price IDs are pre-populated in `.env` (`STRIPE_PRICE_TEAM`, `STRIPE_PRICE_STUDIO`).
+
+### Local webhook forwarding (dev)
+
+```bash
+# Forward Stripe events to the local billing server
+stripe listen --forward-to localhost:9015/api/billing/webhook
+# Copy the whsec_... value printed and set it as STRIPE_WEBHOOK_SECRET in .env
+```
+
+### Production webhook endpoint
+
+Create a permanent endpoint in the Stripe Dashboard pointing to:
+```
+https://<your-sic-domain>/api/billing/webhook
+```
+Events to subscribe: `checkout.session.completed`, `customer.subscription.updated`,
+`customer.subscription.deleted`, `invoice.payment_failed`
+
+---
+
 ## MCP Integration
 
 SIC exposes 150+ security tools and 12+ specialized agents over MCP. Example tools: `smart-scan`, `nuclei`, `trivy`, `checkov`, `nmap`, `gobuster`, `ffuf`, `sqlmap`, and dedicated CTF, bug bounty, and recon modules.
