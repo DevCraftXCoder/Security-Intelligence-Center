@@ -767,7 +767,7 @@ def public_checkout():
 
     base = _base_url()
     success_url = f"{base}/api/billing/public-checkout-success?tier={tier}"
-    cancel_url = f"{base}/sic-signup?billing=cancelled"
+    cancel_url = f"{base}/sic-payment-cancelled?reason=cancelled"
 
     try:
         session = create_checkout_session(
@@ -789,10 +789,10 @@ def public_checkout():
 
 @billing_bp.get("/public-checkout-success")
 def public_checkout_success():
-    """Redirect after Stripe checkout — return user to sic-signup with success state."""
+    """Redirect after Stripe checkout — send user to dedicated payment success page."""
     tier = request.args.get("tier", "community")
     # Validate against known tiers — prevent open redirect via unvalidated query param.
     if tier not in _ALL_VALID_TIERS:
         tier = "community"
     base = _base_url()
-    return redirect(f"{base}/sic-signup?billing=success&tier={tier}")
+    return redirect(f"{base}/sic-payment-success?tier={tier}")
