@@ -24,6 +24,7 @@ import logging
 import os
 import subprocess
 import sys
+import tempfile
 import traceback
 import threading
 import time
@@ -103,6 +104,11 @@ except PermissionError:
         ]
     )
 logger = logging.getLogger(__name__)
+
+# Boot-time warning: SIC_ADMIN_EMAILS must be set for magic-link auth to work
+_admin_emails = os.environ.get("SIC_ADMIN_EMAILS", "").strip()
+if not _admin_emails:
+    print("[SIC WARNING] SIC_ADMIN_EMAILS is not set. Magic link authentication will return 503 for all login requests. Set SIC_ADMIN_EMAILS=your@email.com in .env before starting.")
 
 # Flask app configuration
 app = Flask(__name__)
@@ -5961,7 +5967,7 @@ class ProcessManager:
 class PythonEnvironmentManager:
     """Manage Python virtual environments and dependencies"""
 
-    def __init__(self, base_dir: str = "/tmp/hexstrike_envs"):
+    def __init__(self, base_dir: str = os.path.join(tempfile.gettempdir(), "hexstrike_envs")):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(exist_ok=True)
 
@@ -9263,7 +9269,7 @@ def _determine_operation_type(tool_name: str) -> str:
 class FileOperationsManager:
     """Handle file operations with security and validation"""
 
-    def __init__(self, base_dir: str = "/tmp/hexstrike_files"):
+    def __init__(self, base_dir: str = os.path.join(tempfile.gettempdir(), "hexstrike_files")):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(exist_ok=True)
         self.max_file_size = 100 * 1024 * 1024  # 100MB

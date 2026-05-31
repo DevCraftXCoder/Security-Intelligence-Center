@@ -48,6 +48,44 @@ Add to your MCP client config:
 
 ---
 
+## First-Run Setup (Required)
+
+1. **Copy `.env.example` to `.env`**  
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Set required variables in `.env`:**
+
+   | Variable | Description |
+   |----------|-------------|
+   | `SIC_SECRET_KEY` | Random secret string (min 32 chars) |
+   | `SIC_ADMIN_EMAILS` | Your email (comma-separated for multiple) |
+   | `STRIPE_SECRET_KEY` | From Stripe Dashboard → API Keys |
+   | `STRIPE_WEBHOOK_SECRET` | From Stripe Dashboard → Webhooks |
+   | `STRIPE_PRICE_TEAM` | Stripe Price ID for Team plan |
+   | `STRIPE_PRICE_STUDIO` | Stripe Price ID for Studio plan |
+   | `BILLING_API_KEY` | Random secret for billing M2M auth |
+   | `RESEND_API_KEY` | For magic link email delivery |
+   | `SIC_ALERT_FROM` | Verified sender email (e.g. sic@yourdomain.com) |
+
+3. **Run the audit to verify setup:**
+   ```bash
+   python sic-audit.py
+   ```
+
+4. **Start SIC:**
+   ```bash
+   python server.py          # SIC main server (port 9888)
+   python billing_server.py  # Billing server (port 9015)
+   # Or with PM2:
+   pm2 start ecosystem.config.cjs
+   ```
+
+5. **Open your browser:** [http://localhost:9888](http://localhost:9888)
+
+---
+
 ## Reporting Pipeline
 
 SIC ships two report generators that convert scan output into production-quality HTML reports.

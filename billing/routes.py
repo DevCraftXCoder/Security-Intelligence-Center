@@ -544,7 +544,7 @@ _BILLING_API_KEY = os.getenv("BILLING_API_KEY", "")
 
 @billing_bp.post("/public-checkout")
 def public_checkout():
-    """Public checkout — called from francois-landing CF Worker.
+    """Public (unauthenticated) checkout endpoint — called from the operator's frontend CF Worker.
 
     Body JSON:
         {"email": "user@example.com", "tier": "team" | "studio"}
