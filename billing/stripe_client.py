@@ -3,12 +3,17 @@
 All Stripe API calls are centralised here so routes stay thin.
 
 Environment variables consumed (never logged):
-    STRIPE_SECRET_KEY            — Stripe API key (sk_live_... or sk_test_...)
-    STRIPE_PRICE_TEAM            — price_... ID for the Team tier ($29/mo)
-    STRIPE_PRICE_STUDIO          — price_... ID for the Studio tier ($99/mo)
-    STRIPE_PRICE_TEAM_YEARLY     — price_... ID for the Team tier ($290/yr)
-    STRIPE_PRICE_STUDIO_YEARLY   — price_... ID for the Studio tier ($990/yr)
-    STRIPE_WEBHOOK_SECRET        — whsec_... value for webhook signature verification
+    STRIPE_SECRET_KEY                — Stripe API key (sk_live_... or sk_test_...)
+    STRIPE_PRICE_TEAM                — price_... ID for the Team tier ($29/mo, test)
+    STRIPE_PRICE_STUDIO              — price_... ID for the Studio tier ($99/mo, test)
+    STRIPE_PRICE_TEAM_YEARLY         — price_... ID for the Team tier ($290/yr, test)
+    STRIPE_PRICE_STUDIO_YEARLY       — price_... ID for the Studio tier ($990/yr, test)
+    STRIPE_PRICE_TEAM_LIVE           — price_... ID for the Team tier ($29/mo, live)
+    STRIPE_PRICE_STUDIO_LIVE         — price_... ID for the Studio tier ($99/mo, live)
+    STRIPE_PRICE_TEAM_YEARLY_LIVE    — price_... ID for the Team tier ($290/yr, live)
+    STRIPE_PRICE_STUDIO_YEARLY_LIVE  — price_... ID for the Studio tier ($990/yr, live)
+    STRIPE_WEBHOOK_SECRET            — whsec_... value for webhook signature verification
+    SIC_ENV                          — "production" selects live price IDs; anything else uses test
 
 The module imports stripe lazily so the server does not crash on startup
 when the stripe package is not installed.
@@ -21,17 +26,30 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Tier → interval → env var name for the Stripe Price ID
+# Determine whether to use live or test price IDs based on SIC_ENV
+_is_live = os.environ.get("SIC_ENV", "development") == "production"
+
+# Tier → interval → env var name for the Stripe Price ID (live vs test)
 _PRICE_IDS: dict[str, dict[str, str]] = {
     "team": {
-        "month": "STRIPE_PRICE_TEAM",
-        "year": "STRIPE_PRICE_TEAM_YEARLY",
+        "month": "STRIPE_PRICE_TEAM_LIVE" if _is_live else "STRIPE_PRICE_TEAM",
+        "year": "STRIPE_PRICE_TEAM_YEARLY_LIVE" if _is_live else "STRIPE_PRICE_TEAM_YEARLY",
     },
     "studio": {
-        "month": "STRIPE_PRICE_STUDIO",
-        "year": "STRIPE_PRICE_STUDIO_YEARLY",
+        "month": "STRIPE_PRICE_STUDIO_LIVE" if _is_live else "STRIPE_PRICE_STUDIO",
+        "year": "STRIPE_PRICE_STUDIO_YEARLY_LIVE" if _is_live else "STRIPE_PRICE_STUDIO_YEARLY",
     },
 }
+
+# Guard: warn loudly if production env is using a test key — real payments will fail
+_stripe_key_check = os.environ.get("STRIPE_SECRET_KEY", "")
+if _is_live and _stripe_key_check.startswith("sk_test_"):
+    import warnings
+    warnings.warn(
+        "[billing WARNING] SIC_ENV=production but STRIPE_SECRET_KEY is a test key"
+        " — real payments will fail",
+        stacklevel=1,
+    )
 
 
 # ---------------------------------------------------------------------------
