@@ -30,6 +30,15 @@ function fmtUptime(seconds) {
   return `${m}m ${s}s`;
 }
 
+// ─── Base URLs ───────────────────────────────────────────────────────────────
+// Main SIC server (same origin). Billing server runs on a separate port.
+const BILLING_BASE = window.location.protocol + "//" + window.location.hostname + ":9015";
+
+// billingFetch — routes to the separate billing server on :9015
+async function billingFetch(path, options) {
+  return apiFetch(BILLING_BASE + path, options);
+}
+
 // ─── apiFetch — centralized fetch with credentials + JSON headers ──────────
 
 async function apiFetch(path, options) {
@@ -59,11 +68,25 @@ async function fetchJson(url, opts) {
 }
 
 // ─── checkAuth — redirect to login if not authenticated ───────────────────
+// The main SIC server (hexstrike container) may not expose /auth/me.
+// Fall back to the billing server (:9015/api/billing/auth/me) when the
+// primary returns 404, so cross-origin dashboard pages stay functional.
 
 async function checkAuth() {
   try {
     return await apiFetch("/auth/me");
   } catch (e) {
+    if (e.status === 404) {
+      // Main server doesn't support /auth/me — try the billing server instead.
+      try {
+        return await billingFetch("/api/billing/auth/me");
+      } catch (billingErr) {
+        if (billingErr.status === 401 || billingErr.status === 403) {
+          window.location.href = "/dashboard/login.html";
+        }
+        return null;
+      }
+    }
     if (e.status === 401 || e.status === 403) {
       window.location.href = "/dashboard/login.html";
     }

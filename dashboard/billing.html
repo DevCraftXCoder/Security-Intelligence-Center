@@ -6,6 +6,8 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#050505">
 <title>SIC — Billing</title>
+<!-- Improvement 15: SVG favicon -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23050505'/><text x='4' y='24' font-size='20' font-weight='900' fill='%23e94560'>S</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
@@ -249,6 +251,95 @@
   to { transform: rotate(360deg); }
 }
 
+/* Improvement 7: Card loading skeleton */
+@keyframes sic-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.sic-skeleton {
+  background: linear-gradient(90deg, var(--sic-surface) 25%, var(--sic-surface-2) 50%, var(--sic-surface) 75%);
+  background-size: 800px 100%;
+  animation: sic-shimmer 1.4s infinite linear;
+  border-radius: 0;
+  height: 14px;
+  margin-bottom: 8px;
+}
+
+/* Improvement 8: flat status badge chips */
+.sic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-radius: 0;
+}
+.sic-chip--active   { background: rgba(90,204,138,0.12);  border: 1px solid rgba(90,204,138,0.30);  color: #5acc8a; }
+.sic-chip--past-due { background: rgba(255,140,66,0.12);  border: 1px solid rgba(255,140,66,0.30);  color: #ff8c42; }
+.sic-chip--canceled { background: rgba(136,136,136,0.12); border: 1px solid rgba(136,136,136,0.30); color: #888; }
+.sic-chip--trialing { background: rgba(108,176,255,0.12); border: 1px solid rgba(108,176,255,0.30); color: #6cb0ff; }
+
+/* Improvement 6: empty state for failed billing load */
+.sic-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  background: var(--sic-surface);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.sic-empty-state__icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sic-text-muted);
+  opacity: 0.4;
+}
+.sic-empty-state__msg {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sic-text);
+  margin: 0 0 6px 0;
+}
+.sic-empty-state__sub {
+  font-size: 12px;
+  color: var(--sic-text-muted);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+.sic-empty-state__retry {
+  background: transparent;
+  border: 1px solid rgba(233,69,96,0.4);
+  color: var(--sic-accent);
+  padding: 8px 20px;
+  font-family: var(--sic-font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 140ms ease;
+}
+.sic-empty-state__retry:hover { background: rgba(233,69,96,0.08); }
+
+/* Improvement 14: Focus states */
+:focus-visible {
+  outline: 1px solid var(--sic-accent) !important;
+  outline-offset: 2px !important;
+}
+
+/* Improvement 1: Active nav indicator */
+.sic-nav__link.sic-nav__link--active {
+  border-left: 3px solid var(--sic-accent);
+  background: rgba(233,69,96,0.08);
+  color: var(--sic-accent);
+  padding-left: 9px;
+}
+
 /* ─── Tier indicators ──────────────────────────────────────────────────────── */
 .tier-community { color: var(--sic-text-muted); }
 .tier-team      { color: #6cb0ff; }
@@ -270,17 +361,21 @@
       <span class="sic-header__tagline">Security Intelligence Center</span>
     </div>
     <nav class="sic-nav" aria-label="Main navigation">
-      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">Dashboard</a>
-      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">Posture</a>
-      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">Incidents</a>
-      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">AI Fix</a>
+      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6L12 2z"/></svg>Posture</a>
+      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Incidents</a>
+      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>AI Fix</a>
       <a class="sic-nav__link" data-page="billing" href="/dashboard/billing.html">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:4px"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing
-      </a>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="1" y="4" width="22" height="16" rx="0"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing</a>
     </nav>
     <div class="sic-user">
       <span id="user-email" class="mono">—</span>
-      <button id="logout-btn" class="sic-btn sic-btn--ghost">Sign out</button>
+      <!-- Improvement 13: tooltip -->
+      <button id="logout-btn" class="sic-btn sic-btn--ghost" title="Sign out of SIC dashboard" aria-label="Sign out">Sign out</button>
     </div>
   </header>
 
@@ -299,10 +394,17 @@
     </div>
   </div>
 
-  <!-- Page head -->
+  <!-- Improvement 4: Breadcrumb -->
+  <nav class="sic-breadcrumb" aria-label="Breadcrumb" style="margin-bottom:8px;font-family:var(--sic-font-mono);font-size:11px;color:var(--sic-text-muted)">
+    <a href="/dashboard/index.html" style="color:var(--sic-text-muted);text-decoration:none" class="sic-link" onmouseover="this.style.color='var(--sic-accent)'" onmouseout="this.style.color='var(--sic-text-muted)'">SIC</a>
+    <span style="margin:0 6px;opacity:0.4">/</span>
+    <span style="color:var(--sic-text)">Billing</span>
+  </nav>
+
+  <!-- Improvement 3: Page header -->
   <div class="sic-page-head">
     <div>
-      <h2 class="sic-page-head__title">Billing &amp; Subscription</h2>
+      <h1 class="sic-page-head__title" style="font-size:20px">Billing &amp; Subscription</h1>
       <p class="sic-page-head__sub">Manage your SIC plan, invoices, and payment method</p>
     </div>
     <div id="billing-status-badge"></div>
@@ -489,22 +591,17 @@ async function loadSubscription() {
   const statusBadge = document.getElementById("billing-status-badge");
 
   try {
-    const sub = await apiFetch("/api/billing/subscription");
+    const sub = await billingFetch("/api/billing/subscription");
 
     const tier = sub.tier || "community";
     const isPaid = tier === "team" || tier === "studio";
 
     // Build status badge
-    const statusColor = sub.status === "active" ? "#5acc8a"
-                      : sub.status === "trialing" ? "#6cb0ff"
-                      : sub.status === "past_due" ? "#ff8c42"
-                      : sub.status === "canceled" ? "#888"
-                      : "#888";
+    // Improvement 8: flat chip badges
     if (sub.status) {
-      statusBadge.innerHTML = `
-        <span class="sic-status" style="background:rgba(0,0,0,0.3);color:${statusColor};border:1px solid ${statusColor}40;">
-          ${escapeHtml(sub.status.replace("_", " ").toUpperCase())}
-        </span>`;
+      const chipMap = { active: "sic-chip--active", trialing: "sic-chip--trialing", past_due: "sic-chip--past-due", canceled: "sic-chip--canceled" };
+      const chipClass = chipMap[sub.status] || "sic-chip--canceled";
+      statusBadge.innerHTML = `<span class="sic-chip ${chipClass}">${escapeHtml(sub.status.replace("_", " ").toUpperCase())}</span>`;
     }
 
     // Build the hero — show current plan + next tier as upgrade suggestion
@@ -536,7 +633,14 @@ async function loadSubscription() {
     const msg = err.status === 401
       ? "Not authenticated. Please <a href='/dashboard/login.html' class='sic-link'>sign in</a> to view billing."
       : "Failed to load subscription details. Is the billing server running on port 9015?";
-    hero.innerHTML = `<div class="sic-error" style="grid-column:1/-1">${msg}</div>`;
+    hero.innerHTML = `<div style="grid-column:1/-1" class="sic-empty-state">
+      <div class="sic-empty-state__icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="0"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      </div>
+      <p class="sic-empty-state__msg">Could not load subscription</p>
+      <p class="sic-empty-state__sub">${msg}</p>
+      <button class="sic-empty-state__retry" onclick="loadSubscription()">Retry</button>
+    </div>`;
   }
 }
 
@@ -552,7 +656,7 @@ async function openPortal() {
   btn.textContent = "Opening portal…";
 
   try {
-    const data = await apiFetch("/api/billing/portal", { method: "POST" });
+    const data = await billingFetch("/api/billing/portal", { method: "POST" });
     if (data && data.portal_url) {
       window.location.href = data.portal_url;
     } else {
@@ -584,7 +688,7 @@ async function loadInvoices() {
   // The billing API doesn't expose an invoice list endpoint — we redirect to
   // the Customer Portal where Stripe provides full invoice history natively.
   try {
-    const data = await apiFetch("/api/billing/portal", { method: "POST" });
+    const data = await billingFetch("/api/billing/portal", { method: "POST" });
     if (data && data.portal_url) {
       // Show a note + link rather than duplicating Stripe's invoice UI
       section.style.display = "block";
@@ -614,6 +718,14 @@ async function loadInvoices() {
 
 // Boot
 document.addEventListener("DOMContentLoaded", loadSubscription);
+
+// Improvement 1: Active nav indicator
+(function() {
+  var page = document.body.dataset.page;
+  document.querySelectorAll('.sic-nav__link').forEach(function(a) {
+    if (a.dataset.page === page) a.classList.add('sic-nav__link--active');
+  });
+})();
 </script>
 </body>
 </html>

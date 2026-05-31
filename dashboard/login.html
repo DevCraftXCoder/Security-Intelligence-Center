@@ -4,28 +4,76 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SIC — Sign In</title>
+<!-- Improvement 15: SVG favicon -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23050505'/><text x='4' y='24' font-size='20' font-weight='900' fill='%23e94560'>S</text></svg>">
 <link rel="stylesheet" href="/dashboard/style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
+<style>
+/* Improvements 9, 14 for login page */
+
+/* Improvement 9: canonical primary button */
+.sic-btn--primary {
+  background: var(--sic-accent) !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 10px 20px !important;
+  font-family: var(--sic-font-body) !important;
+  font-weight: 600 !important;
+  border-radius: 0 !important;
+  width: 100%;
+}
+
+/* Improvement 14: focus states */
+:focus-visible {
+  outline: 1px solid var(--sic-accent) !important;
+  outline-offset: 2px !important;
+}
+
+/* Improvement 5: login form card — correct token */
+.sic-form {
+  background: #0f0f0f;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 0 !important;
+}
+
+/* Step 1: SIC logo on login page — enhanced inline svg wordmark */
+.sic-login-logo {
+  text-align: center;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+.sic-login-logo .sic-header__logo {
+  font-size: 28px;
+  letter-spacing: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+</style>
 </head>
 <body data-page="login">
 <canvas id="galaxy-canvas"></canvas>
 <div id="glitch-vignette"></div>
 
 <main class="sic-form-page">
+  <!-- Step 1: Enhanced logo on login page with shield icon -->
   <div class="sic-login-logo" id="login-bg-cycle" role="button" tabindex="0"
        title="Click to cycle background">
-    <span class="sic-header__logo" id="logo-text">SIC</span>
+    <span class="sic-header__logo" id="logo-text">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6L12 2z" fill="#e94560" opacity="0.15" stroke="#e94560" stroke-width="1.5"/><path d="M9 12l2 2 4-4" stroke="#e94560" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>SIC
+    </span>
     <img class="sic-login-logo__img" id="logo-img" alt="SIC Logo" style="display:none">
     <input type="file" id="logo-file" accept="image/*" style="display:none" aria-hidden="true">
   </div>
 
   <form id="login-form" class="sic-form" autocomplete="email">
-    <p class="sic-stat__label" style="text-align:center;margin-bottom:4px">Security Intelligence Center</p>
-    <label for="email">Admin email</label>
+    <p class="sic-stat__label" style="text-align:center;margin-bottom:4px;font-family:var(--sic-font-mono);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sic-text-muted)">Security Intelligence Center</p>
+    <label for="email" class="sic-label">Admin email</label>
     <input id="email" name="email" type="email" class="sic-input" required autofocus>
+    <!-- Improvement 9: canonical primary button -->
     <button type="submit" class="sic-btn sic-btn--primary">Send magic link</button>
     <div id="login-msg"></div>
   </form>

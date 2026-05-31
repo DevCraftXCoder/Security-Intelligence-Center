@@ -397,6 +397,28 @@ def webhook():
 
 
 # ---------------------------------------------------------------------------
+# Route: GET /api/billing/auth/me
+# ---------------------------------------------------------------------------
+
+
+@billing_bp.get("/auth/me")
+def auth_me():
+    """Called by the dashboard to verify the current session across origins.
+
+    The main SIC server (hexstrike container, port 9888) does not expose
+    /auth/me; this endpoint on the billing server (port 9015) fills that gap.
+    Returns the authenticated user's email and tier, or 401 if not logged in.
+    """
+    email = get_session_email()
+    if not email:
+        return jsonify({"error": "unauthenticated"}), 401
+
+    sub = get_subscription(email)
+    tier = sub["tier"] if sub else "community"
+    return jsonify({"email": email, "tier": tier}), 200
+
+
+# ---------------------------------------------------------------------------
 # Webhook event handlers (called from webhook() only)
 # ---------------------------------------------------------------------------
 

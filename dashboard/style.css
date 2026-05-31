@@ -7,12 +7,15 @@
 :root {
   --sic-accent: #e94560;
   --sic-accent-dim: #b02040;
-  --sic-bg: #0a0a0a;
-  --sic-surface: #141414;
-  --sic-surface-2: #1e1e1e;
-  --sic-text: #e0e0e0;
-  --sic-text-muted: #888888;
-  --sic-border: #2a2a2a;
+  /* Improvement 5: align to reference design-system tokens */
+  --sic-bg:       #050505;
+  --sic-surface:  #0f0f0f;
+  --sic-surface-2: #141414;
+  --sic-elevated: #1a1a1a;
+  --sic-text: #f5f2ec;
+  --sic-text-muted: #9a968d;
+  /* Improvement 5: subtle border matching reference token rgba(255,255,255,0.06) */
+  --sic-border: rgba(255,255,255,0.06);
   --sic-font-body: 'DM Sans', system-ui, sans-serif;
   --sic-font-mono: 'JetBrains Mono', 'Courier New', monospace;
 }
@@ -33,7 +36,8 @@ body {
 
 /* ─── Utility ──────────────────────────────────────────────────────────────── */
 .accent { color: var(--sic-accent); }
-.surface { background: var(--sic-surface); border: 1px solid var(--sic-border); border-radius: 6px; }
+/* Improvement 5: flat zero-radius surface */
+.surface { background: var(--sic-surface); border: 1px solid var(--sic-border); border-radius: 0; }
 .mono { font-family: var(--sic-font-mono); }
 
 /* ─── Shell ────────────────────────────────────────────────────────────────── */
@@ -90,20 +94,30 @@ header.sic-header {
   font-size: 13px;
   font-family: var(--sic-font-mono);
   padding: 6px 12px;
-  border-radius: 4px;
-  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  /* Improvement 1: reserve space for left-border so active state doesn't shift layout */
+  border-left: 3px solid transparent;
+  border-bottom: none;
   transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
 }
 
 .sic-nav__link:hover {
   color: var(--sic-text);
-  background: var(--sic-surface);
+  background: rgba(255,255,255,0.03);
 }
 
+/* Improvement 1: active nav — left border + background tint */
 .sic-nav__link--active {
   color: var(--sic-accent);
-  border-bottom-color: var(--sic-accent);
-  background: rgba(233, 69, 96, 0.07);
+  border-left-color: var(--sic-accent);
+  background: rgba(233, 69, 96, 0.08);
+  padding-left: 9px;
+}
+
+/* Improvement 14: global focus-visible ring */
+:focus-visible {
+  outline: 1px solid var(--sic-accent);
+  outline-offset: 2px;
 }
 
 /* ─── User area ────────────────────────────────────────────────────────────── */
@@ -152,7 +166,7 @@ header.sic-header {
   gap: 8px;
   background: var(--sic-surface);
   border: 1px solid var(--sic-border);
-  border-radius: 6px;
+  border-radius: 0;
   padding: 8px 12px;
   flex-wrap: wrap;
 }
@@ -185,10 +199,11 @@ header.sic-header {
 }
 
 /* ─── Panel ────────────────────────────────────────────────────────────────── */
+/* Improvement 5: flat monochrome — zero radius, rgba border */
 .sic-panel {
   background: var(--sic-surface);
   border: 1px solid var(--sic-border);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 20px;
 }
 
@@ -344,7 +359,7 @@ header.sic-header {
   padding: 32px;
   background: var(--sic-surface);
   border: 1px solid var(--sic-border);
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .sic-form h1 {
@@ -368,7 +383,7 @@ header.sic-header {
   background: var(--sic-bg);
   color: var(--sic-text);
   border: 1px solid var(--sic-border);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 10px 12px;
   font-family: var(--sic-font-body);
   font-size: 14px;
@@ -396,11 +411,12 @@ select.sic-input {
 }
 
 /* ─── Buttons ──────────────────────────────────────────────────────────────── */
+/* Improvement 9: canonical button styles — flat zero-radius */
 .sic-btn {
   background: transparent;
   color: var(--sic-text);
   border: 1px solid var(--sic-border);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 8px 16px;
   cursor: pointer;
   font-family: var(--sic-font-body);
@@ -424,6 +440,8 @@ select.sic-input {
   border-color: var(--sic-accent);
   color: #fff;
   font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 0;
 }
 
 .sic-btn--primary:hover:not(:disabled) {
@@ -507,7 +525,7 @@ select.sic-input {
   padding: 16px 18px;
   background: var(--sic-surface);
   border: 1px solid var(--sic-border);
-  border-radius: 8px;
+  border-radius: 0;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease;
   outline: none;

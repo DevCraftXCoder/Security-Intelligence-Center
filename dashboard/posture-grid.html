@@ -4,11 +4,36 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SIC — Security Posture</title>
+<!-- Improvement 15: SVG favicon -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23050505'/><text x='4' y='24' font-size='20' font-weight='900' fill='%23e94560'>S</text></svg>">
 <link rel="stylesheet" href="/dashboard/style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
+<style>
+/* Improvements 1, 5, 14 */
+.sic-nav__link.sic-nav__link--active {
+  border-left: 3px solid var(--sic-accent);
+  background: rgba(233,69,96,0.08);
+  color: var(--sic-accent);
+  padding-left: 9px;
+}
+:focus-visible {
+  outline: 1px solid var(--sic-accent) !important;
+  outline-offset: 2px !important;
+}
+/* Improvement 5: correct card borders to rgba token */
+.sic-domain-card {
+  border: 1px solid rgba(255,255,255,0.06) !important;
+  background: #0f0f0f !important;
+  border-radius: 0 !important;
+}
+.sic-domain-card:hover,
+.sic-domain-card:focus {
+  border-color: var(--sic-accent) !important;
+}
+</style>
 </head>
 <body data-page="posture">
 <canvas id="galaxy-canvas"></canvas>
@@ -18,24 +43,30 @@
   <header class="sic-header">
     <div class="sic-header__brand">
       <div class="sic-header__logo-wrap" id="logo-toggle" role="button" tabindex="0" aria-label="Toggle settings bar" aria-expanded="false" aria-controls="control-bar" title="Click to toggle settings">
-        <span class="sic-header__logo" id="logo-text">SIC</span>
+        <span class="sic-header__logo" id="logo-text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="display:inline-block;vertical-align:-3px;margin-right:4px"><path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6L12 2z" fill="#e94560" opacity="0.15" stroke="#e94560" stroke-width="1.5"/><path d="M9 12l2 2 4-4" stroke="#e94560" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>SIC</span>
         <img class="sic-header__logo-img" id="logo-img" alt="SIC Logo" style="display:none">
         <input type="file" id="logo-file" accept="image/*" style="display:none" aria-hidden="true">
       </div>
       <span class="sic-header__tagline">Security Intelligence Center</span>
     </div>
+    <!-- Improvement 2: icon-aligned nav -->
     <nav class="sic-nav" aria-label="Main navigation">
-      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">Dashboard</a>
-      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">Posture</a>
-      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">Incidents</a>
-      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">AI Fix</a>
+      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6L12 2z"/></svg>Posture</a>
+      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Incidents</a>
+      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>AI Fix</a>
       <a class="sic-nav__link" data-page="billing" href="/dashboard/billing.html">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:4px"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing
-      </a>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="1" y="4" width="22" height="16" rx="0"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing</a>
     </nav>
     <div class="sic-user">
       <span id="user-email" class="mono">—</span>
-      <button id="logout-btn" class="sic-btn sic-btn--ghost">Sign out</button>
+      <!-- Improvement 13: tooltip -->
+      <button id="logout-btn" class="sic-btn sic-btn--ghost" title="Sign out of SIC dashboard" aria-label="Sign out">Sign out</button>
     </div>
   </header>
 
@@ -54,9 +85,19 @@
     </div>
   </div>
 
+  <!-- Improvement 4: Breadcrumb -->
+  <nav class="sic-breadcrumb" aria-label="Breadcrumb" style="margin-bottom:8px;font-family:var(--sic-font-mono);font-size:11px;color:var(--sic-text-muted)">
+    <a href="/dashboard/index.html" style="color:var(--sic-text-muted);text-decoration:none" class="sic-link" onmouseover="this.style.color='var(--sic-accent)'" onmouseout="this.style.color='var(--sic-text-muted)'">SIC</a>
+    <span style="margin:0 6px;opacity:0.4">/</span>
+    <span style="color:var(--sic-text)">Posture</span>
+  </nav>
+
+  <!-- Improvement 3: consistent page header -->
   <div class="sic-page-head">
-    <h2 class="sic-page-head__title">Security Posture</h2>
-    <p class="sic-page-head__sub" id="posture-scan-info">Loading…</p>
+    <div>
+      <h1 class="sic-page-head__title" style="font-size:20px">Security Posture</h1>
+      <p class="sic-page-head__sub" id="posture-scan-info">Loading…</p>
+    </div>
   </div>
 
   <div id="posture-grid" class="sic-posture-grid" aria-label="Security domains">
@@ -80,5 +121,14 @@
 </div>
 
 <script src="/dashboard/app.js"></script>
+<script>
+// Improvement 1: Active nav indicator
+(function() {
+  var page = document.body.dataset.page;
+  document.querySelectorAll('.sic-nav__link').forEach(function(a) {
+    if (a.dataset.page === page) a.classList.add('sic-nav__link--active');
+  });
+})();
+</script>
 </body>
 </html>

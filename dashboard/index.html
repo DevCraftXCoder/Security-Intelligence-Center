@@ -4,11 +4,293 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SIC — Dashboard</title>
+<!-- Improvement 15: SVG favicon — removes 404 favicon error -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23050505'/><text x='4' y='24' font-size='20' font-weight='900' fill='%23e94560'>S</text></svg>">
 <link rel="stylesheet" href="/dashboard/style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
+<style>
+/* ── Index-page extras ────────────────────────────────────────────────────── */
+
+/* Improvement 7: Loading skeleton animation */
+@keyframes sic-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.sic-skeleton {
+  background: linear-gradient(90deg, var(--sic-surface) 25%, var(--sic-surface-2) 50%, var(--sic-surface) 75%);
+  background-size: 800px 100%;
+  animation: sic-shimmer 1.4s infinite linear;
+  border-radius: 0;
+  height: 14px;
+  margin-bottom: 8px;
+}
+.sic-skeleton--wide  { width: 70%; }
+.sic-skeleton--short { width: 40%; }
+.sic-skeleton--tall  { height: 48px; }
+
+/* Improvement 11: Stats bar */
+.sic-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  background: var(--sic-surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 24px;
+}
+@media (max-width: 640px) {
+  .sic-stats-bar { grid-template-columns: 1fr 1fr; }
+}
+.sic-stats-bar__item {
+  padding: 16px 20px;
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+.sic-stats-bar__item:last-child { border-right: none; }
+.sic-stats-bar__num {
+  font-family: var(--sic-font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--sic-accent);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.sic-stats-bar__num--green { color: #5acc8a; }
+.sic-stats-bar__num--muted { color: var(--sic-text-muted); }
+.sic-stats-bar__label {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+}
+
+/* Improvement 10: Quick actions panel */
+.sic-quick-actions {
+  margin-bottom: 24px;
+}
+.sic-quick-actions__title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+  margin: 0 0 12px 0;
+  font-family: var(--sic-font-mono);
+}
+.sic-quick-actions__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 540px) {
+  .sic-quick-actions__grid { grid-template-columns: 1fr; }
+}
+.sic-quick-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--sic-surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--sic-text);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.sic-quick-card:hover {
+  border-color: var(--sic-accent);
+  background: rgba(233,69,96,0.04);
+}
+.sic-quick-card__icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(233,69,96,0.10);
+  border: 1px solid rgba(233,69,96,0.20);
+  color: var(--sic-accent);
+}
+.sic-quick-card__body { flex: 1; min-width: 0; }
+.sic-quick-card__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sic-text);
+  margin-bottom: 2px;
+}
+.sic-quick-card__sub {
+  font-size: 11px;
+  color: var(--sic-text-muted);
+  font-family: var(--sic-font-mono);
+}
+.sic-quick-card__arrow {
+  color: var(--sic-text-muted);
+  font-size: 14px;
+  transition: color 140ms ease, transform 140ms ease;
+}
+.sic-quick-card:hover .sic-quick-card__arrow {
+  color: var(--sic-accent);
+  transform: translateX(3px);
+}
+
+/* Improvement 12: Help sidebar panel */
+.sic-help-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 36px;
+  height: 36px;
+  background: var(--sic-surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: var(--sic-text-muted);
+  font-family: var(--sic-font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 80;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+.sic-help-btn:hover { border-color: var(--sic-accent); color: var(--sic-accent); }
+
+.sic-help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+.sic-help-overlay.is-open {
+  opacity: 1;
+  pointer-events: all;
+}
+.sic-help-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 320px;
+  background: #0f0f0f;
+  border-left: 1px solid rgba(255,255,255,0.06);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 240ms cubic-bezier(0.22,1,0.36,1);
+}
+.sic-help-overlay.is-open .sic-help-panel {
+  transform: translateX(0);
+}
+.sic-help-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+.sic-help-panel__title {
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+  margin: 0;
+}
+.sic-help-panel__close {
+  background: transparent;
+  border: none;
+  color: var(--sic-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: color 120ms ease;
+}
+.sic-help-panel__close:hover { color: var(--sic-text); }
+.sic-help-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.sic-help-section { margin-bottom: 24px; }
+.sic-help-section__title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-accent);
+  font-family: var(--sic-font-mono);
+  margin: 0 0 12px 0;
+}
+.sic-help-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 12px;
+  color: var(--sic-text-muted);
+}
+.sic-help-shortcut:last-child { border-bottom: none; }
+.sic-help-shortcut__key {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  background: var(--sic-surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 2px 6px;
+  color: var(--sic-text);
+}
+.sic-help-support {
+  display: block;
+  padding: 12px 16px;
+  background: var(--sic-surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: var(--sic-text-muted);
+  font-size: 12px;
+  text-decoration: none;
+  text-align: center;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+.sic-help-support:hover { border-color: var(--sic-accent); color: var(--sic-text); }
+
+/* Improvement 1: Active nav indicator */
+.sic-nav__link[data-page="dashboard"].sic-nav__link--active,
+.sic-nav__link.sic-nav__link--active {
+  border-left: 3px solid var(--sic-accent);
+  background: rgba(233,69,96,0.08);
+  color: var(--sic-accent);
+  padding-left: 9px;
+}
+
+/* Improvement 14: Focus states */
+:focus-visible {
+  outline: 1px solid var(--sic-accent) !important;
+  outline-offset: 2px !important;
+}
+
+/* Improvement 8: Flat status badge chips */
+.sic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-radius: 0;
+}
+.sic-chip--active   { background: rgba(90,204,138,0.12);  border: 1px solid rgba(90,204,138,0.30);  color: #5acc8a; }
+.sic-chip--past-due { background: rgba(255,140,66,0.12);  border: 1px solid rgba(255,140,66,0.30);  color: #ff8c42; }
+.sic-chip--canceled { background: rgba(136,136,136,0.12); border: 1px solid rgba(136,136,136,0.30); color: #888; }
+.sic-chip--trialing { background: rgba(108,176,255,0.12); border: 1px solid rgba(108,176,255,0.30); color: #6cb0ff; }
+</style>
 </head>
 <body data-page="dashboard">
 <canvas id="galaxy-canvas"></canvas>
@@ -17,25 +299,32 @@
 
   <header class="sic-header">
     <div class="sic-header__brand">
+      <!-- Improvement 1 + Step 1: SIC logo wordmark with inline SVG shield icon -->
       <div class="sic-header__logo-wrap" id="logo-toggle" role="button" tabindex="0" aria-label="Toggle settings bar" aria-expanded="false" aria-controls="control-bar" title="Click to toggle settings">
-        <span class="sic-header__logo" id="logo-text">SIC</span>
+        <span class="sic-header__logo" id="logo-text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="display:inline-block;vertical-align:-3px;margin-right:4px"><path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6L12 2z" fill="#e94560" opacity="0.15" stroke="#e94560" stroke-width="1.5"/><path d="M9 12l2 2 4-4" stroke="#e94560" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>SIC</span>
         <img class="sic-header__logo-img" id="logo-img" alt="SIC Logo" style="display:none">
         <input type="file" id="logo-file" accept="image/*" style="display:none" aria-hidden="true">
       </div>
       <span class="sic-header__tagline">Security Intelligence Center</span>
     </div>
+    <!-- Improvement 1: Active nav indicator applied via JS; Improvement 2: icon alignment -->
     <nav class="sic-nav" aria-label="Main navigation">
-      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">Dashboard</a>
-      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">Posture</a>
-      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">Incidents</a>
-      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">AI Fix</a>
+      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6L12 2z"/></svg>Posture</a>
+      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Incidents</a>
+      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>AI Fix</a>
       <a class="sic-nav__link" data-page="billing" href="/dashboard/billing.html">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:4px"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing
-      </a>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="1" y="4" width="22" height="16" rx="0" ry="0"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing</a>
     </nav>
     <div class="sic-user">
       <span id="user-email" class="mono">—</span>
-      <button id="logout-btn" class="sic-btn sic-btn--ghost">Sign out</button>
+      <!-- Improvement 13: tooltip on sign out -->
+      <button id="logout-btn" class="sic-btn sic-btn--ghost" title="Sign out of SIC dashboard" aria-label="Sign out">Sign out</button>
     </div>
   </header>
 
@@ -54,6 +343,34 @@
     </div>
   </div>
 
+  <!-- Improvement 3: Consistent page header with h1 + subtitle -->
+  <header class="sic-page-head" style="margin-bottom:20px">
+    <div>
+      <h1 class="sic-page-head__title" style="font-size:20px">Dashboard</h1>
+      <p class="sic-page-head__sub">Scan management, system health, and recent activity</p>
+    </div>
+  </header>
+
+  <!-- Improvement 11: Stats bar -->
+  <div class="sic-stats-bar" id="stats-bar" aria-label="Platform statistics">
+    <div class="sic-stats-bar__item">
+      <div class="sic-stats-bar__num" id="sb-total-scans">—</div>
+      <div class="sic-stats-bar__label">Total Scans</div>
+    </div>
+    <div class="sic-stats-bar__item">
+      <div class="sic-stats-bar__num sic-stats-bar__num--green" id="sb-active-targets">—</div>
+      <div class="sic-stats-bar__label">Active Targets</div>
+    </div>
+    <div class="sic-stats-bar__item">
+      <div class="sic-stats-bar__num sic-stats-bar__num--muted" id="sb-last-scan" style="font-size:13px;padding-top:5px">—</div>
+      <div class="sic-stats-bar__label">Last Scan</div>
+    </div>
+    <div class="sic-stats-bar__item">
+      <div id="sb-sub-status" style="padding-top:2px"><span class="sic-chip sic-chip--muted">—</span></div>
+      <div class="sic-stats-bar__label">Subscription</div>
+    </div>
+  </div>
+
   <!-- Start Scan bar -->
   <div class="sic-scan-bar">
     <div class="sic-scan-bar__inner">
@@ -63,38 +380,246 @@
     </div>
   </div>
 
+  <!-- Improvement 10: Quick Actions panel -->
+  <div class="sic-quick-actions">
+    <p class="sic-quick-actions__title">Quick Actions</p>
+    <div class="sic-quick-actions__grid">
+      <a class="sic-quick-card" href="#" id="qa-scan" role="button" tabindex="0">
+        <div class="sic-quick-card__icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <div class="sic-quick-card__body">
+          <div class="sic-quick-card__label">Start Scan</div>
+          <div class="sic-quick-card__sub">Enter a target above</div>
+        </div>
+        <span class="sic-quick-card__arrow" aria-hidden="true">→</span>
+      </a>
+      <a class="sic-quick-card" href="/dashboard/incidents.html">
+        <div class="sic-quick-card__icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="sic-quick-card__body">
+          <div class="sic-quick-card__label">View Reports</div>
+          <div class="sic-quick-card__sub">Open incidents console</div>
+        </div>
+        <span class="sic-quick-card__arrow" aria-hidden="true">→</span>
+      </a>
+      <a class="sic-quick-card" href="/dashboard/billing.html">
+        <div class="sic-quick-card__icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="0"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        </div>
+        <div class="sic-quick-card__body">
+          <div class="sic-quick-card__label">Billing</div>
+          <div class="sic-quick-card__sub">Manage subscription</div>
+        </div>
+        <span class="sic-quick-card__arrow" aria-hidden="true">→</span>
+      </a>
+    </div>
+  </div>
+
   <div class="sic-grid">
 
     <section class="sic-panel">
       <h2 class="sic-panel__title">Scan Stats</h2>
       <div id="panel-stats" class="sic-stats-row">
-        <div class="sic-empty">Loading…</div>
+        <!-- Improvement 7: loading skeleton -->
+        <div style="width:100%">
+          <div class="sic-skeleton sic-skeleton--tall sic-skeleton--short"></div>
+          <div class="sic-skeleton sic-skeleton--wide"></div>
+        </div>
       </div>
     </section>
 
     <section class="sic-panel">
       <h2 class="sic-panel__title">System Health</h2>
       <div id="panel-health">
-        <div class="sic-empty">Loading…</div>
+        <div style="width:100%">
+          <div class="sic-skeleton" style="height:12px;width:60%;margin-bottom:8px"></div>
+          <div class="sic-skeleton" style="height:12px;width:80%;margin-bottom:8px"></div>
+          <div class="sic-skeleton" style="height:12px;width:50%"></div>
+        </div>
       </div>
     </section>
 
     <section class="sic-panel sic-panel--wide">
       <h2 class="sic-panel__title">Recent Scans</h2>
       <div id="panel-recent">
-        <div class="sic-empty">Loading…</div>
+        <div style="width:100%">
+          <div class="sic-skeleton" style="height:12px;width:90%;margin-bottom:8px"></div>
+          <div class="sic-skeleton" style="height:12px;width:70%;margin-bottom:8px"></div>
+          <div class="sic-skeleton" style="height:12px;width:80%"></div>
+        </div>
       </div>
     </section>
 
     <section class="sic-panel">
       <h2 class="sic-panel__title">Alert Channels</h2>
       <div id="panel-alerts">
-        <div class="sic-empty">Alert channel configuration will appear once <span class="mono">/api/config/alerts</span> is implemented.</div>
+        <!-- Improvement 6: proper empty state -->
+        <div class="sic-empty-state">
+          <div class="sic-empty-state__icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          </div>
+          <p class="sic-empty-state__msg">Alert channels not yet configured</p>
+          <p class="sic-empty-state__sub">Implement <code class="mono" style="font-size:11px">/api/config/alerts</code> to enable channel routing</p>
+        </div>
       </div>
     </section>
 
   </div>
 </div>
+
+<!-- Improvement 12: Help sidebar trigger button -->
+<button class="sic-help-btn" id="help-btn" aria-label="Open help panel" title="Help — keyboard shortcuts &amp; quick start">?</button>
+
+<!-- Improvement 12: Help sidebar panel -->
+<div class="sic-help-overlay" id="help-overlay" role="dialog" aria-modal="true" aria-label="Help panel">
+  <div class="sic-help-panel" id="help-panel">
+    <div class="sic-help-panel__header">
+      <h2 class="sic-help-panel__title">Help &amp; Shortcuts</h2>
+      <button class="sic-help-panel__close" id="help-close" aria-label="Close help panel">&times;</button>
+    </div>
+    <div class="sic-help-panel__body">
+      <div class="sic-help-section">
+        <p class="sic-help-section__title">Keyboard Shortcuts</p>
+        <div class="sic-help-shortcut"><span>Start new scan</span><span class="sic-help-shortcut__key">Ctrl + K</span></div>
+        <div class="sic-help-shortcut"><span>Toggle settings bar</span><span class="sic-help-shortcut__key">Ctrl + ,</span></div>
+        <div class="sic-help-shortcut"><span>Close panels / dialogs</span><span class="sic-help-shortcut__key">Esc</span></div>
+        <div class="sic-help-shortcut"><span>Dashboard</span><span class="sic-help-shortcut__key">G D</span></div>
+        <div class="sic-help-shortcut"><span>Posture</span><span class="sic-help-shortcut__key">G P</span></div>
+        <div class="sic-help-shortcut"><span>Incidents</span><span class="sic-help-shortcut__key">G I</span></div>
+      </div>
+      <div class="sic-help-section">
+        <p class="sic-help-section__title">Quick Start</p>
+        <ol style="margin:0;padding-left:18px;color:var(--sic-text-muted);font-size:13px;line-height:1.8">
+          <li>Enter a target domain or IP in the scan bar above</li>
+          <li>Click <strong style="color:var(--sic-text)">Start Scan</strong> to launch a new scan job</li>
+          <li>View security posture grades in <a href="/dashboard/posture-grid.html" class="sic-link">Posture</a></li>
+          <li>Track active issues in <a href="/dashboard/incidents.html" class="sic-link">Incidents</a></li>
+          <li>Use <a href="/dashboard/ai-fix.html" class="sic-link">AI Fix</a> for automated remediation</li>
+        </ol>
+      </div>
+      <div class="sic-help-section">
+        <p class="sic-help-section__title">Support</p>
+        <a href="mailto:support@frxncois.com" class="sic-help-support">contact support →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Improvement 6: Empty state card */
+.sic-empty-state {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--sic-text-muted);
+}
+.sic-empty-state__icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sic-text-muted);
+  opacity: 0.4;
+}
+.sic-empty-state__msg {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sic-text);
+  margin: 0 0 4px 0;
+}
+.sic-empty-state__sub {
+  font-size: 12px;
+  margin: 0 0 14px 0;
+  line-height: 1.5;
+}
+.sic-empty-state__retry {
+  background: transparent;
+  border: 1px solid rgba(233,69,96,0.4);
+  color: var(--sic-accent);
+  padding: 8px 16px;
+  font-family: var(--sic-font-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 140ms ease;
+}
+.sic-empty-state__retry:hover { background: rgba(233,69,96,0.08); }
+</style>
+
 <script src="/dashboard/app.js"></script>
+<script>
+// Active nav indicator (Improvement 1)
+(function() {
+  const page = document.body.dataset.page;
+  document.querySelectorAll('.sic-nav__link').forEach(function(a) {
+    if (a.dataset.page === page) a.classList.add('sic-nav__link--active');
+  });
+})();
+
+// Help panel toggle (Improvement 12)
+(function() {
+  var overlay = document.getElementById('help-overlay');
+  var btn = document.getElementById('help-btn');
+  var closeBtn = document.getElementById('help-close');
+  function openHelp() { overlay.classList.add('is-open'); btn.setAttribute('aria-expanded', 'true'); }
+  function closeHelp() { overlay.classList.remove('is-open'); btn.setAttribute('aria-expanded', 'false'); }
+  btn.addEventListener('click', openHelp);
+  closeBtn.addEventListener('click', closeHelp);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeHelp(); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeHelp(); });
+})();
+
+// Quick action: Start Scan shortcut
+document.getElementById('qa-scan').addEventListener('click', function(e) {
+  e.preventDefault();
+  var input = document.getElementById('scan-target');
+  if (input) { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+});
+
+// Stats bar population — reads from existing panel-stats after app.js loads
+document.addEventListener('DOMContentLoaded', function() {
+  // Poll until panel-stats has data (app.js populates it)
+  var attempts = 0;
+  var interval = setInterval(function() {
+    var statsPanel = document.getElementById('panel-stats');
+    if (!statsPanel) return;
+    var statNums = statsPanel.querySelectorAll('.sic-stat__num');
+    if (statNums.length > 0 || attempts++ > 20) {
+      clearInterval(interval);
+      populateStatsBar(statsPanel, statNums);
+    }
+  }, 300);
+});
+
+function populateStatsBar(panel, statNums) {
+  var labels = panel.querySelectorAll('.sic-stat__label');
+  var dataMap = {};
+  statNums.forEach(function(n, i) { if (labels[i]) dataMap[labels[i].textContent.trim().toUpperCase()] = n.textContent.trim(); });
+
+  var total = dataMap['TOTAL'] || dataMap['SCANS'] || '—';
+  var targets = dataMap['TARGETS'] || dataMap['UNIQUE TARGETS'] || '—';
+  var last = dataMap['LAST SCAN'] || dataMap['LAST'] || '—';
+
+  document.getElementById('sb-total-scans').textContent = total;
+  document.getElementById('sb-active-targets').textContent = targets;
+  var lsEl = document.getElementById('sb-last-scan');
+  lsEl.textContent = last;
+  lsEl.style.fontSize = last.length > 6 ? '11px' : '24px';
+  lsEl.style.paddingTop = last.length > 6 ? '7px' : '2px';
+
+  // Try to get subscription status from billing endpoint
+  fetch('/api/billing/subscription').then(function(r) { return r.ok ? r.json() : null; }).then(function(sub) {
+    if (!sub) return;
+    var status = (sub.status || 'free').replace('_', ' ');
+    var tier = sub.tier || 'community';
+    var chipClass = sub.status === 'active' ? 'sic-chip--active' : sub.status === 'past_due' ? 'sic-chip--past-due' : sub.status === 'canceled' ? 'sic-chip--canceled' : sub.status === 'trialing' ? 'sic-chip--trialing' : 'sic-chip--canceled';
+    document.getElementById('sb-sub-status').innerHTML = '<span class="sic-chip ' + chipClass + '">' + tier + ' &middot; ' + status + '</span>';
+  }).catch(function() {});
+}
+</script>
 </body>
 </html>

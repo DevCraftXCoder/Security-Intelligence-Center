@@ -53,11 +53,63 @@ if _SIC_DIR not in sys.path:
 # Build Flask app with only the billing blueprint
 # ---------------------------------------------------------------------------
 
-from flask import Flask  # noqa: E402
+from flask import Flask, Response, request  # noqa: E402
 from billing import billing_bp, init_db  # noqa: E402
 
 app = Flask(__name__)
 app.register_blueprint(billing_bp)
+
+# ---------------------------------------------------------------------------
+# CORS — allow the SIC dashboard origins to reach the billing server
+# ---------------------------------------------------------------------------
+
+_CORS_ORIGINS = frozenset({
+    "http://localhost:9888",
+    "http://localhost:9889",
+    "http://127.0.0.1:9888",
+    "http://127.0.0.1:9889",
+})
+
+
+@app.after_request
+def _add_cors_headers(response: Response) -> Response:
+    origin = request.headers.get("Origin", "")
+    if origin in _CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, X-Billing-Key"
+        )
+    return response
+
+
+@app.route("/api/billing/<path:path>", methods=["OPTIONS"])
+def _billing_preflight(path: str) -> Response:  # noqa: ARG001
+    resp = Response()
+    origin = request.headers.get("Origin", "")
+    if origin in _CORS_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, X-Billing-Key"
+        )
+    return resp
+
+
+@app.route("/auth/me", methods=["OPTIONS"])
+def _auth_me_preflight() -> Response:
+    resp = Response()
+    origin = request.headers.get("Origin", "")
+    if origin in _CORS_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, X-Billing-Key"
+        )
+    return resp
 
 with app.app_context():
     init_db()
