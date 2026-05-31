@@ -400,6 +400,15 @@ def serve_dashboard(filename):
     return send_from_directory(str(base), filename)
 
 
+@app.route("/assets/<path:filename>")
+def serve_assets(filename):
+    """Serve SIC static assets (logo, images) from the assets/ directory."""
+    import pathlib as _pl  # noqa: PLC0415
+    from flask import send_from_directory  # noqa: PLC0415
+    base = _pl.Path(__file__).parent / "assets"
+    return send_from_directory(str(base), filename)
+
+
 # API Configuration
 API_PORT = int(os.environ.get('HEXSTRIKE_PORT', 8888))
 API_HOST = os.environ.get('HEXSTRIKE_HOST', '127.0.0.1')
