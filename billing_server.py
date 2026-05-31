@@ -111,6 +111,12 @@ def _auth_me_preflight() -> Response:
         )
     return resp
 
+@app.route("/health", methods=["GET"])
+def _health() -> Response:
+    from flask import jsonify
+    return jsonify({"status": "ok", "service": "sic-billing"})
+
+
 with app.app_context():
     init_db()
 
