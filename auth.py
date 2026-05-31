@@ -365,7 +365,7 @@ def verify():
     now = int(time.time())
     session_token = _make_token(payload["email"], now, now + _SESSION_TTL_SEC)
 
-    resp = redirect("/dashboard/")
+    resp = redirect("/dashboard/index.html")
     resp.set_cookie(
         _COOKIE_NAME,
         session_token,
