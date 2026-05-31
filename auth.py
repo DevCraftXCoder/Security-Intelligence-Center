@@ -232,6 +232,50 @@ def request_link():
     except Exception:
         pass
 
+    # Send magic link directly to the customer via Resend
+    _resend_key = os.environ.get("RESEND_API_KEY", "")
+    _from = os.environ.get("SIC_ALERT_FROM", "")
+    if _resend_key and _from:
+        try:
+            import json as _json  # noqa: PLC0415
+            import urllib.request as _ur  # noqa: PLC0415
+
+            _payload = _json.dumps({
+                "from": _from,
+                "to": [email],
+                "subject": "Your SIC login link",
+                "html": (
+                    '<div style="font-family:DM Sans,sans-serif;background:#0a0a0a;color:#fff;'
+                    'padding:40px;max-width:480px;margin:auto;border-radius:8px;">'
+                    '<h2 style="color:#e94560;margin-top:0;">Security Intelligence Center</h2>'
+                    '<p style="color:#ccc;">Click the button below to sign in. '
+                    "This link expires in 15 minutes.</p>"
+                    f'<a href="{link}" style="display:inline-block;background:#e94560;color:#fff;'
+                    'padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;'
+                    'margin:16px 0;">Sign in to SIC</a>'
+                    '<p style="color:#666;font-size:12px;margin-top:24px;">'
+                    "If you didn&#39;t request this, you can safely ignore this email.</p>"
+                    "</div>"
+                ),
+            }).encode()
+            _req = _ur.Request(
+                "https://api.resend.com/emails",
+                data=_payload,
+                headers={
+                    "Authorization": f"Bearer {_resend_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            _ur.urlopen(_req, timeout=5)
+            logger.info("magic link email sent to %.6s*** via Resend", email[:6])
+        except Exception as _e:
+            logger.warning("failed to send magic link email via Resend: %s", _e)
+    else:
+        logger.warning(
+            "magic link not emailed — RESEND_API_KEY or SIC_ALERT_FROM not set. Link: %s",
+            link,
+        )
+
     dev_mode = os.environ.get("SIC_DEV_MODE", "").lower() in ("1", "true", "yes")
     resp_body: dict = {"ok": True, "expires_at": expires}
     if dev_mode:

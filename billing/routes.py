@@ -368,6 +368,9 @@ def webhook():
         elif event_type == "customer.subscription.deleted":
             _handle_subscription_deleted(event, email)
 
+        elif event_type == "invoice.paid":
+            _handle_invoice_paid(event, email)
+
         elif event_type == "invoice.payment_failed":
             _handle_payment_failed(event, email)
 
@@ -395,6 +398,81 @@ def webhook():
 # ---------------------------------------------------------------------------
 # Webhook event handlers (called from webhook() only)
 # ---------------------------------------------------------------------------
+
+
+def _send_provisioning_email(email: str, session_obj: dict) -> None:  # noqa: ARG001
+    """Generate a magic link and email it to the customer after successful checkout."""
+    import json as _json  # noqa: PLC0415
+    import sqlite3 as _sqlite3  # noqa: PLC0415
+    import time as _time  # noqa: PLC0415
+    import urllib.request as _ur  # noqa: PLC0415
+
+    try:
+        from auth import _init_db, _iso, _make_token  # noqa: PLC0415
+
+        _init_db()
+        now = int(_time.time())
+        expires = now + 900  # 15 minutes
+        token = _make_token(email, now, expires)
+
+        import hashlib as _hashlib  # noqa: PLC0415
+
+        token_hash = _hashlib.sha256(token.encode()).hexdigest()
+
+        from pathlib import Path as _Path  # noqa: PLC0415
+
+        _db_path = _Path.home() / ".sic" / "state.db"
+        with _sqlite3.connect(str(_db_path)) as _con:
+            _con.execute(
+                "INSERT OR IGNORE INTO auth_tokens "
+                "(token_hash, email, issued_at, expires_at, used_at) "
+                "VALUES (?, ?, ?, ?, NULL)",
+                (token_hash, email, _iso(now), _iso(expires)),
+            )
+            _con.commit()
+
+        _resend_key = os.environ.get("RESEND_API_KEY", "")
+        _from = os.environ.get("SIC_ALERT_FROM", "")
+        _base = os.environ.get("SIC_BASE_URL", "http://localhost:9888")
+        _link = f"{_base}/auth/verify?token={token}"
+
+        if _resend_key and _from:
+            _payload = _json.dumps({
+                "from": _from,
+                "to": [email],
+                "subject": "Welcome to SIC — your access link",
+                "html": (
+                    '<div style="font-family:DM Sans,sans-serif;background:#0a0a0a;color:#fff;'
+                    'padding:40px;max-width:480px;margin:auto;border-radius:8px;">'
+                    '<h2 style="color:#e94560;margin-top:0;">Welcome to SIC</h2>'
+                    '<p style="color:#ccc;">Your subscription is active. '
+                    "Click below to access your dashboard.</p>"
+                    f'<a href="{_link}" style="display:inline-block;background:#e94560;color:#fff;'
+                    'padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;'
+                    'margin:16px 0;">Open SIC Dashboard</a>'
+                    '<p style="color:#666;font-size:12px;margin-top:24px;">'
+                    "This link expires in 15 minutes.</p>"
+                    "</div>"
+                ),
+            }).encode()
+            _req = _ur.Request(
+                "https://api.resend.com/emails",
+                data=_payload,
+                headers={
+                    "Authorization": f"Bearer {_resend_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            _ur.urlopen(_req, timeout=5)
+            logger.info("provisioning email sent to %.6s*** via Resend", email[:6])
+        else:
+            logger.warning(
+                "provisioning email not sent — RESEND_API_KEY or SIC_ALERT_FROM not set "
+                "for email %.6s***",
+                email[:6],
+            )
+    except Exception as _e:
+        logger.warning("auto-provision email failed for %.6s***: %s", email[:6], _e)
 
 
 def _handle_checkout_completed(event, email: str | None) -> None:
@@ -431,6 +509,9 @@ def _handle_checkout_completed(event, email: str | None) -> None:
         current_period_end=None,  # will be updated on subscription.updated event
     )
     logger.info("provisioned tier=%s for email=%.6s***", tier, email[:6])
+
+    # Auto-provision: send a magic link so the customer can log in immediately
+    _send_provisioning_email(email, obj)
 
 
 def _handle_subscription_updated(event, email: str | None) -> None:
@@ -531,6 +612,40 @@ def _handle_payment_failed(event, email: str | None) -> None:
         f"| amount: ${amount_due / 100:.2f} "
         f"| reason: {failure_msg} "
         f"| event: {event.get('id', '?')}"
+    )
+
+
+def _handle_invoice_paid(event, email: str | None) -> None:
+    """Keep subscription active and sync period_end on each successful invoice payment."""
+    invoice = event.get("data", {}).get("object", {})
+    customer_id: str | None = invoice.get("customer")
+    subscription_id: str | None = invoice.get("subscription")
+    lines = invoice.get("lines", {}).get("data", [])
+    period_end: int | None = lines[0].get("period", {}).get("end") if lines else None
+
+    if not email:
+        logger.warning(
+            "invoice.paid — no email extractable from event %s",
+            event.get("id"),
+        )
+        return
+
+    # Preserve the existing tier — only refresh status and period_end
+    sub = get_subscription(email)
+    current_tier = sub["tier"] if sub else "community"
+
+    upsert_subscription(
+        email=email,
+        stripe_customer_id=customer_id,
+        stripe_subscription_id=subscription_id,
+        tier=current_tier,
+        status="active",
+        current_period_end=period_end,
+    )
+    logger.info(
+        "invoice.paid — subscription kept active, period_end=%s for email=%.6s***",
+        period_end,
+        email[:6],
     )
 
 
