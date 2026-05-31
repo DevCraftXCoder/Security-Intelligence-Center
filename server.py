@@ -22,6 +22,7 @@ import argparse
 import json
 import logging
 import os
+import platform
 import subprocess
 import sys
 import tempfile
@@ -18189,6 +18190,133 @@ def handle_unhandled_exception(e: Exception):
         return jsonify({"error": "rate_limit_exceeded", "detail": "Too many requests."}), 429
     logger.error("Unhandled exception: %s", e, exc_info=True)
     return jsonify({"error": "internal_error"}), 500
+
+
+# ─── ARP Spoofing Defense ────────────────────────────────────────────────────
+
+def _parse_arp_table():
+    """Parse system ARP table. Returns list of {ip, mac, type, iface}."""
+    entries = []
+    try:
+        if platform.system() == "Windows":
+            out = subprocess.check_output(
+                ["arp", "-a"], text=True, timeout=5, creationflags=0x08000000
+            )
+            for line in out.splitlines():
+                m = re.match(r'\s+([\d.]+)\s+([\w-]+)\s+(\w+)', line)
+                if m:
+                    entries.append({
+                        "ip": m.group(1),
+                        "mac": m.group(2).replace("-", ":"),
+                        "type": m.group(3),
+                        "iface": "",
+                    })
+        else:
+            out = subprocess.check_output(["arp", "-n"], text=True, timeout=5)
+            for line in out.splitlines()[1:]:
+                parts = line.split()
+                if len(parts) >= 3:
+                    entries.append({
+                        "ip": parts[0],
+                        "mac": parts[2],
+                        "type": parts[3] if len(parts) > 3 else "dynamic",
+                        "iface": parts[-1],
+                    })
+    except Exception:
+        pass
+    return entries
+
+
+def _detect_anomalies(entries):
+    """Flag duplicate MACs (same MAC for multiple IPs) and incomplete entries."""
+    anomalies = []
+    mac_to_ips = {}
+    for e in entries:
+        mac = e["mac"]
+        if mac not in ("ff:ff:ff:ff:ff:ff", "<incomplete>", "00:00:00:00:00:00"):
+            mac_to_ips.setdefault(mac, []).append(e["ip"])
+    for mac, ips in mac_to_ips.items():
+        if len(ips) > 1:
+            anomalies.append({
+                "type": "duplicate_mac",
+                "mac": mac,
+                "ips": ips,
+                "severity": "HIGH",
+                "description": f"MAC {mac} claims {len(ips)} IPs — possible ARP spoofing",
+            })
+    for e in entries:
+        if e["mac"] in ("<incomplete>",):
+            anomalies.append({
+                "type": "incomplete",
+                "ip": e["ip"],
+                "mac": e["mac"],
+                "severity": "LOW",
+                "description": f"Incomplete ARP entry for {e['ip']}",
+            })
+    return anomalies
+
+
+@app.route("/api/arp/scan", methods=["GET"])
+def arp_defense_scan():
+    """Return full ARP table with anomaly detection."""
+    entries = _parse_arp_table()
+    anomalies = _detect_anomalies(entries)
+    return jsonify({
+        "entries": entries,
+        "anomalies": anomalies,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "total": len(entries),
+        "anomaly_count": len(anomalies),
+    })
+
+
+@app.route("/api/arp/bind", methods=["POST"])
+def arp_defense_bind():
+    """Set a static ARP binding (Windows: netsh, Linux/Mac: arp -s)."""
+    data = request.get_json() or {}
+    ip = data.get("ip", "").strip()
+    mac = data.get("mac", "").strip()
+    if not ip or not mac:
+        return jsonify({"error": "ip and mac required"}), 400
+    if not re.match(r'^[\d.]+$', ip) or not re.match(r'^[0-9a-fA-F:]{17}$', mac):
+        return jsonify({"error": "invalid ip or mac format"}), 400
+    try:
+        if platform.system() == "Windows":
+            mac_dash = mac.replace(":", "-")
+            subprocess.run(
+                ["netsh", "interface", "ip", "add", "neighbors", "Ethernet", ip, mac_dash],
+                check=True, timeout=10, creationflags=0x08000000,
+            )
+        else:
+            subprocess.run(["arp", "-s", ip, mac], check=True, timeout=10)
+        return jsonify({"ok": True, "message": f"Static ARP binding set: {ip} -> {mac}"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/arp/monitor", methods=["GET"])
+def arp_defense_monitor():
+    """Return current ARP table + anomaly score for polling."""
+    entries = _parse_arp_table()
+    anomalies = _detect_anomalies(entries)
+    score = max(0, 100 - len(anomalies) * 25)
+    status = "clean" if not anomalies else ("warning" if len(anomalies) == 1 else "critical")
+    return jsonify({
+        "status": status,
+        "score": score,
+        "entries": entries,
+        "anomalies": anomalies,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    })
+
+
+@app.route("/api/arp/history", methods=["GET"])
+def arp_defense_history():
+    """Stub — returns empty history. Extend to persist snapshots in DB."""
+    return jsonify({"history": [], "message": "History tracking not yet persisted"})
+
+
+# ─── End ARP Spoofing Defense ─────────────────────────────────────────────────
 
 
 if __name__ == "__main__":
