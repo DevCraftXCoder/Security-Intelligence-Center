@@ -312,7 +312,7 @@ function initLogin() {
   if (cycleBtn) {
     const BG_CYCLE = ["glitch", "galaxy", "navy"];
     function cycleBg() {
-      const cur = localStorage.getItem("sic-bg-theme") || "navy";
+      const cur = localStorage.getItem("sic-bg-theme") || "default";
       const next = BG_CYCLE[(BG_CYCLE.indexOf(cur) + 1) % BG_CYCLE.length];
       localStorage.setItem("sic-bg-theme", next);
       applyTheme(next);
@@ -856,7 +856,7 @@ let _galaxyRaf = null;
 let _glitchInterval = null;
 
 function initTheme() {
-  const saved = localStorage.getItem("sic-bg-theme") || "navy";
+  const saved = localStorage.getItem("sic-bg-theme") || "default";
   applyTheme(saved);
 }
 
@@ -877,25 +877,26 @@ function applyTheme(theme) {
 
 function toggleTheme() {
   const root = document.documentElement;
-  let current = "navy";
-  if (root.classList.contains("theme-galaxy")) current = "galaxy";
+  let current = "default";
+  if (root.classList.contains("theme-navy")) current = "navy";
+  else if (root.classList.contains("theme-galaxy")) current = "galaxy";
   else if (root.classList.contains("theme-glitch")) current = "glitch";
-  const next = current === "navy" ? "galaxy" : current === "galaxy" ? "glitch" : "navy";
+  const next = current === "default" ? "galaxy" : current === "galaxy" ? "glitch" : "default";
   localStorage.setItem("sic-bg-theme", next);
   applyTheme(next);
 }
 
 function updateThemeToggleLabel(theme) {
   document.querySelectorAll(".sic-theme-toggle").forEach(btn => {
-    if (theme === "navy") {
+    if (theme === "default" || theme === "navy") {
       btn.textContent = "✦ Galaxy";
       btn.title = "Switch to Galaxy";
     } else if (theme === "galaxy") {
       btn.textContent = "⬡ Glitch";
       btn.title = "Switch to Letter Glitch";
     } else {
-      btn.textContent = "◈ Navy";
-      btn.title = "Switch to Default Navy";
+      btn.textContent = "◈ Default";
+      btn.title = "Switch to Default";
     }
   });
 }
@@ -1174,7 +1175,7 @@ function initControlBar() {
     });
   });
 
-  const saved = localStorage.getItem("sic-bg-theme") || "navy";
+  const saved = localStorage.getItem("sic-bg-theme") || "default";
   updateControlBarActive(saved);
 }
 

@@ -500,7 +500,7 @@ select.sic-input {
   overflow: auto;
   background: var(--sic-bg);
   padding: 12px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 /* ─── Posture grid ─────────────────────────────────────────────────────────── */
@@ -801,7 +801,7 @@ select.sic-input {
 .sic-inline-form__inner {
   background: var(--sic-surface);
   border: 1px solid var(--sic-border);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 20px;
 }
 
@@ -843,7 +843,7 @@ select.sic-input {
   gap: 0;
   background: var(--sic-surface);
   border: 1px solid var(--sic-border);
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
   min-height: 520px;
 }
@@ -963,7 +963,7 @@ select.sic-input {
 
 .sic-ai-detail__meta {
   background: var(--sic-surface-2);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 10px 14px;
   margin-bottom: 16px;
   display: flex;
@@ -1006,7 +1006,7 @@ select.sic-input {
 .sic-ai-fix-result {
   background: var(--sic-surface-2);
   border: 1px solid var(--sic-border);
-  border-radius: 6px;
+  border-radius: 0;
   padding: 16px;
 }
 
@@ -1022,7 +1022,7 @@ select.sic-input {
   align-items: center;
   gap: 10px;
   background: var(--sic-bg);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 10px 12px;
   margin-bottom: 14px;
   flex-wrap: wrap;
@@ -1084,14 +1084,21 @@ html.theme-glitch #galaxy-canvas {
   opacity: 1;
 }
 
-/* ─── Navy theme overrides ──────────────────────────────────────────────────── */
+/* ─── Navy theme — remapped to match default #050505 palette ───────────────── */
+/* Legacy "navy" theme now resolves to the canonical dark tokens.               */
+/* Background was previously #0d1b2a; corrected to #050505.                     */
 html.theme-navy {
-  --sic-bg: #0d1b2a;
-  --sic-surface: #102236;
-  --sic-surface-2: #163044;
-  --sic-border: #1e3a52;
-  --sic-text: #d8e8f8;
-  --sic-text-muted: #7a9ab8;
+  --sic-bg: #050505;
+  --sic-surface: #0f0f0f;
+  --sic-surface-2: #141414;
+  --sic-border: rgba(255, 255, 255, 0.06);
+  --sic-text: #f5f2ec;
+  --sic-text-muted: #9a968d;
+}
+
+/* ─── Default/fallback background backstop ─────────────────────────────────── */
+html, body {
+  background-color: #050505 !important;
 }
 
 /* ─── Logo upload ───────────────────────────────────────────────────────────── */
