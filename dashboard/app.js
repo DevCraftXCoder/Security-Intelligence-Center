@@ -206,14 +206,20 @@ async function loadRecent() {
         <td class="mono">${escapeHtml(s.target || "—")}</td>
         <td>${statusBadge(s.status)}</td>
         <td>${s.findings_count || 0}</td>
+        <td style="white-space:nowrap">
+          <button class="sic-btn" data-requires-tier="team" style="font-size:11px;padding:4px 10px;" onclick="exportScan('${escapeHtml(s.id)}')">Export</button>
+          <button class="sic-btn" data-requires-tier="team" style="font-size:11px;padding:4px 10px;margin-left:4px;" onclick="shareScan('${escapeHtml(s.id)}')">Share</button>
+        </td>
       </tr>
     `).join("");
     el.innerHTML = `
       <table class="sic-table">
-        <thead><tr><th>Started</th><th>Type</th><th>Target</th><th>Status</th><th>Findings</th></tr></thead>
+        <thead><tr><th>Started</th><th>Type</th><th>Target</th><th>Status</th><th>Findings</th><th>Actions</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     `;
+    // Apply tier gating to the newly rendered buttons
+    applyTierGating();
   } catch (e) {
     el.innerHTML = `<div class="sic-error">Failed to load recent scans (${escapeHtml(e.message)})</div>`;
   }
@@ -1191,5 +1197,187 @@ function initControlBar() {
 function updateControlBarActive(theme) {
   document.querySelectorAll(".sic-control-bar__btn[data-theme]").forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.theme === theme);
+  });
+}
+
+// ─── Toast notifications ──────────────────────────────────────────────────────
+
+function showToast(message, type) {
+  const existing = document.getElementById("sic-toast");
+  if (existing) existing.remove();
+  const toast = document.createElement("div");
+  toast.id = "sic-toast";
+  const bg = type === "error" ? "#e94560" : type === "success" ? "#5acc8a" : "#6cb0ff";
+  toast.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:10001;background:" + bg + ";color:#fff;padding:10px 20px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;max-width:400px;text-align:center;pointer-events:none;";
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3500);
+}
+
+// ─── Tier gating ─────────────────────────────────────────────────────────────
+let _cachedTier = null;
+
+async function getCurrentTier() {
+  if (_cachedTier) return _cachedTier;
+  try {
+    const sub = await billingFetch("/api/billing/subscription");
+    _cachedTier = sub?.tier || "community";
+  } catch { _cachedTier = "community"; }
+  return _cachedTier;
+}
+
+const TIER_RANK = { community: 0, team: 1, studio: 2 };
+
+function requiresTier(needed, current) {
+  return TIER_RANK[current] < TIER_RANK[needed];
+}
+
+// Wrap a button with an upgrade gate — shows upgrade tooltip if tier is too low
+function gateButton(btn, requiredTier, currentTier) {
+  if (!requiresTier(requiredTier, currentTier)) return;
+  btn.disabled = true;
+  btn.title = `Requires ${requiredTier} plan`;
+  btn.style.opacity = "0.4";
+  btn.style.cursor = "not-allowed";
+  const badge = document.createElement("span");
+  badge.textContent = requiredTier.toUpperCase();
+  badge.style.cssText = "font-size:9px;background:#e94560;color:#fff;padding:2px 5px;margin-left:6px;vertical-align:middle;letter-spacing:1px;";
+  btn.appendChild(badge);
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showUpgradePrompt(requiredTier);
+  }, true);
+}
+
+function showUpgradePrompt(tier) {
+  const existing = document.getElementById("sic-upgrade-modal");
+  if (existing) existing.remove();
+  const modal = document.createElement("div");
+  modal.id = "sic-upgrade-modal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;";
+  modal.innerHTML = `
+    <div style="background:#0f0f0f;border:1px solid rgba(233,69,96,0.3);padding:32px;max-width:400px;width:90%;font-family:'DM Sans',sans-serif;">
+      <div style="color:#e94560;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Upgrade Required</div>
+      <div style="color:#fff;font-size:20px;font-weight:700;margin-bottom:8px;">This feature requires ${tier.charAt(0).toUpperCase()+tier.slice(1)}</div>
+      <div style="color:rgba(255,255,255,0.5);font-size:14px;margin-bottom:24px;">Upgrade your plan to unlock this feature and more.</div>
+      <div style="display:flex;gap:12px;">
+        <a href="/sic-signup#pricing" style="flex:1;background:#e94560;color:#fff;padding:12px;text-align:center;font-weight:600;text-decoration:none;display:block;">View Plans</a>
+        <button onclick="document.getElementById('sic-upgrade-modal').remove()" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#888;padding:12px;cursor:pointer;">Dismiss</button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+async function applyTierGating() {
+  const tier = await getCurrentTier();
+  // Gate all elements with data-requires-tier attribute
+  document.querySelectorAll("[data-requires-tier]").forEach(el => {
+    const required = el.dataset.requiresTier;
+    if (el.tagName === "BUTTON" || el.tagName === "A") {
+      gateButton(el, required, tier);
+    }
+  });
+}
+
+// ─── Export scan ──────────────────────────────────────────────────────────────
+
+async function exportScan(scanId) {
+  try {
+    const data = await mainFetch(`/api/export/${scanId}`);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `scan-${scanId}.json`; a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) { showToast("Export failed: " + ((err.body && err.body.error) || err.message), "error"); }
+}
+
+// ─── Share scan ───────────────────────────────────────────────────────────────
+
+async function shareScan(scanId) {
+  try {
+    const data = await mainFetch(`/api/scans/${scanId}/share`, { method: "POST" });
+    const url = data.share_url || data.url;
+    if (url) {
+      await navigator.clipboard.writeText(url);
+      showToast("Share link copied to clipboard", "success");
+    }
+  } catch (err) { showToast("Share failed: " + ((err.body && err.body.error) || err.message), "error"); }
+}
+
+// ─── showToast ───────────────────────────────────────────────────────────────
+
+function showToast(msg, type) {
+  type = type || "info";
+  const color = type === "success" ? "#22c55e" : type === "error" ? "#e94560" : "#888";
+  const t = document.createElement("div");
+  t.style.cssText = "position:fixed;bottom:24px;right:24px;z-index:9999;background:#0f0f0f;border:1px solid " + color + ";color:#fff;padding:12px 20px;font-family:'DM Sans',sans-serif;font-size:14px;max-width:320px;";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function() { t.remove(); }, 4000);
+}
+
+// ─── AI Fix Grader (scan-selector → grade → results) ────────────────────────
+
+async function initAiFixGrader() {
+  const me = await initHeader("aifix");
+  if (!me) return;
+
+  const select = document.getElementById("scan-select");
+  const btn = document.getElementById("grade-btn");
+  const result = document.getElementById("grade-result");
+  if (!select) return;
+
+  // Load completed scans into dropdown
+  try {
+    const data = await mainFetch("/api/scans?limit=20&status=completed");
+    const scans = data.scans || data || [];
+    if (!scans.length) {
+      select.innerHTML = "<option value=\"\">No completed scans found</option>";
+    } else {
+      select.innerHTML = scans.map(function(s) {
+        return "<option value=\"" + escapeHtml(String(s.id)) + "\">" + escapeHtml(s.target || s.id) + " — " + fmtDate(s.started_at) + " (" + (s.findings_count || 0) + " findings)</option>";
+      }).join("");
+    }
+  } catch (e) {
+    select.innerHTML = "<option value=\"\">Failed to load scans</option>";
+  }
+
+  if (!btn || !result) return;
+
+  btn.addEventListener("click", async function() {
+    const scanId = select.value;
+    if (!scanId) { showToast("Select a scan first", "error"); return; }
+    btn.disabled = true;
+    btn.textContent = "Grading…";
+    result.style.display = "none";
+    try {
+      const data = await mainFetch("/api/ai/grade", { method: "POST", body: { scan_id: scanId } });
+      result.style.display = "";
+      const remItems = (data.remediations || []).map(function(r) {
+        return "<div style=\"border:1px solid rgba(255,255,255,0.06);padding:14px;margin-bottom:8px\">" +
+          "<div style=\"display:flex;gap:8px;align-items:center;margin-bottom:6px\">" +
+          severityBadge(r.severity) +
+          "<span style=\"color:#fff;font-weight:600\">" + escapeHtml(r.title || "") + "</span>" +
+          "</div>" +
+          "<div style=\"color:rgba(255,255,255,0.6);font-size:13px\">" + escapeHtml(r.fix || r.description || "") + "</div>" +
+          "</div>";
+      }).join("");
+      result.innerHTML = "<div style=\"display:flex;align-items:center;gap:16px;margin-bottom:20px\">" +
+        gradeBadge(data.grade) +
+        "<div>" +
+        "<div style=\"color:#fff;font-weight:700;font-size:18px\">" + escapeHtml(data.summary || "Grade complete") + "</div>" +
+        "<div style=\"color:rgba(255,255,255,0.5);font-size:13px\">" + (data.findings_count || 0) + " findings analyzed</div>" +
+        "</div></div>" +
+        (remItems || "<div style=\"color:rgba(255,255,255,0.4);font-size:13px\">No remediation steps returned.</div>");
+    } catch (e) {
+      showToast("AI grade failed: " + ((e.body && e.body.error) || e.message), "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Grade with AI";
+    }
   });
 }

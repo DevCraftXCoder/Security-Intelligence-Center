@@ -106,58 +106,26 @@
   <!-- Improvement 3: consistent page header -->
   <div class="sic-page-head">
     <div>
-      <h1 class="sic-page-head__title" style="font-size:20px">AI Remediation</h1>
-      <p class="sic-page-head__sub">Select a finding to request an AI-generated fix.</p>
+      <h1 class="sic-page-head__title" style="font-size:20px">AI Security Grader</h1>
+      <p class="sic-page-head__sub">Select a completed scan to get an AI-powered security grade and remediation plan.</p>
     </div>
   </div>
 
-  <div class="sic-ai-pane">
-
-    <!-- Left: findings list -->
-    <aside class="sic-ai-pane__list">
-      <div class="sic-ai-pane__list-head">Open Findings</div>
-      <div id="ai-findings-list" class="sic-ai-findings">
-        <div class="sic-empty">Loading…</div>
+  <section class="sic-panel">
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <label class="sic-label" for="scan-select">Select Scan</label>
+        <select id="scan-select" class="sic-input" style="width:100%">
+          <option value="">Loading scans…</option>
+        </select>
       </div>
-    </aside>
+      <button id="grade-btn" class="sic-btn sic-btn--primary" style="white-space:nowrap;padding:10px 20px">Grade with AI</button>
+    </div>
+  </section>
 
-    <!-- Right: detail + AI fix -->
-    <main class="sic-ai-pane__detail">
-
-      <div id="ai-placeholder" class="sic-ai-placeholder">
-        <div class="sic-ai-placeholder__icon">⬡</div>
-        <div class="sic-ai-placeholder__text">Select a finding from the left panel</div>
-      </div>
-
-      <div id="ai-detail" style="display:none">
-        <div class="sic-ai-detail__header">
-          <span id="ai-detail-severity"></span>
-          <h3 id="ai-detail-title" class="sic-ai-detail__title"></h3>
-        </div>
-        <div class="sic-ai-detail__meta">
-          <div class="sic-ai-detail__row">
-            <span class="sic-ai-detail__key">Category</span>
-            <span id="ai-detail-category" class="sic-ai-detail__val"></span>
-          </div>
-          <div class="sic-ai-detail__row">
-            <span class="sic-ai-detail__key">Location</span>
-            <span id="ai-detail-location" class="sic-ai-detail__val mono"></span>
-          </div>
-        </div>
-        <div class="sic-ai-detail__desc" id="ai-detail-desc"></div>
-
-        <!-- Improvement 9: canonical primary button -->
-        <div class="sic-ai-detail__action">
-          <button id="ai-get-fix-btn" class="sic-btn sic-btn--primary">Get AI Fix</button>
-        </div>
-
-        <div id="ai-fix-result" class="sic-ai-fix-result" style="display:none">
-          <!-- Populated by app.js -->
-        </div>
-      </div>
-
-    </main>
-  </div>
+  <section id="grade-result" class="sic-panel" style="display:none;margin-top:16px">
+    <!-- populated by initAiFixGrader() -->
+  </section>
 
 </div>
 <script src="/dashboard/app.js"></script>
@@ -169,6 +137,7 @@
     if (a.dataset.page === page) a.classList.add('sic-nav__link--active');
   });
 })();
+document.addEventListener("DOMContentLoaded", function() { initAiFixGrader(); });
 </script>
 </body>
 </html>
