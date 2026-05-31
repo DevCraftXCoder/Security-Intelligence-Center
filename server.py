@@ -289,14 +289,24 @@ def require_auth() -> None:
     # --- Auth check for /api/* routes ---
     path = request.path
 
-    # Public paths — no auth required
-    public_prefixes = ("/health", "/static/", "/api/auth/")
-    public_exact = {"/", "/dashboard/login.html", "/dashboard/", "/api/billing/webhook", "/api/billing/public-checkout", "/api/billing/public-checkout-success"}
+    # Public paths — no auth required.
+    # /auth/* is the magic-link blueprint (request-link, verify, logout, me) —
+    # these must stay public to bootstrap authentication.
+    # /api/auth/ is kept for forward-compatibility but no routes currently mount there.
+    public_prefixes = ("/health", "/static/", "/auth/", "/api/auth/")
+    public_exact = {
+        "/",
+        "/dashboard/login.html",
+        "/dashboard/",
+        "/api/billing/webhook",
+        "/api/billing/public-checkout",
+        "/api/billing/public-checkout-success",
+    }
     if path in public_exact or any(path.startswith(p) for p in public_prefixes):
         return None  # type: ignore[return-value]
 
     if path.startswith("/api/"):
-        session_ok = get_session_email is not None and bool(get_session_email())
+        session_ok = bool(get_session_email())
         if not session_ok:
             # Accept Bearer API token as alternative credential
             auth_header = request.headers.get("Authorization", "")
@@ -382,7 +392,7 @@ def serve_dashboard(filename):
     from flask import send_from_directory, redirect  # noqa: PLC0415
 
     public = filename in ("login.html", "style.css", "app.js")
-    if not public and get_session_email is not None and not get_session_email():
+    if not public and not get_session_email():
         return redirect("/dashboard/login.html")
     base = _pl.Path(__file__).parent / "dashboard"
     if not base.exists():
@@ -9522,11 +9532,11 @@ def panic_stop():
     if _SIC_ENV != "production":
         return jsonify({"error": "panic-stop is only available when SIC_ENV=production"}), 403
     # Admin-only gate: verify session belongs to a configured admin email
-    if get_session_email is not None:
-        from auth import _admin_emails  # noqa: PLC0415
-        admins = _admin_emails()
-        if admins and get_session_email().lower() not in admins:
-            return jsonify({"error": "admin access required"}), 403
+    from auth import _admin_emails  # noqa: PLC0415
+    admins = _admin_emails()
+    session_email = get_session_email()
+    if admins and session_email and session_email.lower() not in admins:
+        return jsonify({"error": "admin access required"}), 403
     import signal as _sig
     logger.critical("PANIC STOP triggered")
     _sig.raise_signal(_sig.SIGTERM)

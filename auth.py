@@ -169,6 +169,17 @@ def _admin_emails() -> list[str]:
     return [e.strip().lower() for e in raw.split(",") if e.strip()]
 
 
+def _waitlist_mode() -> bool:
+    """Return True when SIC_WAITLIST_MODE=open.
+
+    In waitlist mode any email may request a magic link regardless of
+    subscription status.  The session is still subject to tool-tier gating
+    (feature_gates.py) so an unpaid user cannot run scans — they can only
+    sign in and view the dashboard.  Disable this once the product is GA.
+    """
+    return os.environ.get("SIC_WAITLIST_MODE", "").lower() in ("open", "1", "true")
+
+
 # ---------------------------------------------------------------------------
 # ISO timestamp helper
 # ---------------------------------------------------------------------------
@@ -212,7 +223,15 @@ def _has_active_subscription(email: str) -> bool:
 
 @auth_bp.post("/request-link")
 def request_link():
-    """Issue a time-limited magic link for an admin email or paying customer."""
+    """Issue a time-limited magic link for an admin email, paying customer, or waitlist user.
+
+    Gate:
+    - Admins (SIC_ADMIN_EMAILS): always allowed.
+    - Paying customers (active subscription in billing.db): always allowed.
+    - Waitlist users (SIC_WAITLIST_MODE=open): allowed to sign in; tool-tier
+      gating in feature_gates.py still restricts what they can do.
+    - All others: 403 unauthorized.
+    """
     body = request.get_json(silent=True) or {}
     email = body.get("email")
     if not email or not isinstance(email, str):
@@ -227,8 +246,10 @@ def request_link():
         if hmac.compare_digest(admin.encode(), email.encode()):
             is_admin = True
 
-    # Allow paying customers even if not in SIC_ADMIN_EMAILS
-    if not is_admin and not _has_active_subscription(email):
+    # Allow paying customers or waitlist-mode users even if not in SIC_ADMIN_EMAILS.
+    # In waitlist mode (SIC_WAITLIST_MODE=open) any email can receive a magic link;
+    # access to premium tools is still gated by feature_gates.py / subscription tier.
+    if not is_admin and not _has_active_subscription(email) and not _waitlist_mode():
         return jsonify({"error": "unauthorized", "message": "No active subscription found for this email."}), 403
 
     _init_db()
