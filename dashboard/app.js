@@ -856,7 +856,7 @@ document.addEventListener("DOMContentLoaded", () => {
     case "dashboard": initDashboard(); break;
     case "posture":   initPosture(); break;
     case "incidents": initIncidents(); break;
-    case "aifix":     initAiFix(); break;
+    case "aifix":     initAiFixGrader(); break;
     default:
       // Fallback: detect by element presence (backward compat)
       if (document.getElementById("login-form")) initLogin();
