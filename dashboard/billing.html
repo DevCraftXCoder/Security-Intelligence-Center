@@ -448,6 +448,16 @@
       <span id="invoices-msg" class="sic-error" style="display:none"></span>
     </div>
 
+    <div class="billing-action-card">
+      <div class="billing-action-card__icon" aria-hidden="true">
+        <!-- Key icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="5"/><path d="M12.5 9.5 22 0"/><path d="M17 5l-1.5 1.5"/><path d="M21 1l-1.5 1.5"/></svg>
+      </div>
+      <h3 class="billing-action-card__title">API Tokens</h3>
+      <p class="billing-action-card__desc">Create and manage API tokens for programmatic access to the SIC API. Unlimited tokens on Studio plan.</p>
+      <a href="/dashboard/api-tokens.html" class="sic-btn" data-requires-tier="studio" style="text-align:center;text-decoration:none;display:block">Manage Tokens</a>
+    </div>
+
   </div>
 
   <!-- Invoice table -->
@@ -725,5 +735,6 @@ document.addEventListener("DOMContentLoaded", loadSubscription);
   });
 })();
 </script>
+<script>document.addEventListener("DOMContentLoaded", () => applyTierGating());</script>
 </body>
 </html>

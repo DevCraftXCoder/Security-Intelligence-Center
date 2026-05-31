@@ -578,6 +578,9 @@ document.getElementById('qa-scan').addEventListener('click', function(e) {
   if (input) { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 });
 
+// Tier gating — applied after DOMContentLoaded (loadRecent also calls this)
+document.addEventListener("DOMContentLoaded", () => applyTierGating());
+
 // Stats bar population — reads from existing panel-stats after app.js loads
 document.addEventListener('DOMContentLoaded', function() {
   // Poll until panel-stats has data (app.js populates it)
