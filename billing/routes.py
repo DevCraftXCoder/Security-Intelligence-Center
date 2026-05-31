@@ -489,26 +489,64 @@ def _handle_checkout_completed(event, email: str | None) -> None:
     customer_id: str | None = obj.get("customer")
     subscription_id: str | None = obj.get("subscription")
 
-    # Derive tier from metadata
+    # Bug 3: Validate sic_tier metadata before provisioning.
+    # Missing or unrecognised tier is suspicious (could indicate a tampered/malformed
+    # session) — do not silently provision community access for a paid checkout.
     meta = obj.get("metadata") or {}
-    tier = _TIER_LABEL_MAP.get(meta.get("sic_tier", "").lower(), "community")
-    if tier == "community":
-        # Fallback: metadata missing or unrecognised — default to community (lowest tier).
-        # Previously defaulted to "team" which silently over-provisioned access.
-        logger.warning(
-            "checkout.session.completed: sic_tier metadata missing or invalid for event %s — defaulting to community",
-            event.get("id", "unknown"),
+    sic_tier = meta.get("sic_tier")
+    if not sic_tier or sic_tier not in ("community", "team", "studio"):
+        print(
+            f"[billing WARNING] checkout.session.completed missing valid sic_tier in "
+            f"metadata. Session ID: {obj.get('id')}. Not provisioning."
         )
+        logger.warning(
+            "checkout.session.completed: sic_tier metadata missing or invalid "
+            "(got %r) for session %s — not provisioning",
+            sic_tier,
+            obj.get("id", "unknown"),
+        )
+        _discord_billing_alert(
+            f"**Billing alert — invalid sic_tier** `{sic_tier!r}` "
+            f"in checkout session `{obj.get('id', '?')}`. Not provisioned."
+        )
+        return
+
+    tier = _TIER_LABEL_MAP.get(sic_tier.lower(), "community")
+
+    # Bug 2: Check payment_status — ACH/SEPA payments are async and won't be
+    # marked "paid" immediately. Treat those as "pending" rather than "active".
+    payment_status = obj.get("payment_status", "unpaid")
+    subscription_status = "active" if payment_status == "paid" else "pending"
+
+    # Bug 7: Fetch current_period_end directly from the Stripe Subscription object
+    # so it is populated immediately (not waiting for subscription.updated event).
+    current_period_end: int | None = None
+    if subscription_id:
+        try:
+            import stripe as _stripe  # noqa: PLC0415
+            sub = _stripe.Subscription.retrieve(subscription_id)
+            current_period_end = sub.get("current_period_end")
+        except Exception as _e:  # noqa: BLE001
+            logger.warning(
+                "Could not retrieve subscription period_end for %s: %s",
+                subscription_id,
+                _e,
+            )
 
     upsert_subscription(
         email=email,
         stripe_customer_id=customer_id,
         stripe_subscription_id=subscription_id,
         tier=tier,
-        status="active",
-        current_period_end=None,  # will be updated on subscription.updated event
+        status=subscription_status,
+        current_period_end=current_period_end,
     )
-    logger.info("provisioned tier=%s for email=%.6s***", tier, email[:6])
+    logger.info(
+        "provisioned tier=%s status=%s for email=%.6s***",
+        tier,
+        subscription_status,
+        email[:6],
+    )
 
     # Auto-provision: send a magic link so the customer can log in immediately
     _send_provisioning_email(email, obj)
@@ -674,10 +712,22 @@ def public_checkout():
         402  {"error": "billing_unavailable"}
         500  {"error": "internal_error"}
     """
-    # Machine-to-machine auth — CF Worker must send the shared secret
-    if _BILLING_API_KEY:
-        incoming = request.headers.get("X-Billing-Key", "")
-        if not incoming or not _secrets_equal(incoming, _BILLING_API_KEY):
+    # Bug 4: Machine-to-machine auth — always require BILLING_API_KEY.
+    # When the key is unset in production, the endpoint must refuse traffic rather
+    # than silently accept all requests (previous behaviour when env var was empty).
+    if not _BILLING_API_KEY:
+        if os.environ.get("SIC_ENV", "development") == "production":
+            return jsonify(
+                {"error": "BILLING_API_KEY not configured — set it in .env"}
+            ), 503
+        # Development: allow but warn so operators notice the misconfiguration.
+        print(
+            "[billing WARNING] BILLING_API_KEY is not set — "
+            "M2M auth is disabled (development mode only)"
+        )
+    else:
+        provided_key = request.headers.get("X-Billing-Key", "")
+        if not provided_key or not _secrets_equal(provided_key, _BILLING_API_KEY):
             return jsonify({"error": "unauthorized"}), 401
 
     init_db()

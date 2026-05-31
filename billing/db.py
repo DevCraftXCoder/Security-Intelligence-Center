@@ -146,13 +146,24 @@ def get_subscription(email: str) -> sqlite3.Row | None:
 
 
 def get_tier(email: str) -> str:
-    """Return the billing tier for *email*, defaulting to 'community'."""
+    """Return the effective billing tier for *email*, defaulting to 'community'.
+
+    Respects subscription status: canceled and unpaid subscriptions are
+    immediately downgraded to community.  past_due subscriptions retain their
+    tier as a grace period (the operator is expected to handle recovery).
+    """
     row = get_subscription(email)
     if row is None:
         return "community"
     tier = row["tier"]
     # Guard against unexpected values already in the DB
     if tier not in ("community", "team", "studio"):
+        return "community"
+    # Bug 5: Status-aware access control.
+    # canceled / unpaid → no paid access.
+    # past_due → grace period, keep tier (operator should follow up).
+    status = row["status"] if row["status"] else "active"
+    if status in ("canceled", "unpaid"):
         return "community"
     return tier
 
