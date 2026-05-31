@@ -179,13 +179,40 @@ def _iso(ts: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Billing DB helper
+# ---------------------------------------------------------------------------
+
+
+def _has_active_subscription(email: str) -> bool:
+    """Return True if the email has an active paid subscription in billing.db."""
+    try:
+        billing_db_path = os.environ.get(
+            "BILLING_DB_PATH",
+            os.path.join(os.path.dirname(__file__), "billing", "billing.db"),
+        )
+        conn = sqlite3.connect(billing_db_path)
+        row = conn.execute(
+            "SELECT tier, status FROM subscriptions WHERE customer_email = ? ORDER BY created_at DESC LIMIT 1",
+            (email,),
+        ).fetchone()
+        conn.close()
+        if row:
+            tier, status = row
+            return tier in ("team", "studio") and status in ("active", "trialing", "past_due")
+        return False
+    except Exception as e:
+        logger.warning("[auth] billing DB check failed: %s", e)
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
 
 @auth_bp.post("/request-link")
 def request_link():
-    """Issue a time-limited magic link for an admin email address."""
+    """Issue a time-limited magic link for an admin email or paying customer."""
     body = request.get_json(silent=True) or {}
     email = body.get("email")
     if not email or not isinstance(email, str):
@@ -193,16 +220,16 @@ def request_link():
     email = email.strip().lower()
 
     admins = _admin_emails()
-    if not admins:
-        return jsonify({"error": "no_admins_configured"}), 503
 
     # Timing-safe check: iterate all admins to avoid short-circuit leakage
-    match_found = False
+    is_admin = False
     for admin in admins:
         if hmac.compare_digest(admin.encode(), email.encode()):
-            match_found = True
-    if not match_found:
-        return jsonify({"error": "forbidden"}), 403
+            is_admin = True
+
+    # Allow paying customers even if not in SIC_ADMIN_EMAILS
+    if not is_admin and not _has_active_subscription(email):
+        return jsonify({"error": "unauthorized", "message": "No active subscription found for this email."}), 403
 
     _init_db()
     now = int(time.time())

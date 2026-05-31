@@ -68,6 +68,7 @@ Add to your MCP client config:
    | `BILLING_API_KEY` | Random secret for billing M2M auth |
    | `RESEND_API_KEY` | For magic link email delivery |
    | `SIC_ALERT_FROM` | Verified sender email (e.g. sic@yourdomain.com) |
+   | `SIC_BASE_URL` | Public URL where customers reach the dashboard (required for email login links) |
 
 3. **Run the audit to verify setup:**
    ```bash

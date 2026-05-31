@@ -31,6 +31,14 @@ results.append(check("STRIPE_PRICE_TEAM set", bool(env.get("STRIPE_PRICE_TEAM", 
 results.append(check("STRIPE_PRICE_STUDIO set", bool(env.get("STRIPE_PRICE_STUDIO", "").replace("your_stripe_studio_price_id", "")), "Create a Stripe Price and set STRIPE_PRICE_STUDIO"))
 results.append(check("BILLING_API_KEY set", bool(env.get("BILLING_API_KEY")), "Set BILLING_API_KEY in .env"))
 
+base_url = env.get("SIC_BASE_URL", "http://localhost:9888")
+is_localhost = "localhost" in base_url or "127.0.0.1" in base_url
+results.append(check(
+    "SIC_BASE_URL is public (required for email links)",
+    not is_localhost,
+    f"Set SIC_BASE_URL to your public server URL -- currently '{base_url}' (localhost links won't work in emails)"
+))
+
 port = env.get("SIC_PORT", "9888")
 try:
     urllib.request.urlopen(f"http://localhost:{port}/health", timeout=3)
