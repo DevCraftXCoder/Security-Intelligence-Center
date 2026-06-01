@@ -263,6 +263,18 @@ except ImportError as e:
 
 
 @app.before_request
+def block_path_traversal() -> None:
+    """Reject path traversal in the raw URI before Werkzeug normalization hides it.
+
+    request.path is post-normalization (.. already stripped), so we read the
+    original WSGI PATH_INFO and RAW_URI from environ instead.
+    """
+    raw = request.environ.get("RAW_URI") or request.environ.get("PATH_INFO", "")
+    if ".." in raw:
+        return jsonify({"error": "invalid path"}), 400  # type: ignore[return-value]
+
+
+@app.before_request
 def require_auth() -> None:
     """Global auth + IP allowlist enforcement for all /api/* routes."""
     import ipaddress as _ipa  # noqa: PLC0415
