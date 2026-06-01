@@ -24,6 +24,25 @@
   font-weight: 600 !important;
   border-radius: 0 !important;
   width: 100%;
+  position: relative;
+  overflow: hidden;
+  transition: filter 0.2s ease;
+}
+.sic-btn--primary:hover {
+  filter: brightness(1.12);
+}
+/* button shimmer sweep on hover */
+.sic-btn--primary::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  transition: left 0.4s ease;
+  pointer-events: none;
+}
+.sic-btn--primary:hover::after {
+  left: 150%;
 }
 
 /* Improvement 14: focus states */
@@ -31,12 +50,43 @@
   outline: 1px solid var(--sic-accent) !important;
   outline-offset: 2px !important;
 }
+/* email input red glow on focus */
+.sic-input:focus {
+  box-shadow: 0 0 0 1px rgba(233,69,96,0.5), 0 0 12px rgba(233,69,96,0.15) !important;
+  outline: none !important;
+  border-color: rgba(233,69,96,0.6) !important;
+}
 
-/* Improvement 5: login form card — correct token */
+/* Improvement 5: login form card — correct token + scan-line texture */
 .sic-form {
   background: #0f0f0f;
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 0 !important;
+  position: relative;
+}
+/* scan-line overlay — ultra-thin horizontal lines for hacker feel */
+.sic-form::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(255,255,255,0.012) 3px,
+    rgba(255,255,255,0.012) 4px
+  );
+  pointer-events: none;
+  border-radius: 0;
+}
+
+/* page fade-in on load */
+@keyframes sic-page-fadein {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sic-form-page {
+  animation: sic-page-fadein 0.45s ease forwards;
 }
 
 /* Step 1: SIC logo on login page — enhanced inline svg wordmark */
@@ -63,6 +113,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+/* subtitle slow-pulse */
+@keyframes sic-subtitle-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.65; }
+}
+.sic-login-logo [style*="Security Intelligence Center"] {
+  animation: sic-subtitle-pulse 4s ease-in-out infinite;
 }
 </style>
 </head>
