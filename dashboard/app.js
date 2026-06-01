@@ -207,8 +207,8 @@ async function loadRecent() {
         <td>${statusBadge(s.status)}</td>
         <td>${s.findings_count || 0}</td>
         <td style="white-space:nowrap">
-          <button class="sic-btn" data-requires-tier="team" style="font-size:11px;padding:4px 10px;" onclick="exportScan('${escapeHtml(s.id)}')">Export</button>
-          <button class="sic-btn" data-requires-tier="team" style="font-size:11px;padding:4px 10px;margin-left:4px;" onclick="shareScan('${escapeHtml(s.id)}')">Share</button>
+          <button class="sic-btn js-export-scan" data-requires-tier="team" data-scan-id="${escapeHtml(s.id)}" style="font-size:11px;padding:4px 10px;">Export</button>
+          <button class="sic-btn js-share-scan"  data-requires-tier="team" data-scan-id="${escapeHtml(s.id)}" style="font-size:11px;padding:4px 10px;margin-left:4px;">Share</button>
         </td>
       </tr>
     `).join("");
@@ -218,6 +218,14 @@ async function loadRecent() {
         <tbody>${rows}</tbody>
       </table>
     `;
+    // H3: event delegation — scan IDs stay as inert data attributes, never
+    // interpolated into JS execution context via onclick strings.
+    el.addEventListener("click", function(e) {
+      const exportBtn = e.target.closest(".js-export-scan");
+      const shareBtn  = e.target.closest(".js-share-scan");
+      if (exportBtn) exportScan(exportBtn.dataset.scanId);
+      if (shareBtn)  shareScan(shareBtn.dataset.scanId);
+    });
     // Apply tier gating to the newly rendered buttons
     applyTierGating();
   } catch (e) {

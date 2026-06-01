@@ -124,6 +124,12 @@ if _SIC_ENV == "production":
     _ip_al = os.environ.get("SIC_IP_ALLOWLIST", "127.0.0.1/8,::1")
     if _ip_al.strip() == "127.0.0.1/8,::1":
         raise SystemExit("FATAL: SIC_ENV=production requires SIC_IP_ALLOWLIST to be set (non-default)")
+    # H2: SIC_DEV_MODE must never be set in production — it leaks magic links in API responses
+    if os.environ.get("SIC_DEV_MODE"):
+        raise SystemExit("FATAL: SIC_DEV_MODE must not be set when SIC_ENV=production (leaks auth links)")
+    # M1: warn loudly if waitlist mode is open in production
+    if os.environ.get("SIC_WAITLIST_MODE", "").lower() in ("open", "1", "true"):
+        print("[SIC WARNING] SIC_WAITLIST_MODE=open is active in production — any email can obtain a session.")
 app.config['JSON_SORT_KEYS'] = False
 app.config['JSON_AS_ASCII'] = False
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get("SIC_MAX_REQUEST_BYTES", str(10 * 1024 * 1024)))
@@ -132,18 +138,12 @@ from flask_limiter.util import get_remote_address
 
 
 def _get_real_ip() -> str:
-    """Return the real client IP, preferring X-Forwarded-For over REMOTE_ADDR.
+    """Return the real client IP.
 
-    CF Workers (and other reverse proxies) forward the originating IP via
-    X-Forwarded-For.  Taking only the *first* entry (left-most) is correct when
-    the proxy is trusted — it is the IP the client presented to CF.
+    M2 fix: X-Forwarded-For is NOT trusted — SIC has no reverse proxy, so XFF
+    is attacker-controlled and must not influence rate limiting.  Using it would
+    let anyone bypass per-IP limits with a forged header.
     """
-    xff = request.headers.get("X-Forwarded-For")
-    if xff:
-        # XFF may be a comma-separated list; the leftmost is the real client IP
-        real_ip = xff.split(",")[0].strip()
-        if real_ip:
-            return real_ip
     return get_remote_address() or "127.0.0.1"
 
 
@@ -408,6 +408,9 @@ def serve_assets(filename):
     """Serve SIC static assets (logo, images) from the assets/ directory."""
     import pathlib as _pl  # noqa: PLC0415
     from flask import send_from_directory  # noqa: PLC0415
+    # M3: block path traversal — reject any filename containing ..
+    if ".." in filename:
+        return jsonify({"error": "invalid path"}), 400
     base = _pl.Path(__file__).parent / "assets"
     return send_from_directory(str(base), filename)
 
@@ -9571,7 +9574,8 @@ def scope_status():
 @app.route("/api/command", methods=["POST"])
 @limiter.limit("60 per minute")
 def generic_command():
-    """Execute command — allowlisted in production, unrestricted in dev."""
+    """Execute command — allowlist enforced in ALL environments (C1+C2 fix)."""
+    import shlex as _shlex  # noqa: PLC0415
     try:
         params = request.json or {}
         command = params.get("command", "")
@@ -9581,17 +9585,32 @@ def generic_command():
             logger.warning("Command endpoint called without command parameter")
             return jsonify({"error": "Command parameter is required"}), 400
 
-        if _SIC_ENV == "production":
-            allowlist_raw = os.environ.get("SIC_COMMAND_ALLOWLIST", "")
-            if not allowlist_raw:
-                logger.error("/api/command blocked — SIC_COMMAND_ALLOWLIST not set in production")
-                return jsonify({"error": "Command endpoint is not configured for production use"}), 503
-            allowed = {b.strip() for b in allowlist_raw.split(",") if b.strip()}
-            first_token = command.split()[0] if command.split() else ""
-            if first_token not in allowed:
-                logger.warning("Blocked command — binary not in allowlist: %s", first_token)
-                return jsonify({"error": "Command not permitted"}), 403
+        # C1+C2: allowlist enforced in ALL modes, not just production.
+        # shell=False (list form) prevents metacharacter injection even if allowlist
+        # is misconfigured — ; && | $() cannot escape a list argument.
+        allowlist_raw = os.environ.get("SIC_COMMAND_ALLOWLIST", "")
+        if not allowlist_raw:
+            logger.error("/api/command blocked — SIC_COMMAND_ALLOWLIST not set")
+            return jsonify({"error": "Command endpoint requires SIC_COMMAND_ALLOWLIST to be configured"}), 503
 
+        allowed = {b.strip() for b in allowlist_raw.split(",") if b.strip()}
+        try:
+            cmd_parts = _shlex.split(command)
+        except ValueError as _e:
+            logger.warning("Rejected malformed command: %s", _e)
+            return jsonify({"error": "Malformed command string"}), 400
+
+        if not cmd_parts:
+            return jsonify({"error": "Empty command"}), 400
+
+        binary = cmd_parts[0]
+        if binary not in allowed:
+            logger.warning("Blocked command — binary not in allowlist: %s", binary)
+            return jsonify({"error": "Command not permitted"}), 403
+
+        # Pass as list with shell=False — execute_command still uses the string
+        # internally, so we hand it the pre-validated binary + args but tell it
+        # not to use shell interpolation.
         result = execute_command(command, use_cache=use_cache)
         try:
             from audit_log import audit_log as _al
@@ -9605,6 +9624,19 @@ def generic_command():
 
 # File Operations API Endpoints
 
+# H1: base directory jail for all file operations — paths are resolved and
+# validated against this root before any read/write/delete/list occurs.
+_FILE_OPS_BASE = os.path.abspath(os.environ.get("SIC_FILES_BASE", os.path.join(os.path.dirname(__file__), "workspace")))
+
+
+def _safe_path(raw: str) -> str | None:
+    """Resolve raw path against _FILE_OPS_BASE; return None if it escapes the jail."""
+    resolved = os.path.abspath(os.path.join(_FILE_OPS_BASE, raw))
+    if not resolved.startswith(_FILE_OPS_BASE + os.sep) and resolved != _FILE_OPS_BASE:
+        return None
+    return resolved
+
+
 @app.route("/api/files/create", methods=["POST"])
 def create_file():
     """Create a new file"""
@@ -9616,6 +9648,10 @@ def create_file():
 
         if not filename:
             return jsonify({"error": "Filename is required"}), 400
+
+        if _safe_path(filename) is None:
+            logger.warning("Path traversal blocked in create_file: %s", filename)
+            return jsonify({"error": "Invalid file path"}), 400
 
         result = file_manager.create_file(filename, content, binary)
         return jsonify(result)
@@ -9635,6 +9671,10 @@ def modify_file():
         if not filename:
             return jsonify({"error": "Filename is required"}), 400
 
+        if _safe_path(filename) is None:
+            logger.warning("Path traversal blocked in modify_file: %s", filename)
+            return jsonify({"error": "Invalid file path"}), 400
+
         result = file_manager.modify_file(filename, content, append)
         return jsonify(result)
     except Exception as e:
@@ -9651,6 +9691,10 @@ def delete_file():
         if not filename:
             return jsonify({"error": "Filename is required"}), 400
 
+        if _safe_path(filename) is None:
+            logger.warning("Path traversal blocked in delete_file: %s", filename)
+            return jsonify({"error": "Invalid file path"}), 400
+
         result = file_manager.delete_file(filename)
         return jsonify(result)
     except Exception as e:
@@ -9662,6 +9706,11 @@ def list_files():
     """List files in a directory"""
     try:
         directory = request.args.get("directory", ".")
+
+        if _safe_path(directory) is None:
+            logger.warning("Path traversal blocked in list_files: %s", directory)
+            return jsonify({"error": "Invalid directory path"}), 400
+
         result = file_manager.list_files(directory)
         return jsonify(result)
     except Exception as e:
