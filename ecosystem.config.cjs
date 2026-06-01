@@ -25,6 +25,7 @@ module.exports = {
     {
       name: "sic-mcp",
       script: "mcp_server.py",
+      cwd: "C:/Za/sic",
       interpreter: PYTHON,
       windowsHide: true,
       env: {
