@@ -149,7 +149,8 @@ DEFAULT_HEXSTRIKE_SERVER = os.environ.get(
     "HEXSTRIKE_SERVER",
     f"http://127.0.0.1:{os.environ.get('HEXSTRIKE_PORT', '9890')}",
 )  # Default HexStrike server URL
-DEFAULT_REQUEST_TIMEOUT = 300  # 5 minutes default timeout for API requests
+DEFAULT_REQUEST_TIMEOUT = 30   # Default timeout — keeps MCP transport alive (was 300s)
+SCAN_REQUEST_TIMEOUT = 600     # Long-running scans (nmap, sqlmap, etc.) pass this explicitly
 MAX_RETRIES = 3  # Maximum number of retries for connection attempts
 
 class HexStrikeClient:
@@ -166,6 +167,10 @@ class HexStrikeClient:
         self.server_url = server_url.rstrip("/")
         self.timeout = timeout
         self.session = requests.Session()
+        # Larger connection pool for concurrent MCP tool calls
+        _adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+        self.session.mount("http://", _adapter)
+        self.session.mount("https://", _adapter)
 
         # Try to connect to server with retries
         connected = False
@@ -192,6 +197,7 @@ class HexStrikeClient:
                 logger.warning(f"❌ Connection attempt {i+1} failed: {str(e)}")
                 time.sleep(2)  # Wait before retrying
 
+        self.connected = connected
         if not connected:
             error_msg = f"Failed to establish connection to HexStrike AI API Server at {server_url} after {MAX_RETRIES} attempts"
             logger.error(error_msg)
@@ -218,12 +224,16 @@ class HexStrikeClient:
             response = self.session.get(url, params=params, timeout=self.timeout)
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"🚫 Connection error on GET {url}: {str(e)}")
+            self._reconnect()
+            return self._mcp_error(f"Backend connection failed: {str(e)}")
         except requests.exceptions.RequestException as e:
             logger.error(f"🚫 Request failed: {str(e)}")
-            return {"error": f"Request failed: {str(e)}", "success": False}
+            return self._mcp_error(f"Request failed: {str(e)}")
         except Exception as e:
             logger.error(f"💥 Unexpected error: {str(e)}")
-            return {"error": f"Unexpected error: {str(e)}", "success": False}
+            return self._mcp_error(f"Unexpected error: {str(e)}")
 
     def safe_post(self, endpoint: str, json_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -243,12 +253,16 @@ class HexStrikeClient:
             response = self.session.post(url, json=json_data, timeout=self.timeout)
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"🚫 Connection error on POST {url}: {str(e)}")
+            self._reconnect()
+            return self._mcp_error(f"Backend connection failed: {str(e)}")
         except requests.exceptions.RequestException as e:
             logger.error(f"🚫 Request failed: {str(e)}")
-            return {"error": f"Request failed: {str(e)}", "success": False}
+            return self._mcp_error(f"Request failed: {str(e)}")
         except Exception as e:
             logger.error(f"💥 Unexpected error: {str(e)}")
-            return {"error": f"Unexpected error: {str(e)}", "success": False}
+            return self._mcp_error(f"Unexpected error: {str(e)}")
 
     def execute_command(self, command: str, use_cache: bool = True) -> Dict[str, Any]:
         """
@@ -262,6 +276,42 @@ class HexStrikeClient:
             Command execution results
         """
         return self.safe_post("api/command", {"command": command, "use_cache": use_cache})
+
+    def _backend_alive(self) -> bool:
+        """Quick non-retrying probe — used before deciding on an error action."""
+        try:
+            r = self.session.get(f"{self.server_url}/health", timeout=3)
+            return r.ok
+        except Exception:
+            return False
+
+    def _reconnect(self) -> bool:
+        """Attempt to re-establish connection after a runtime failure."""
+        alive = self._backend_alive()
+        if alive:
+            self.connected = True
+            logger.info(f"🔄 Reconnected to HexStrike backend at {self.server_url}")
+        else:
+            self.connected = False
+            logger.warning(f"⚠️  HexStrike backend still unreachable at {self.server_url}")
+        return alive
+
+    def _mcp_error(self, reason: str, tool: str = "") -> Dict[str, Any]:
+        """Return a structured error readable by LLM tool consumers."""
+        backend_down = not self._backend_alive()
+        action = (
+            "pm2 restart sic-main  # SIC backend is unreachable"
+            if backend_down
+            else "pm2 logs sic-main --lines 30  # check SIC server logs"
+        )
+        return {
+            "success": False,
+            "error": reason,
+            "tool": tool or "unknown",
+            "action": action,
+            "sic_backend": self.server_url,
+            "backend_reachable": not backend_down,
+        }
 
     def check_health(self) -> Dict[str, Any]:
         """
@@ -283,6 +333,92 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
         Configured FastMCP instance
     """
     mcp = FastMCP("hexstrike-ai-mcp")
+
+    # ============================================================================
+    # TOOL AVAILABILITY — call these first to know what's usable on this host
+    # ============================================================================
+
+    @mcp.tool()
+    def list_available_tools(category: str = "") -> Dict[str, Any]:
+        """
+        Return tools currently available on the SIC backend (binary present on host).
+        Call this at the start of a session to plan which tools to use and avoid
+        wasting round-trips on tools that aren't installed.
+
+        Args:
+            category: Filter by category (e.g. 'network', 'web_security', 'osint',
+                      'password', 'binary', 'forensics', 'cloud', 'exploitation',
+                      'api', 'wireless', 'additional'). Leave empty for all.
+
+        Returns:
+            Dict with available tool names, counts, and category breakdown.
+        """
+        try:
+            health = hexstrike_client.check_health()
+            if "error" in health:
+                return hexstrike_client._mcp_error(health["error"], tool="list_available_tools")
+            status = health.get("tools_status", {})
+            cat_stats = health.get("category_stats", {})
+            available = [t for t, ok in status.items() if ok]
+            if category:
+                cat = cat_stats.get(category, {})
+                available = [t for t in available if t in
+                             [t2 for t2, ok in status.items() if ok]]
+                return {
+                    "success": True,
+                    "category": category,
+                    "available_count": cat.get("available", 0),
+                    "total": cat.get("total", 0),
+                    "tools": available,
+                }
+            return {
+                "success": True,
+                "total_tools": health.get("total_tools_count", 0),
+                "available_count": len(available),
+                "unavailable_count": len(status) - len(available),
+                "available": available,
+                "categories": {k: v for k, v in cat_stats.items()},
+                "note": (
+                    "Unavailability is normal on Windows dev — "
+                    "tools run inside the SIC Docker/Linux sandbox."
+                ),
+            }
+        except Exception as e:
+            return hexstrike_client._mcp_error(str(e), tool="list_available_tools")
+
+    @mcp.tool()
+    def list_unavailable_tools(category: str = "") -> Dict[str, Any]:
+        """
+        Return tools NOT currently available on the SIC backend host.
+        Use to find alternatives or understand what requires the Linux sandbox.
+
+        Args:
+            category: Filter by category. Leave empty for all unavailable tools.
+
+        Returns:
+            Dict with unavailable tool names, count, and a remediation note.
+        """
+        try:
+            health = hexstrike_client.check_health()
+            if "error" in health:
+                return hexstrike_client._mcp_error(health["error"], tool="list_unavailable_tools")
+            status = health.get("tools_status", {})
+            unavailable = [t for t, ok in status.items() if not ok]
+            if category:
+                cat_stats = health.get("category_stats", {})
+                cat = cat_stats.get(category, {})
+                unavailable = unavailable[:cat.get("total", len(unavailable))]
+            return {
+                "success": True,
+                "unavailable_count": len(unavailable),
+                "unavailable": unavailable,
+                "note": (
+                    "On Windows dev hosts most Linux pentest binaries are absent. "
+                    "They are available inside the SIC Docker/Linux sandbox."
+                ),
+            }
+        except Exception as e:
+            return hexstrike_client._mcp_error(str(e), tool="list_unavailable_tools")
 
     # ============================================================================
     # CORE NETWORK SCANNING TOOLS
@@ -333,7 +469,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in nmap_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def gobuster_scan(url: str, mode: str = "dir", wordlist: str = "/usr/share/wordlists/dirb/common.txt", additional_args: str = "") -> Dict[str, Any]:
@@ -381,7 +517,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in gobuster_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def nuclei_scan(target: str, severity: str = "", tags: str = "", template: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -432,7 +568,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in nuclei_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # CLOUD SECURITY TOOLS
@@ -474,7 +610,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in prowler_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def trivy_scan(scan_type: str = "image", target: str = "", output_format: str = "json", severity: str = "", output_file: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -510,7 +646,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in trivy_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ENHANCED CLOUD AND CONTAINER SECURITY TOOLS (v6.0)
@@ -552,7 +688,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in scout_suite_assessment: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def cloudmapper_analysis(action: str = "collect", account: str = "",
@@ -585,7 +721,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in cloudmapper_analysis: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def pacu_exploitation(session_name: str = "hexstrike_session", modules: str = "",
@@ -630,7 +766,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in pacu_exploitation: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def kube_hunter_scan(target: str = "", remote: str = "", cidr: str = "",
@@ -670,7 +806,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in kube_hunter_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def kube_bench_cis(targets: str = "", version: str = "", config_dir: str = "",
@@ -705,7 +841,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in kube_bench_cis: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def docker_bench_security_scan(checks: str = "", exclude: str = "",
@@ -739,7 +875,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in docker_bench_security_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def clair_vulnerability_scan(image: str, config: str = "/etc/clair/config.yaml",
@@ -772,7 +908,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in clair_vulnerability_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def falco_runtime_monitoring(config_file: str = "/etc/falco/falco.yaml",
@@ -808,7 +944,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in falco_runtime_monitoring: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def checkov_iac_scan(directory: str = ".", framework: str = "", check: str = "",
@@ -846,7 +982,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in checkov_iac_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def terrascan_iac_scan(scan_type: str = "all", iac_dir: str = ".",
@@ -884,7 +1020,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in terrascan_iac_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # FILE OPERATIONS & PAYLOAD GENERATION
@@ -918,7 +1054,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in create_file: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def modify_file(filename: str, content: str, append: bool = False) -> Dict[str, Any]:
@@ -948,7 +1084,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in modify_file: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def delete_file(filename: str) -> Dict[str, Any]:
@@ -974,7 +1110,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in delete_file: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def list_files(directory: str = ".") -> Dict[str, Any]:
@@ -998,7 +1134,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in list_files: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def generate_payload(payload_type: str = "buffer", size: int = 1024, pattern: str = "A", filename: str = "",
@@ -1041,7 +1177,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in generate_payload: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # PYTHON ENVIRONMENT MANAGEMENT
@@ -1073,7 +1209,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in install_python_package: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def execute_python_script(script: str, env_name: str = "default", filename: str = "") -> Dict[str, Any]:
@@ -1105,7 +1241,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in execute_python_script: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ADDITIONAL SECURITY TOOLS FROM ORIGINAL IMPLEMENTATION
@@ -1148,7 +1284,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in dirb_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def nikto_scan(target: str, additional_args: str = "") -> Dict[str, Any]:
@@ -1176,7 +1312,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in nikto_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def sqlmap_scan(url: str, data: str = "", additional_args: str = "",
@@ -1215,7 +1351,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in sqlmap_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def metasploit_run(module: str, options: Dict[str, Any] = {},
@@ -1252,7 +1388,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in metasploit_run: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def hydra_attack(
@@ -1307,7 +1443,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in hydra_attack: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def john_crack(
@@ -1353,7 +1489,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in john_crack: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def wpscan_analyze(url: str, additional_args: str = "") -> Dict[str, Any]:
@@ -1381,7 +1517,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in wpscan_analyze: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def enum4linux_scan(target: str, additional_args: str = "-a") -> Dict[str, Any]:
@@ -1409,7 +1545,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in enum4linux_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def ffuf_scan(url: str, wordlist: str = "/usr/share/wordlists/dirb/common.txt", mode: str = "directory", match_codes: str = "200,204,301,302,307,401,403", additional_args: str = "") -> Dict[str, Any]:
@@ -1443,7 +1579,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in ffuf_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def netexec_scan(target: str, protocol: str = "smb", username: str = "", password: str = "", hash_value: str = "", module: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -1481,7 +1617,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in netexec_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def amass_scan(domain: str, mode: str = "enum", additional_args: str = "") -> Dict[str, Any]:
@@ -1511,7 +1647,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in amass_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def hashcat_crack(hash_file: str, hash_type: str, attack_mode: str = "0", wordlist: str = "/usr/share/wordlists/rockyou.txt", mask: str = "", additional_args: str = "",
@@ -1556,7 +1692,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in hashcat_crack: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def subfinder_scan(domain: str, silent: bool = True, all_sources: bool = False, additional_args: str = "") -> Dict[str, Any]:
@@ -1588,7 +1724,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in subfinder_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def smbmap_scan(target: str, username: str = "", password: str = "", domain: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -1622,7 +1758,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in smbmap_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ENHANCED NETWORK PENETRATION TESTING TOOLS (v6.0)
@@ -1666,7 +1802,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in rustscan_fast_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def masscan_high_speed(target: str, ports: str = "1-65535", rate: int = 1000,
@@ -1708,7 +1844,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in masscan_high_speed: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def nmap_advanced_scan(target: str, scan_type: str = "-sS", ports: str = "",
@@ -1755,7 +1891,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in nmap_advanced_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def autorecon_comprehensive(target: str, output_dir: str = "/tmp/autorecon",
@@ -1796,7 +1932,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in autorecon_comprehensive: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def enum4linux_ng_advanced(target: str, username: str = "", password: str = "",
@@ -1841,7 +1977,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in enum4linux_ng_advanced: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def rpcclient_enumeration(target: str, username: str = "", password: str = "",
@@ -1879,7 +2015,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in rpcclient_enumeration: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def nbtscan_netbios(target: str, verbose: bool = False, timeout: int = 2,
@@ -1912,7 +2048,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in nbtscan_netbios: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def arp_scan_discovery(target: str = "", interface: str = "", local_network: bool = False,
@@ -1949,7 +2085,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in arp_scan_discovery: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def responder_credential_harvest(interface: str = "eth0", analyze: bool = False,
@@ -1999,7 +2135,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in responder_credential_harvest: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def volatility_analyze(memory_file: str, plugin: str, profile: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -2031,7 +2167,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in volatility_analyze: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def msfvenom_generate(payload: str, format_type: str = "", output_file: str = "", encoder: str = "", iterations: str = "", additional_args: str = "",
@@ -2076,7 +2212,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in msfvenom_generate: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # BINARY ANALYSIS & REVERSE ENGINEERING TOOLS
@@ -2112,7 +2248,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in gdb_analyze: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def radare2_analyze(binary: str, commands: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -2142,7 +2278,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in radare2_analyze: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def binwalk_analyze(file_path: str, extract: bool = False, additional_args: str = "") -> Dict[str, Any]:
@@ -2172,7 +2308,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in binwalk_analyze: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def ropgadget_search(binary: str, gadget_type: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -2202,7 +2338,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in ropgadget_search: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def checksec_analyze(binary: str) -> Dict[str, Any]:
@@ -2228,7 +2364,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in checksec_analyze: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def xxd_hexdump(file_path: str, offset: str = "0", length: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -2260,7 +2396,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in xxd_hexdump: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def strings_extract(file_path: str, min_len: int = 4, additional_args: str = "") -> Dict[str, Any]:
@@ -2290,7 +2426,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in strings_extract: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def objdump_analyze(binary: str, disassemble: bool = True, additional_args: str = "") -> Dict[str, Any]:
@@ -2320,7 +2456,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in objdump_analyze: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ENHANCED BINARY ANALYSIS AND EXPLOITATION FRAMEWORK (v6.0)
@@ -2362,7 +2498,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in ghidra_analysis: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def pwntools_exploit(script_content: str = "", target_binary: str = "",
@@ -2409,7 +2545,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in pwntools_exploit: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def one_gadget_search(libc_path: str, level: int = 1, additional_args: str = "") -> Dict[str, Any]:
@@ -2439,7 +2575,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in one_gadget_search: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def libc_database_lookup(action: str = "find", symbols: str = "",
@@ -2472,7 +2608,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in libc_database_lookup: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def gdb_peda_debug(binary: str = "", commands: str = "", attach_pid: int = 0,
@@ -2516,7 +2652,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in gdb_peda_debug: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def angr_symbolic_execution(binary: str, script_content: str = "",
@@ -2554,7 +2690,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in angr_symbolic_execution: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def ropper_gadget_search(binary: str, gadget_type: str = "rop", quality: int = 1,
@@ -2592,7 +2728,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in ropper_gadget_search: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def pwninit_setup(binary: str, libc: str = "", ld: str = "",
@@ -2636,7 +2772,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in pwninit_setup: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def feroxbuster_scan(url: str, wordlist: str = "/usr/share/wordlists/dirb/common.txt", threads: int = 10, additional_args: str = "") -> Dict[str, Any]:
@@ -2668,7 +2804,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in feroxbuster_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def dotdotpwn_scan(target: str, module: str = "http", additional_args: str = "") -> Dict[str, Any]:
@@ -2698,7 +2834,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in dotdotpwn_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def xsser_scan(url: str, params: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -2728,7 +2864,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in xsser_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def wfuzz_scan(url: str, wordlist: str = "/usr/share/wordlists/dirb/common.txt", additional_args: str = "") -> Dict[str, Any]:
@@ -2758,7 +2894,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in wfuzz_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ENHANCED WEB APPLICATION SECURITY TOOLS (v6.0)
@@ -2800,7 +2936,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in dirsearch_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def katana_crawl(url: str, depth: int = 3, js_crawl: bool = True,
@@ -2838,7 +2974,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in katana_crawl: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def gau_discovery(domain: str, providers: str = "wayback,commoncrawl,otx,urlscan",
@@ -2874,7 +3010,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in gau_discovery: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def waybackurls_discovery(domain: str, get_versions: bool = False,
@@ -2907,7 +3043,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in waybackurls_discovery: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def arjun_parameter_discovery(url: str, method: str = "GET", wordlist: str = "",
@@ -2947,7 +3083,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in arjun_parameter_discovery: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def paramspider_mining(domain: str, level: int = 2,
@@ -2983,7 +3119,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in paramspider_mining: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def x8_parameter_discovery(url: str, wordlist: str = "/usr/share/wordlists/x8/params.txt",
@@ -3021,7 +3157,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in x8_parameter_discovery: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def jaeles_vulnerability_scan(url: str, signatures: str = "", config: str = "",
@@ -3059,7 +3195,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in jaeles_vulnerability_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def dalfox_xss_scan(url: str, pipe_mode: bool = False, blind: bool = False,
@@ -3099,7 +3235,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in dalfox_xss_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def httpx_probe_single(target: str, probe: bool = True, tech_detect: bool = False,
@@ -3144,7 +3280,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in httpx_probe: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def anew_data_processing(input_data: str, output_file: str = "",
@@ -3175,7 +3311,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in anew_data_processing: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def qsreplace_parameter_replacement(urls: str, replacement: str = "FUZZ",
@@ -3206,7 +3342,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in qsreplace_parameter_replacement: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def uro_url_filtering(urls: str, whitelist: str = "", blacklist: str = "",
@@ -3239,7 +3375,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in uro_url_filtering: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # AI-POWERED PAYLOAD GENERATION (v5.0 ENHANCEMENT)
@@ -3297,7 +3433,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in ai_generate_payload: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def ai_test_payload(payload: str, target_url: str, method: str = "GET",
@@ -3345,7 +3481,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in ai_test_payload: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def ai_generate_attack_suite(target_url: str, attack_types: str = "xss,sqli,lfi",
@@ -3415,7 +3551,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             }
         except Exception as e:
             logger.error(f"MCP tool error in ai_generate_attack_suite: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ADVANCED API TESTING TOOLS (v5.0 ENHANCEMENT)
@@ -3459,7 +3595,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in api_fuzzer: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def graphql_scanner(endpoint: str, introspection: bool = True, query_depth: int = 10, test_mutations: bool = True) -> Dict[str, Any]:
@@ -3505,7 +3641,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in graphql_scanner: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def jwt_analyzer(jwt_token: str, target_url: str = "") -> Dict[str, Any]:
@@ -3548,7 +3684,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in jwt_analyzer: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def api_schema_analyzer(schema_url: str, schema_type: str = "openapi") -> Dict[str, Any]:
@@ -3597,7 +3733,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in api_schema_analyzer: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def comprehensive_api_audit(base_url: str, schema_url: str = "", jwt_token: str = "", graphql_endpoint: str = "") -> Dict[str, Any]:
@@ -3695,7 +3831,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             }
         except Exception as e:
             logger.error(f"MCP tool error in comprehensive_api_audit: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ADVANCED CTF TOOLS (v5.0 ENHANCEMENT)
@@ -3731,7 +3867,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in volatility3_analyze: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def foremost_carving(input_file: str, output_dir: str = "/tmp/foremost_output", file_types: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -3763,7 +3899,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in foremost_carving: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def steghide_analysis(action: str, cover_file: str, embed_file: str = "", passphrase: str = "", output_file: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -3799,7 +3935,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in steghide_analysis: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def exiftool_extract(file_path: str, output_format: str = "", tags: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -3831,7 +3967,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in exiftool_extract: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def hashpump_attack(signature: str, data: str, key_length: str, append_data: str, additional_args: str = "",
@@ -3874,7 +4010,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in hashpump_attack: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # BUG BOUNTY RECONNAISSANCE TOOLS (v5.0 ENHANCEMENT)
@@ -3923,7 +4059,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in hakrawler_crawl: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def httpx_probe(targets: str = "", target_file: str = "", ports: str = "", methods: str = "GET", status_code: str = "", content_length: bool = False, output_file: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -3963,7 +4099,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in httpx_probe: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def paramspider_discovery(domain: str, exclude: str = "", output_file: str = "", level: int = 2, additional_args: str = "") -> Dict[str, Any]:
@@ -3997,7 +4133,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in paramspider_discovery: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ADVANCED WEB SECURITY TOOLS CONTINUED
@@ -4041,7 +4177,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in burpsuite_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def zap_scan(target: str = "", scan_type: str = "baseline", api_key: str = "", daemon: bool = False, port: str = "8090", host: str = "0.0.0.0", format_type: str = "xml", output_file: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -4083,7 +4219,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in zap_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def arjun_scan(url: str, method: str = "GET", data: str = "", headers: str = "", timeout: str = "", output_file: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -4121,7 +4257,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in arjun_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def wafw00f_scan(target: str, additional_args: str = "") -> Dict[str, Any]:
@@ -4149,7 +4285,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in wafw00f_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def fierce_scan(domain: str, dns_server: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -4179,7 +4315,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in fierce_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def dnsenum_scan(domain: str, dns_server: str = "", wordlist: str = "", additional_args: str = "") -> Dict[str, Any]:
@@ -4211,7 +4347,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in dnsenum_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def autorecon_scan(
@@ -4353,7 +4489,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in autorecon_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # SYSTEM MONITORING & TELEMETRY
@@ -4377,7 +4513,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in server_health: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def get_cache_stats() -> Dict[str, Any]:
@@ -4395,7 +4531,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in get_cache_stats: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def clear_cache() -> Dict[str, Any]:
@@ -4415,7 +4551,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in clear_cache: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def get_telemetry() -> Dict[str, Any]:
@@ -4433,7 +4569,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in get_telemetry: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # PROCESS MANAGEMENT TOOLS (v5.0 ENHANCEMENT)
@@ -4457,7 +4593,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in list_active_processes: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def get_process_status(pid: int) -> Dict[str, Any]:
@@ -4480,7 +4616,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in get_process_status: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def terminate_process(pid: int) -> Dict[str, Any]:
@@ -4503,7 +4639,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in terminate_process: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def pause_process(pid: int) -> Dict[str, Any]:
@@ -4526,7 +4662,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in pause_process: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def resume_process(pid: int) -> Dict[str, Any]:
@@ -4549,7 +4685,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in resume_process: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def get_process_dashboard() -> Dict[str, Any]:
@@ -4576,7 +4712,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in get_process_dashboard: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def execute_command(command: str, use_cache: bool = True) -> Dict[str, Any]:
@@ -4620,7 +4756,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
                 }
         except Exception as e:
             logger.error(f"MCP tool error in execute_command: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ADVANCED VULNERABILITY INTELLIGENCE MCP TOOLS (v6.0 ENHANCEMENT)
@@ -4659,7 +4795,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in monitor_cve_feeds: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def generate_exploit_from_cve(cve_id: str, target_os: str = "", target_arch: str = "x64", exploit_type: str = "poc", evasion_level: str = "none",
@@ -4711,7 +4847,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in generate_exploit_from_cve: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def discover_attack_chains(target_software: str, attack_depth: int = 3, include_zero_days: bool = False,
@@ -4758,7 +4894,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in discover_attack_chains: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def research_zero_day_opportunities(target_software: str, analysis_depth: str = "standard", source_code_url: str = "") -> Dict[str, Any]:
@@ -4799,7 +4935,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in research_zero_day_opportunities: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def correlate_threat_intelligence(indicators: str, timeframe: str = "30d", sources: str = "all") -> Dict[str, Any]:
@@ -4849,7 +4985,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in correlate_threat_intelligence: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def advanced_payload_generation(attack_type: str, target_context: str = "", evasion_level: str = "standard", custom_constraints: str = "",
@@ -4910,7 +5046,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in advanced_payload_generation: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def vulnerability_intelligence_dashboard() -> Dict[str, Any]:
@@ -4968,7 +5104,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             }
         except Exception as e:
             logger.error(f"MCP tool error in vulnerability_intelligence_dashboard: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def threat_hunting_assistant(target_environment: str, threat_indicators: str = "", hunt_focus: str = "general") -> Dict[str, Any]:
@@ -5078,7 +5214,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             }
         except Exception as e:
             logger.error(f"MCP tool error in threat_hunting_assistant: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ENHANCED VISUAL OUTPUT TOOLS
@@ -5102,7 +5238,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in get_live_dashboard: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def create_vulnerability_report(vulnerabilities: str, target: str = "", scan_type: str = "comprehensive") -> Dict[str, Any]:
@@ -5157,10 +5293,10 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
 
             except Exception as e:
                 logger.error(f"❌ Failed to create vulnerability report: {str(e)}")
-                return {"success": False, "error": str(e)}
+                return hexstrike_client._mcp_error(str(e))
         except Exception as e:
             logger.error(f"MCP tool error in create_vulnerability_report: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def format_tool_output_visual(tool_name: str, output: str, success: bool = True) -> Dict[str, Any]:
@@ -5193,7 +5329,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in format_tool_output_visual: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def create_scan_summary(target: str, tools_used: str, vulnerabilities_found: int = 0,
@@ -5233,7 +5369,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in create_scan_summary: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def display_system_metrics() -> Dict[str, Any]:
@@ -5282,7 +5418,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
                 return telemetry_result
         except Exception as e:
             logger.error(f"MCP tool error in display_system_metrics: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # INTELLIGENT DECISION ENGINE TOOLS
@@ -5314,7 +5450,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in analyze_target_intelligence: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def select_optimal_tools_ai(target: str, objective: str = "comprehensive") -> Dict[str, Any]:
@@ -5346,7 +5482,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in select_optimal_tools_ai: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def optimize_tool_parameters_ai(target: str, tool: str, context: str = "{}") -> Dict[str, Any]:
@@ -5387,7 +5523,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in optimize_tool_parameters_ai: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def create_attack_chain_ai(target: str, objective: str = "comprehensive",
@@ -5432,7 +5568,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in create_attack_chain_ai: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def intelligent_smart_scan(target: str, objective: str = "comprehensive", max_tools: int = 5) -> Dict[str, Any]:
@@ -5489,7 +5625,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in intelligent_smart_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def detect_technologies_ai(target: str) -> Dict[str, Any]:
@@ -5525,7 +5661,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in detect_technologies_ai: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def ai_reconnaissance_workflow(target: str, depth: str = "standard") -> Dict[str, Any]:
@@ -5578,7 +5714,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             }
         except Exception as e:
             logger.error(f"MCP tool error in ai_reconnaissance_workflow: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def ai_vulnerability_assessment(target: str, focus_areas: str = "all") -> Dict[str, Any]:
@@ -5638,7 +5774,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             }
         except Exception as e:
             logger.error(f"MCP tool error in ai_vulnerability_assessment: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # BUG BOUNTY HUNTING SPECIALIZED WORKFLOWS
@@ -5679,7 +5815,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in bugbounty_reconnaissance_workflow: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def bugbounty_vulnerability_hunting(domain: str, priority_vulns: str = "rce,sqli,xss,idor,ssrf",
@@ -5714,7 +5850,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in bugbounty_vulnerability_hunting: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def bugbounty_business_logic_testing(domain: str, program_type: str = "web") -> Dict[str, Any]:
@@ -5747,7 +5883,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in bugbounty_business_logic_testing: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def bugbounty_osint_gathering(domain: str) -> Dict[str, Any]:
@@ -5776,7 +5912,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in bugbounty_osint_gathering: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def bugbounty_file_upload_testing(target_url: str) -> Dict[str, Any]:
@@ -5805,7 +5941,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in bugbounty_file_upload_testing: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def bugbounty_comprehensive_assessment(domain: str, scope: str = "",
@@ -5847,7 +5983,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in bugbounty_comprehensive_assessment: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def bugbounty_authentication_bypass_testing(target_url: str, auth_type: str = "form") -> Dict[str, Any]:
@@ -5912,7 +6048,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             }
         except Exception as e:
             logger.error(f"MCP tool error in bugbounty_authentication_bypass_testing: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ============================================================================
     # ENHANCED HTTP TESTING FRAMEWORK & BROWSER AGENT (BURP SUITE ALTERNATIVE)
@@ -5961,7 +6097,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in http_framework_test: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def browser_agent_inspect(url: str, headless: bool = True, wait_time: int = 5,
@@ -6012,7 +6148,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in browser_agent_inspect: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     # ---------------- Additional HTTP Framework Tools (sync with server) ----------------
     @mcp.tool()
@@ -6024,7 +6160,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return hexstrike_client.safe_post("api/tools/http-framework", payload)
         except Exception as e:
             logger.error(f"MCP tool error in http_set_rules: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def http_set_scope(host: str, include_subdomains: bool = True) -> Dict[str, Any]:
@@ -6034,7 +6170,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return hexstrike_client.safe_post("api/tools/http-framework", payload)
         except Exception as e:
             logger.error(f"MCP tool error in http_set_scope: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def http_repeater(request_spec: dict) -> Dict[str, Any]:
@@ -6044,7 +6180,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return hexstrike_client.safe_post("api/tools/http-framework", payload)
         except Exception as e:
             logger.error(f"MCP tool error in http_repeater: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def http_intruder(url: str, method: str = "GET", location: str = "query", params: list = None,
@@ -6065,7 +6201,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return hexstrike_client.safe_post("api/tools/http-framework", payload)
         except Exception as e:
             logger.error(f"MCP tool error in http_intruder: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def burpsuite_alternative_scan(target: str, scan_type: str = "comprehensive",
@@ -6130,7 +6266,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in burpsuite_alternative_scan: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def error_handling_statistics() -> Dict[str, Any]:
@@ -6165,7 +6301,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in error_handling_statistics: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     @mcp.tool()
     def test_error_recovery(tool_name: str, error_type: str = "timeout",
@@ -6210,7 +6346,7 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
             return result
         except Exception as e:
             logger.error(f"MCP tool error in test_error_recovery: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return hexstrike_client._mcp_error(str(e))
 
     return mcp
 
