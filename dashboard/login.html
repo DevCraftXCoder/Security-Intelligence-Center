@@ -40,14 +40,22 @@
 }
 
 /* Step 1: SIC logo on login page — enhanced inline svg wordmark */
+@keyframes sic-logo-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
 .sic-login-logo {
   text-align: center;
   margin-bottom: 20px;
   cursor: pointer;
 }
-.sic-login-logo:hover {
-  opacity: 0.85;
-  transform: none !important;
+.sic-login-logo img {
+  animation: sic-logo-float 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.25));
+  transition: filter 0.3s ease;
+}
+.sic-login-logo:hover img {
+  filter: drop-shadow(0 0 16px rgba(255,255,255,0.85)) drop-shadow(0 0 32px rgba(255,255,255,0.4));
 }
 .sic-login-logo .sic-header__logo {
   font-size: 28px;
