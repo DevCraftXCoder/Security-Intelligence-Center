@@ -80,6 +80,20 @@ async function fetchJson(url, opts) {
 // primary returns 404 (e.g. sic-main not running), so the dashboard stays
 // functional even if one server is down.
 
+function _showOfflineBanner(message) {
+  const existing = document.getElementById("sic-offline-banner");
+  if (existing) return; // already showing
+  const banner = document.createElement("div");
+  banner.id = "sic-offline-banner";
+  banner.style.cssText =
+    "position:fixed;top:0;left:0;width:100%;z-index:10002;" +
+    "background:#e94560;color:#fff;padding:10px 16px;" +
+    "font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;" +
+    "text-align:center;letter-spacing:.02em;";
+  banner.textContent = message;
+  document.body.prepend(banner);
+}
+
 async function checkAuth() {
   try {
     // Primary: main SIC server on port 9890
@@ -92,13 +106,29 @@ async function checkAuth() {
       } catch (billingErr) {
         if (billingErr.status === 401 || billingErr.status === 403) {
           window.location.href = "/dashboard/login.html";
+          return null;
         }
+        if (billingErr.status === 0 || billingErr.status == null) {
+          // Both servers unreachable — show offline banner, do NOT redirect
+          _showOfflineBanner("Server offline — cannot reach SIC");
+          return null;
+        }
+        // Other error from billing server
+        _showOfflineBanner(`Authentication error (${billingErr.status || "network"})`);
         return null;
       }
     }
     if (e.status === 401 || e.status === 403) {
       window.location.href = "/dashboard/login.html";
+      return null;
     }
+    if (e.status === 0 || e.status == null) {
+      // Network failure on primary (non-404) — show offline banner, do NOT redirect
+      _showOfflineBanner("Server offline — cannot reach SIC");
+      return null;
+    }
+    // Other HTTP error
+    _showOfflineBanner(`Authentication error (${e.status})`);
     return null;
   }
 }

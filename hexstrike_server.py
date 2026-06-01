@@ -28,7 +28,6 @@ import traceback
 import threading
 import time
 import hashlib
-import pickle
 import base64
 import queue
 from concurrent.futures import ThreadPoolExecutor
@@ -37,7 +36,6 @@ from typing import Dict, Any, Optional
 from collections import OrderedDict
 import shutil
 import venv
-import zipfile
 from pathlib import Path
 from flask import Flask, request, jsonify
 import psutil
@@ -48,10 +46,8 @@ import socket
 import urllib.parse
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Set, Tuple
-import asyncio
-import aiohttp
-from urllib.parse import urljoin, urlparse, parse_qs
+from typing import List, Set
+from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 try:
     import selenium
@@ -72,8 +68,7 @@ try:
     HAS_MITMPROXY = True
 except ImportError:
     HAS_MITMPROXY = False
-from scope_enforcer import ScopeEnforcer, get_enforcer, safe_request, ScopeViolationError
-from scan_alerts import send_scan_alert
+from scope_enforcer import get_enforcer
 
 # ============================================================================
 # LOGGING CONFIGURATION (MUST BE FIRST)
@@ -211,10 +206,10 @@ class ModernVisualEngine:
         'BURGUNDY': '\033[38;5;52m',
         'SCARLET': '\033[38;5;197m',
         'RUBY': '\033[38;5;161m',
-    # Unified theme primary/secondary (used going forward instead of legacy blue/green accents)
-    'PRIMARY_BORDER': '\033[38;5;160m',  # CRIMSON
-    'ACCENT_LINE': '\033[38;5;196m',      # HACKER_RED
-    'ACCENT_GRADIENT': '\033[38;5;124m',  # BLOOD_RED (for subtle alternation)
+        # Unified theme primary/secondary (used going forward instead of legacy blue/green accents)
+        'PRIMARY_BORDER': '\033[38;5;160m',  # CRIMSON
+        'ACCENT_LINE': '\033[38;5;196m',     # HACKER_RED
+        'ACCENT_GRADIENT': '\033[38;5;124m',  # BLOOD_RED (for subtle alternation)
         # Highlighting colors
         'HIGHLIGHT_RED': '\033[48;5;196m\033[38;5;15m',  # Red background, white text
         'HIGHLIGHT_YELLOW': '\033[48;5;226m\033[38;5;16m',  # Yellow background, black text
@@ -384,8 +379,9 @@ class ModernVisualEngine:
 
             status_color = ModernVisualEngine.COLORS['ACCENT_LINE'] if status == 'running' else ModernVisualEngine.COLORS['HACKER_RED']
 
+            duration_text = f"{duration}s" if duration else "-"
             dashboard_lines.append(
-                f"│ {ModernVisualEngine.COLORS['CYBER_ORANGE']}PID {pid}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {status_color}{status}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {ModernVisualEngine.COLORS['BRIGHT_WHITE']}{command}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} │"
+                f"│ {ModernVisualEngine.COLORS['CYBER_ORANGE']}PID {pid}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {status_color}{status}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {ModernVisualEngine.COLORS['TERMINAL_GRAY']}{duration_text}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {ModernVisualEngine.COLORS['BRIGHT_WHITE']}{command}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} │"
             )
 
         dashboard_lines.append(f"╰─────────────────────────────────────────────────────────────────────────────╯{ModernVisualEngine.COLORS['RESET']}")
@@ -1635,10 +1631,8 @@ decision_engine = IntelligentDecisionEngine()
 
 from enum import Enum
 from dataclasses import dataclass
-from typing import Callable, Union
 import traceback
 import time
-import random
 
 class ErrorType(Enum):
     """Enumeration of different error types for intelligent handling"""
@@ -6041,52 +6035,52 @@ class CVEIntelligenceManager:
         """Fetch latest CVEs from NVD and other real sources"""
         try:
             logger.info(f"🔍 Fetching CVEs from last {hours} hours with severity: {severity_filter}")
-            
+
             # Calculate date range for CVE search
             end_date = datetime.now()
             start_date = end_date - timedelta(hours=hours)
-            
+
             # Format dates for NVD API (ISO 8601 format)
             start_date_str = start_date.strftime('%Y-%m-%dT%H:%M:%S.000')
             end_date_str = end_date.strftime('%Y-%m-%dT%H:%M:%S.000')
-            
+
             # NVD API endpoint
             nvd_url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-            
+
             # Parse severity filter
             severity_levels = [s.strip().upper() for s in severity_filter.split(",")]
-            
+
             all_cves = []
-            
+
             # Query NVD API with rate limiting compliance
             params = {
                 'lastModStartDate': start_date_str,
                 'lastModEndDate': end_date_str,
                 'resultsPerPage': 100
             }
-            
+
             try:
                 # Add delay to respect NVD rate limits (6 seconds between requests for unauthenticated)
                 import time
-                
+
                 logger.info(f"🌐 Querying NVD API: {nvd_url}")
                 response = requests.get(nvd_url, params=params, timeout=30)
-                
+
                 if response.status_code == 200:
                     nvd_data = response.json()
                     vulnerabilities = nvd_data.get('vulnerabilities', [])
-                    
+
                     logger.info(f"📊 Retrieved {len(vulnerabilities)} vulnerabilities from NVD")
-                    
+
                     for vuln_item in vulnerabilities:
                         cve_data = vuln_item.get('cve', {})
                         cve_id = cve_data.get('id', 'Unknown')
-                        
+
                         # Extract CVSS scores and determine severity
                         metrics = cve_data.get('metrics', {})
                         cvss_score = 0.0
                         severity = "UNKNOWN"
-                        
+
                         # Try CVSS v3.1 first, then v3.0, then v2.0
                         if 'cvssMetricV31' in metrics and metrics['cvssMetricV31']:
                             cvss_data = metrics['cvssMetricV31'][0]['cvssData']
@@ -6108,11 +6102,11 @@ class CVEIntelligenceManager:
                                 severity = "MEDIUM"
                             else:
                                 severity = "LOW"
-                        
+
                         # Filter by severity if specified
                         if severity not in severity_levels and severity_levels != ['ALL']:
                             continue
-                        
+
                         # Extract description
                         descriptions = cve_data.get('descriptions', [])
                         description = "No description available"
@@ -6120,13 +6114,13 @@ class CVEIntelligenceManager:
                             if desc.get('lang') == 'en':
                                 description = desc.get('value', description)
                                 break
-                        
+
                         # Extract references
                         references = []
                         ref_data = cve_data.get('references', [])
                         for ref in ref_data[:5]:  # Limit to first 5 references
                             references.append(ref.get('url', ''))
-                        
+
                         # Extract affected software (CPE data)
                         affected_software = []
                         configurations = cve_data.get('configurations', [])
@@ -6144,7 +6138,7 @@ class CVEIntelligenceManager:
                                             product = parts[4]
                                             version = parts[5] if parts[5] != '*' else 'all versions'
                                             affected_software.append(f"{vendor} {product} {version}")
-                        
+
                         cve_entry = {
                             "cve_id": cve_id,
                             "description": description,
@@ -6156,19 +6150,19 @@ class CVEIntelligenceManager:
                             "references": references,
                             "source": "NVD"
                         }
-                        
+
                         all_cves.append(cve_entry)
-                
+
                 else:
                     logger.warning(f"⚠️ NVD API returned status code: {response.status_code}")
-                    
+
             except requests.exceptions.RequestException as e:
                 logger.error(f"❌ Error querying NVD API: {str(e)}")
-            
+
             # If no CVEs found from NVD, try alternative sources or provide informative response
             if not all_cves:
                 logger.info("🔄 No recent CVEs found in specified timeframe, checking for any recent critical CVEs...")
-                
+
                 # Try a broader search for recent critical CVEs (last 7 days)
                 try:
                     broader_start = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%dT%H:%M:%S.000')
@@ -6178,18 +6172,18 @@ class CVEIntelligenceManager:
                         'cvssV3Severity': 'CRITICAL',
                         'resultsPerPage': 20
                     }
-                    
+
                     time.sleep(6)  # Rate limit compliance
                     response = requests.get(nvd_url, params=broader_params, timeout=30)
-                    
+
                     if response.status_code == 200:
                         nvd_data = response.json()
                         vulnerabilities = nvd_data.get('vulnerabilities', [])
-                        
+
                         for vuln_item in vulnerabilities[:10]:  # Limit to 10 most recent
                             cve_data = vuln_item.get('cve', {})
                             cve_id = cve_data.get('id', 'Unknown')
-                            
+
                             # Extract basic info for recent critical CVEs
                             descriptions = cve_data.get('descriptions', [])
                             description = "No description available"
@@ -6197,12 +6191,12 @@ class CVEIntelligenceManager:
                                 if desc.get('lang') == 'en':
                                     description = desc.get('value', description)
                                     break
-                            
+
                             metrics = cve_data.get('metrics', {})
                             cvss_score = 0.0
                             if 'cvssMetricV31' in metrics and metrics['cvssMetricV31']:
                                 cvss_score = metrics['cvssMetricV31'][0]['cvssData'].get('baseScore', 0.0)
-                            
+
                             cve_entry = {
                                 "cve_id": cve_id,
                                 "description": description,
@@ -6214,14 +6208,14 @@ class CVEIntelligenceManager:
                                 "references": [f"https://nvd.nist.gov/vuln/detail/{cve_id}"],
                                 "source": "NVD (Recent Critical)"
                             }
-                            
+
                             all_cves.append(cve_entry)
-                            
+
                 except Exception as broader_e:
                     logger.warning(f"⚠️ Broader search also failed: {str(broader_e)}")
-            
+
             logger.info(f"✅ Successfully retrieved {len(all_cves)} CVEs")
-            
+
             return {
                 "success": True,
                 "cves": all_cves,
@@ -6231,7 +6225,7 @@ class CVEIntelligenceManager:
                 "data_sources": ["NVD API v2.0"],
                 "search_period": f"{start_date_str} to {end_date_str}"
             }
-            
+
         except Exception as e:
             logger.error(f"💥 Error fetching CVEs: {str(e)}")
             return {
@@ -6245,16 +6239,15 @@ class CVEIntelligenceManager:
         """Analyze CVE exploitability using real CVE data and threat intelligence"""
         try:
             logger.info(f"🔬 Analyzing exploitability for {cve_id}")
-            
+
             # Fetch detailed CVE data from NVD
             nvd_url = f"https://services.nvd.nist.gov/rest/json/cves/2.0"
             params = {'cveId': cve_id}
-            
-            import time
-            
+
+
             try:
                 response = requests.get(nvd_url, params=params, timeout=30)
-                
+
                 if response.status_code != 200:
                     logger.warning(f"⚠️ NVD API returned status {response.status_code} for {cve_id}")
                     return {
@@ -6262,10 +6255,10 @@ class CVEIntelligenceManager:
                         "error": f"Failed to fetch CVE data: HTTP {response.status_code}",
                         "cve_id": cve_id
                     }
-                
+
                 nvd_data = response.json()
                 vulnerabilities = nvd_data.get('vulnerabilities', [])
-                
+
                 if not vulnerabilities:
                     logger.warning(f"⚠️ No data found for CVE {cve_id}")
                     return {
@@ -6273,9 +6266,9 @@ class CVEIntelligenceManager:
                         "error": f"CVE {cve_id} not found in NVD database",
                         "cve_id": cve_id
                     }
-                
+
                 cve_data = vulnerabilities[0].get('cve', {})
-                
+
                 # Extract CVSS metrics for exploitability analysis
                 metrics = cve_data.get('metrics', {})
                 cvss_score = 0.0
@@ -6285,7 +6278,7 @@ class CVEIntelligenceManager:
                 privileges_required = "UNKNOWN"
                 user_interaction = "UNKNOWN"
                 exploitability_subscore = 0.0
-                
+
                 # Analyze CVSS v3.1 metrics (preferred)
                 if 'cvssMetricV31' in metrics and metrics['cvssMetricV31']:
                     cvss_data = metrics['cvssMetricV31'][0]['cvssData']
@@ -6296,7 +6289,7 @@ class CVEIntelligenceManager:
                     privileges_required = cvss_data.get('privilegesRequired', 'UNKNOWN')
                     user_interaction = cvss_data.get('userInteraction', 'UNKNOWN')
                     exploitability_subscore = cvss_data.get('exploitabilityScore', 0.0)
-                    
+
                 elif 'cvssMetricV30' in metrics and metrics['cvssMetricV30']:
                     cvss_data = metrics['cvssMetricV30'][0]['cvssData']
                     cvss_score = cvss_data.get('baseScore', 0.0)
@@ -6306,17 +6299,17 @@ class CVEIntelligenceManager:
                     privileges_required = cvss_data.get('privilegesRequired', 'UNKNOWN')
                     user_interaction = cvss_data.get('userInteraction', 'UNKNOWN')
                     exploitability_subscore = cvss_data.get('exploitabilityScore', 0.0)
-                
+
                 # Calculate exploitability score based on CVSS metrics
                 exploitability_score = 0.0
-                
+
                 # Base exploitability on CVSS exploitability subscore if available
                 if exploitability_subscore > 0:
                     exploitability_score = min(exploitability_subscore / 3.9, 1.0)  # Normalize to 0-1
                 else:
                     # Calculate based on individual CVSS components
                     score_components = 0.0
-                    
+
                     # Attack Vector scoring
                     if attack_vector == "NETWORK":
                         score_components += 0.4
@@ -6326,25 +6319,25 @@ class CVEIntelligenceManager:
                         score_components += 0.2
                     elif attack_vector == "PHYSICAL":
                         score_components += 0.1
-                    
+
                     # Attack Complexity scoring
                     if attack_complexity == "LOW":
                         score_components += 0.3
                     elif attack_complexity == "HIGH":
                         score_components += 0.1
-                    
+
                     # Privileges Required scoring
                     if privileges_required == "NONE":
                         score_components += 0.2
                     elif privileges_required == "LOW":
                         score_components += 0.1
-                    
+
                     # User Interaction scoring
                     if user_interaction == "NONE":
                         score_components += 0.1
-                    
+
                     exploitability_score = min(score_components, 1.0)
-                
+
                 # Determine exploitability level
                 if exploitability_score >= 0.8:
                     exploitability_level = "HIGH"
@@ -6354,7 +6347,7 @@ class CVEIntelligenceManager:
                     exploitability_level = "LOW"
                 else:
                     exploitability_level = "VERY_LOW"
-                
+
                 # Extract description for additional context
                 descriptions = cve_data.get('descriptions', [])
                 description = ""
@@ -6362,7 +6355,7 @@ class CVEIntelligenceManager:
                     if desc.get('lang') == 'en':
                         description = desc.get('value', '')
                         break
-                
+
                 # Analyze description for exploit indicators
                 exploit_keywords = [
                     'remote code execution', 'rce', 'buffer overflow', 'stack overflow',
@@ -6371,31 +6364,31 @@ class CVEIntelligenceManager:
                     'privilege escalation', 'directory traversal', 'path traversal',
                     'deserialization', 'xxe', 'ssrf', 'csrf', 'xss'
                 ]
-                
+
                 description_lower = description.lower()
                 exploit_indicators = [kw for kw in exploit_keywords if kw in description_lower]
-                
+
                 # Adjust exploitability based on vulnerability type
                 if any(kw in description_lower for kw in ['remote code execution', 'rce', 'buffer overflow']):
                     exploitability_score = min(exploitability_score + 0.2, 1.0)
                 elif any(kw in description_lower for kw in ['authentication bypass', 'privilege escalation']):
                     exploitability_score = min(exploitability_score + 0.15, 1.0)
-                
+
                 # Check for public exploit availability indicators
                 public_exploits = False
                 exploit_maturity = "UNKNOWN"
-                
+
                 # Look for exploit references in CVE references
                 references = cve_data.get('references', [])
                 exploit_sources = ['exploit-db.com', 'github.com', 'packetstormsecurity.com', 'metasploit']
-                
+
                 for ref in references:
                     ref_url = ref.get('url', '').lower()
                     if any(source in ref_url for source in exploit_sources):
                         public_exploits = True
                         exploit_maturity = "PROOF_OF_CONCEPT"
                         break
-                
+
                 # Determine weaponization level
                 weaponization_level = "LOW"
                 if public_exploits and exploitability_score > 0.7:
@@ -6404,14 +6397,14 @@ class CVEIntelligenceManager:
                     weaponization_level = "MEDIUM"
                 elif exploitability_score > 0.8:
                     weaponization_level = "MEDIUM"
-                
+
                 # Active exploitation assessment
                 active_exploitation = False
                 if exploitability_score > 0.8 and public_exploits:
                     active_exploitation = True
                 elif severity in ["CRITICAL", "HIGH"] and attack_vector == "NETWORK":
                     active_exploitation = True
-                
+
                 # Priority recommendation
                 if exploitability_score > 0.8 and severity == "CRITICAL":
                     priority = "IMMEDIATE"
@@ -6421,11 +6414,11 @@ class CVEIntelligenceManager:
                     priority = "MEDIUM"
                 else:
                     priority = "LOW"
-                
+
                 # Extract publication and modification dates
                 published_date = cve_data.get('published', '')
                 last_modified = cve_data.get('lastModified', '')
-                
+
                 analysis = {
                     "success": True,
                     "cve_id": cve_id,
@@ -6458,11 +6451,11 @@ class CVEIntelligenceManager:
                     "data_source": "NVD API v2.0",
                     "analysis_timestamp": datetime.now().isoformat()
                 }
-                
+
                 logger.info(f"✅ Completed exploitability analysis for {cve_id}: {exploitability_level} ({exploitability_score:.2f})")
-                
+
                 return analysis
-                
+
             except requests.exceptions.RequestException as e:
                 logger.error(f"❌ Network error analyzing {cve_id}: {str(e)}")
                 return {
@@ -6470,7 +6463,7 @@ class CVEIntelligenceManager:
                     "error": f"Network error: {str(e)}",
                     "cve_id": cve_id
                 }
-                
+
         except Exception as e:
             logger.error(f"💥 Error analyzing CVE {cve_id}: {str(e)}")
             return {
@@ -6483,14 +6476,14 @@ class CVEIntelligenceManager:
         """Search for existing exploits from real sources"""
         try:
             logger.info(f"🔎 Searching existing exploits for {cve_id}")
-            
+
             all_exploits = []
             sources_searched = []
-            
+
             # 1. Search GitHub for PoCs and exploits
             try:
                 logger.info(f"🔍 Searching GitHub for {cve_id} exploits...")
-                
+
                 # GitHub Search API
                 github_search_url = "https://api.github.com/search/repositories"
                 github_params = {
@@ -6499,18 +6492,18 @@ class CVEIntelligenceManager:
                     'order': 'desc',
                     'per_page': 10
                 }
-                
+
                 github_response = requests.get(github_search_url, params=github_params, timeout=15)
-                
+
                 if github_response.status_code == 200:
                     github_data = github_response.json()
                     repositories = github_data.get('items', [])
-                    
+
                     for repo in repositories[:5]:  # Limit to top 5 results
                         # Check if CVE is actually mentioned in repo name or description
                         repo_name = repo.get('name', '').lower()
                         repo_desc = repo.get('description', '').lower()
-                        
+
                         if cve_id.lower() in repo_name or cve_id.lower() in repo_desc:
                             exploit_entry = {
                                 "source": "github",
@@ -6528,51 +6521,51 @@ class CVEIntelligenceManager:
                                 "verified": False,
                                 "reliability": "UNVERIFIED"
                             }
-                            
+
                             # Assess reliability based on repo metrics
                             stars = repo.get('stargazers_count', 0)
                             forks = repo.get('forks_count', 0)
-                            
+
                             if stars >= 50 or forks >= 10:
                                 exploit_entry["reliability"] = "GOOD"
                             elif stars >= 20 or forks >= 5:
                                 exploit_entry["reliability"] = "FAIR"
-                            
+
                             all_exploits.append(exploit_entry)
-                    
+
                     sources_searched.append("github")
                     logger.info(f"✅ Found {len([e for e in all_exploits if e['source'] == 'github'])} GitHub repositories")
-                
+
                 else:
                     logger.warning(f"⚠️ GitHub search failed with status {github_response.status_code}")
-                    
+
             except requests.exceptions.RequestException as e:
                 logger.error(f"❌ GitHub search error: {str(e)}")
-            
+
             # 2. Search Exploit-DB via searchsploit-like functionality
             try:
                 logger.info(f"🔍 Searching for {cve_id} in exploit databases...")
-                
+
                 # Since we can't directly access Exploit-DB API, we'll use a web search approach
                 # or check if the CVE references contain exploit-db links
-                
+
                 # First, get CVE data to check references
                 nvd_url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
                 nvd_params = {'cveId': cve_id}
-                
+
                 import time
                 time.sleep(1)  # Rate limiting
-                
+
                 nvd_response = requests.get(nvd_url, params=nvd_params, timeout=20)
-                
+
                 if nvd_response.status_code == 200:
                     nvd_data = nvd_response.json()
                     vulnerabilities = nvd_data.get('vulnerabilities', [])
-                    
+
                     if vulnerabilities:
                         cve_data = vulnerabilities[0].get('cve', {})
                         references = cve_data.get('references', [])
-                        
+
                         # Check references for exploit sources
                         exploit_sources = {
                             'exploit-db.com': 'exploit-db',
@@ -6580,11 +6573,11 @@ class CVEIntelligenceManager:
                             'metasploit': 'metasploit',
                             'rapid7.com': 'rapid7'
                         }
-                        
+
                         for ref in references:
                             ref_url = ref.get('url', '')
                             ref_url_lower = ref_url.lower()
-                            
+
                             for source_domain, source_name in exploit_sources.items():
                                 if source_domain in ref_url_lower:
                                     exploit_entry = {
@@ -6601,31 +6594,31 @@ class CVEIntelligenceManager:
                                         "reliability": "GOOD" if source_name == "exploit-db" else "FAIR"
                                     }
                                     all_exploits.append(exploit_entry)
-                                    
+
                                     if source_name not in sources_searched:
                                         sources_searched.append(source_name)
-                
+
             except Exception as e:
                 logger.error(f"❌ Exploit database search error: {str(e)}")
-            
+
             # 3. Search for Metasploit modules
             try:
                 logger.info(f"🔍 Searching for Metasploit modules for {cve_id}...")
-                
+
                 # Search GitHub for Metasploit modules containing the CVE
                 msf_search_url = "https://api.github.com/search/code"
                 msf_params = {
                     'q': f'{cve_id} filename:*.rb repo:rapid7/metasploit-framework',
                     'per_page': 5
                 }
-                
+
                 time.sleep(1)  # Rate limiting
                 msf_response = requests.get(msf_search_url, params=msf_params, timeout=15)
-                
+
                 if msf_response.status_code == 200:
                     msf_data = msf_response.json()
                     code_results = msf_data.get('items', [])
-                    
+
                     for code_item in code_results:
                         file_path = code_item.get('path', '')
                         if 'exploits/' in file_path or 'auxiliary/' in file_path:
@@ -6643,24 +6636,24 @@ class CVEIntelligenceManager:
                                 "reliability": "EXCELLENT"
                             }
                             all_exploits.append(exploit_entry)
-                    
+
                     if code_results and "metasploit" not in sources_searched:
                         sources_searched.append("metasploit")
-                        
+
                 elif msf_response.status_code == 403:
                     logger.warning("⚠️ GitHub API rate limit reached for code search")
                 else:
                     logger.warning(f"⚠️ Metasploit search failed with status {msf_response.status_code}")
-                    
+
             except requests.exceptions.RequestException as e:
                 logger.error(f"❌ Metasploit search error: {str(e)}")
-            
+
             # Add default sources to searched list
             default_sources = ["exploit-db", "github", "metasploit", "packetstorm"]
             for source in default_sources:
                 if source not in sources_searched:
                     sources_searched.append(source)
-            
+
             # Sort exploits by reliability and date
             reliability_order = {"EXCELLENT": 4, "GOOD": 3, "FAIR": 2, "UNVERIFIED": 1}
             all_exploits.sort(key=lambda x: (
@@ -6668,9 +6661,9 @@ class CVEIntelligenceManager:
                 x.get("stars", 0),
                 x.get("date_published", "")
             ), reverse=True)
-            
+
             logger.info(f"✅ Found {len(all_exploits)} total exploits from {len(sources_searched)} sources")
-            
+
             return {
                 "success": True,
                 "cve_id": cve_id,
@@ -6685,7 +6678,7 @@ class CVEIntelligenceManager:
                 },
                 "search_timestamp": datetime.now().isoformat()
             }
-            
+
         except Exception as e:
             logger.error(f"💥 Error searching exploits for {cve_id}: {str(e)}")
             return {
@@ -7248,12 +7241,12 @@ def send_exploit(target_url, command):
         try:
             cve_id = cve_data.get("cve_id", "")
             description = cve_data.get("description", "").lower()
-            
+
             logger.info(f"🛠️ Generating specific exploit for {cve_id}")
 
             # Enhanced vulnerability classification using real CVE data
             vuln_type, specific_details = self._analyze_vulnerability_details(description, cve_data)
-            
+
             # Generate real, specific exploit based on CVE details
             if vuln_type == "sql_injection":
                 exploit_code = self._generate_sql_injection_exploit(cve_data, target_info, specific_details)
@@ -7378,7 +7371,7 @@ exec(base64.b64decode('{base64.b64encode(code.encode()).decode()}'))
     def _analyze_vulnerability_details(self, description, cve_data):
         """Analyze CVE data to extract specific vulnerability details"""
         import re  # Import at the top of the method
-        
+
         vuln_type = "generic"
         specific_details = {
             "endpoints": [],
@@ -7388,10 +7381,10 @@ exec(base64.b64decode('{base64.b64encode(code.encode()).decode()}'))
             "version": "unknown",
             "attack_vector": "unknown"
         }
-        
+
         # Extract specific details from description
         description_lower = description.lower()
-        
+
         # SQL Injection detection and details
         if any(keyword in description_lower for keyword in ["sql injection", "sqli"]):
             vuln_type = "sql_injection"
@@ -7403,7 +7396,7 @@ exec(base64.b64decode('{base64.b64encode(code.encode()).decode()}'))
             param_matches = re.findall(r'(?:via|parameter|param)\s+([a-zA-Z_][a-zA-Z0-9_]*)', description)
             if param_matches:
                 specific_details["parameters"] = param_matches
-                
+
         # XSS detection
         elif any(keyword in description_lower for keyword in ["cross-site scripting", "xss"]):
             vuln_type = "xss"
@@ -7414,12 +7407,12 @@ exec(base64.b64decode('{base64.b64encode(code.encode()).decode()}'))
                 specific_details["xss_type"] = "reflected"
             else:
                 specific_details["xss_type"] = "unknown"
-                
+
         # XXE detection
         elif any(keyword in description_lower for keyword in ["xxe", "xml external entity"]):
             vuln_type = "xxe"
             specific_details["payload_location"] = "xml"
-            
+
         # File read/traversal detection
         elif any(keyword in description_lower for keyword in ["file read", "directory traversal", "path traversal", "arbitrary file", "file disclosure", "local file inclusion", "lfi", "file inclusion"]):
             vuln_type = "file_read"
@@ -7429,34 +7422,34 @@ exec(base64.b64decode('{base64.b64encode(code.encode()).decode()}'))
                 specific_details["traversal_type"] = "lfi"
             else:
                 specific_details["traversal_type"] = "file_read"
-            
+
             # Extract parameter names for LFI
             param_matches = re.findall(r'(?:via|parameter|param)\s+([a-zA-Z_][a-zA-Z0-9_]*)', description)
             if param_matches:
                 specific_details["parameters"] = param_matches
-                
+
         # Authentication bypass
         elif any(keyword in description_lower for keyword in ["authentication bypass", "auth bypass", "login bypass"]):
             vuln_type = "authentication_bypass"
-            
+
         # RCE detection
         elif any(keyword in description_lower for keyword in ["remote code execution", "rce", "command injection"]):
             vuln_type = "rce"
-            
+
         # Deserialization
         elif any(keyword in description_lower for keyword in ["deserialization", "unserialize", "pickle"]):
             vuln_type = "deserialization"
-            
+
         # Buffer overflow
         elif any(keyword in description_lower for keyword in ["buffer overflow", "heap overflow", "stack overflow"]):
             vuln_type = "buffer_overflow"
-            
+
         # Extract software and version info
         software_match = re.search(r'(\w+(?:\s+\w+)*)\s+v?(\d+(?:\.\d+)*)', description)
         if software_match:
             specific_details["software"] = software_match.group(1)
             specific_details["version"] = software_match.group(2)
-            
+
         return vuln_type, specific_details
 
     def _generate_sql_injection_exploit(self, cve_data, target_info, details):
@@ -7464,7 +7457,7 @@ exec(base64.b64decode('{base64.b64encode(code.encode()).decode()}'))
         cve_id = cve_data.get("cve_id", "")
         endpoint = details.get("endpoints", ["/vulnerable.php"])[0] if details.get("endpoints") else "/vulnerable.php"
         parameter = details.get("parameters", ["id"])[0] if details.get("parameters") else "id"
-        
+
         return f'''#!/usr/bin/env python3
 # SQL Injection Exploit for {cve_id}
 # Vulnerability: {cve_data.get("description", "")[:100]}...
@@ -7594,7 +7587,7 @@ if __name__ == "__main__":
         """Generate specific XSS exploit based on CVE details"""
         cve_id = cve_data.get("cve_id", "")
         xss_type = details.get("xss_type", "reflected")
-        
+
         return f'''#!/usr/bin/env python3
 # Cross-Site Scripting (XSS) Exploit for {cve_id}
 # Type: {xss_type.title()} XSS
@@ -7713,7 +7706,7 @@ if __name__ == "__main__":
         cve_id = cve_data.get("cve_id", "")
         parameter = details.get("parameters", ["portal_type"])[0] if details.get("parameters") else "portal_type"
         traversal_type = details.get("traversal_type", "file_read")
-        
+
         return f'''#!/usr/bin/env python3
 # Local File Inclusion (LFI) Exploit for {cve_id}
 # Vulnerability: {cve_data.get("description", "")[:100]}...
@@ -7859,7 +7852,7 @@ if __name__ == "__main__":
         """Generate intelligent generic exploit based on CVE analysis"""
         cve_id = cve_data.get("cve_id", "")
         description = cve_data.get("description", "")
-        
+
         return f'''#!/usr/bin/env python3
 # Generic Exploit for {cve_id}
 # Vulnerability: {description[:150]}...
@@ -7967,7 +7960,7 @@ if __name__ == "__main__":
     def _generate_specific_instructions(self, vuln_type, cve_data, target_info, details):
         """Generate specific usage instructions based on vulnerability type"""
         cve_id = cve_data.get("cve_id", "")
-        
+
         base_instructions = f"""# Exploit for {cve_id}
 # Vulnerability Type: {vuln_type}
 # Software: {details.get('software', 'Unknown')} {details.get('version', '')}
@@ -8037,7 +8030,7 @@ python3 exploit.py <target_url>"""
     def _generate_rce_exploit(self, cve_data, target_info, details):
         """Generate RCE exploit based on CVE details"""
         cve_id = cve_data.get("cve_id", "")
-        
+
         return f'''#!/usr/bin/env python3
 # Remote Code Execution Exploit for {cve_id}
 # Vulnerability: {cve_data.get("description", "")[:100]}...
@@ -8165,7 +8158,7 @@ if __name__ == "__main__":
     def _generate_xxe_exploit(self, cve_data, target_info, details):
         """Generate XXE exploit based on CVE details"""
         cve_id = cve_data.get("cve_id", "")
-        
+
         return f'''#!/usr/bin/env python3
 # XXE (XML External Entity) Exploit for {cve_id}
 # Vulnerability: {cve_data.get("description", "")[:100]}...
@@ -8252,7 +8245,7 @@ if __name__ == "__main__":
     def _generate_deserialization_exploit(self, cve_data, target_info, details):
         """Generate deserialization exploit based on CVE details"""
         cve_id = cve_data.get("cve_id", "")
-        
+
         return f'''#!/usr/bin/env python3
 # Deserialization Exploit for {cve_id}
 # Vulnerability: {cve_data.get("description", "")[:100]}...
@@ -8338,7 +8331,7 @@ if __name__ == "__main__":
     def _generate_auth_bypass_exploit(self, cve_data, target_info, details):
         """Generate authentication bypass exploit"""
         cve_id = cve_data.get("cve_id", "")
-        
+
         return f'''#!/usr/bin/env python3
 # Authentication Bypass Exploit for {cve_id}
 # Vulnerability: {cve_data.get("description", "")[:100]}...
@@ -8452,7 +8445,7 @@ if __name__ == "__main__":
         """Generate buffer overflow exploit"""
         cve_id = cve_data.get("cve_id", "")
         arch = target_info.get("target_arch", "x64")
-        
+
         return f'''#!/usr/bin/env python3
 # Buffer Overflow Exploit for {cve_id}
 # Architecture: {arch}
@@ -15177,7 +15170,7 @@ def jwt_analyzer():
                         "description": f"Token decoding failed: {str(decode_error)}"
                     })
 
-        except Exception as e:
+        except Exception:
             results["vulnerabilities"].append({
                 "type": "invalid_format",
                 "severity": "HIGH",

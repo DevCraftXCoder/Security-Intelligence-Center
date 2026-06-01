@@ -171,6 +171,60 @@ class TestSendScanAlertMagicLink:
 
 
 # ---------------------------------------------------------------------------
+# P3-6: Discord webhook coverage
+# ---------------------------------------------------------------------------
+
+
+class TestDiscordWebhook:
+    """Tests for _fire_webhook — Discord alert delivery."""
+
+    def setup_method(self) -> None:
+        _reset_module_caches()
+
+    def test_discord_webhook_called_with_correct_payload(self) -> None:
+        """_fire_webhook posts to DISCORD_WEBHOOK_URL with an embeds payload."""
+        import scan_alerts as sa  # noqa: PLC0415
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 204
+
+        with patch.dict("os.environ", {"DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/test/hook"}):
+            _reset_module_caches()
+            with patch("requests.post", return_value=mock_resp) as mock_post:
+                sa._fire_webhook("scan_complete", {"target": "example.com", "findings_count": 3})
+
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert "discord.com" in call_args[0][0]
+        payload = call_args[1]["json"]
+        assert "embeds" in payload
+        embed = payload["embeds"][0]
+        assert "title" in embed
+        assert "timestamp" in embed
+
+    def test_discord_webhook_graceful_failure_on_network_error(self) -> None:
+        """_fire_webhook must not raise when requests.post throws."""
+        import scan_alerts as sa  # noqa: PLC0415
+
+        with patch.dict("os.environ", {"DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/test/hook"}):
+            _reset_module_caches()
+            with patch("requests.post", side_effect=OSError("Connection refused")):
+                # Should not raise — failure is logged at DEBUG level, swallowed
+                sa._fire_webhook("scan_complete", {"target": "example.com"})
+
+    def test_discord_webhook_skipped_when_url_not_configured(self) -> None:
+        """_fire_webhook must be a no-op when DISCORD_WEBHOOK_URL is unset."""
+        import scan_alerts as sa  # noqa: PLC0415
+
+        with patch.dict("os.environ", {}, clear=True):
+            _reset_module_caches()
+            with patch("requests.post") as mock_post:
+                sa._fire_webhook("scan_complete", {"target": "example.com"})
+
+        mock_post.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # P0-2: Rate-limit key function
 # ---------------------------------------------------------------------------
 

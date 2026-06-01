@@ -109,6 +109,33 @@ except PermissionError:
     )
 logger = logging.getLogger(__name__)
 
+
+class JsonFormatter(logging.Formatter):
+    """Structured JSON log formatter. Activated when SIC_JSON_LOGS=1."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        import json as _json  # local import — only used when JSON logs active
+        log_data = {
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "timestamp": self.formatTime(record, self.datefmt),
+            "module": record.module,
+        }
+        if record.exc_info:
+            log_data["exception"] = self.formatException(record.exc_info)
+        return _json.dumps(log_data)
+
+
+if os.environ.get("SIC_JSON_LOGS", "0").strip() == "1":
+    _json_formatter = JsonFormatter(datefmt="%Y-%m-%dT%H:%M:%S")
+    for _handler in logging.root.handlers:
+        _handler.setFormatter(_json_formatter)
+    # Also wire Flask's app logger after app is created (done below in app init block)
+    _SIC_JSON_LOGS_ENABLED = True
+else:
+    _SIC_JSON_LOGS_ENABLED = False
+
+
 # Boot-time warning: SIC_ADMIN_EMAILS must be set for magic-link auth to work
 _admin_emails = os.environ.get("SIC_ADMIN_EMAILS", "").strip()
 if not _admin_emails:
@@ -133,6 +160,13 @@ if _SIC_ENV == "production":
 app.config['JSON_SORT_KEYS'] = False
 app.config['JSON_AS_ASCII'] = False
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get("SIC_MAX_REQUEST_BYTES", str(10 * 1024 * 1024)))
+
+# Wire JSON formatter to Flask's app.logger if SIC_JSON_LOGS=1
+if _SIC_JSON_LOGS_ENABLED:
+    for _flask_handler in app.logger.handlers:
+        _flask_handler.setFormatter(_json_formatter)
+    # Propagate so root handlers (already JSON-formatted) also receive Flask logs
+    app.logger.propagate = True
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -463,10 +497,10 @@ class ModernVisualEngine:
         'BURGUNDY': '\033[38;5;52m',
         'SCARLET': '\033[38;5;197m',
         'RUBY': '\033[38;5;161m',
-    # Unified theme primary/secondary (used going forward instead of legacy blue/green accents)
-    'PRIMARY_BORDER': '\033[38;5;160m',  # CRIMSON
-    'ACCENT_LINE': '\033[38;5;196m',      # HACKER_RED
-    'ACCENT_GRADIENT': '\033[38;5;124m',  # BLOOD_RED (for subtle alternation)
+        # Unified theme primary/secondary (used going forward instead of legacy blue/green accents)
+        'PRIMARY_BORDER': '\033[38;5;160m',  # CRIMSON
+        'ACCENT_LINE': '\033[38;5;196m',     # HACKER_RED
+        'ACCENT_GRADIENT': '\033[38;5;124m',  # BLOOD_RED (for subtle alternation)
         # Highlighting colors
         'HIGHLIGHT_RED': '\033[48;5;196m\033[38;5;15m',  # Red background, white text
         'HIGHLIGHT_YELLOW': '\033[48;5;226m\033[38;5;16m',  # Yellow background, black text
@@ -636,8 +670,9 @@ class ModernVisualEngine:
 
             status_color = ModernVisualEngine.COLORS['ACCENT_LINE'] if status == 'running' else ModernVisualEngine.COLORS['HACKER_RED']
 
+            duration_text = f"{duration}s" if duration else "-"
             dashboard_lines.append(
-                f"│ {ModernVisualEngine.COLORS['CYBER_ORANGE']}PID {pid}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {status_color}{status}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {ModernVisualEngine.COLORS['BRIGHT_WHITE']}{command}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} │"
+                f"│ {ModernVisualEngine.COLORS['CYBER_ORANGE']}PID {pid}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {status_color}{status}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {ModernVisualEngine.COLORS['TERMINAL_GRAY']}{duration_text}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} | {ModernVisualEngine.COLORS['BRIGHT_WHITE']}{command}{ModernVisualEngine.COLORS['PRIMARY_BORDER']} │"
             )
 
         dashboard_lines.append(f"╰─────────────────────────────────────────────────────────────────────────────╯{ModernVisualEngine.COLORS['RESET']}")
