@@ -28,6 +28,7 @@ module.exports = {
       cwd: "C:/Za/sic",
       interpreter: PYTHON,
       windowsHide: true,
+      args: "--server http://127.0.0.1:9890",
       env: {
         SIC_ENV: "development",
         SIC_PORT: "9888",
