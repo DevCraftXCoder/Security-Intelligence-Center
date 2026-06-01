@@ -53,21 +53,21 @@ from typing import List, Set
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 try:
-    import selenium
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options as SeleniumOptions
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.common.exceptions import TimeoutException, WebDriverException
+    import selenium  # noqa: F401
+    from selenium import webdriver  # noqa: F401
+    from selenium.webdriver.chrome.options import Options as SeleniumOptions  # noqa: F401
+    from selenium.webdriver.common.by import By  # noqa: F401
+    from selenium.webdriver.support.ui import WebDriverWait  # noqa: F401
+    from selenium.webdriver.support import expected_conditions as EC  # noqa: F401
+    from selenium.common.exceptions import TimeoutException, WebDriverException  # noqa: F401
     HAS_SELENIUM = True
 except ImportError:
     HAS_SELENIUM = False
 try:
-    import mitmproxy
-    from mitmproxy import http as mitmhttp
-    from mitmproxy.tools.dump import DumpMaster
-    from mitmproxy.options import Options as MitmOptions
+    import mitmproxy  # noqa: F401
+    from mitmproxy import http as mitmhttp  # noqa: F401
+    from mitmproxy.tools.dump import DumpMaster  # noqa: F401
+    from mitmproxy.options import Options as MitmOptions  # noqa: F401
     HAS_MITMPROXY = True
 except ImportError:
     HAS_MITMPROXY = False
@@ -337,12 +337,14 @@ def require_auth() -> None:
 
 @app.after_request
 def add_cors(response):
-    """Allow the SIC dashboard (served from port 9888) to call this server cross-origin."""
+    """Allow the SIC dashboard and production origins to call this server cross-origin."""
     _CORS_ORIGINS = {
         "http://localhost:9888",
         "http://127.0.0.1:9888",
         "http://localhost:9889",
         "http://127.0.0.1:9889",
+        "https://frxncois.com",
+        "https://www.frxncois.com",
     }
     origin = request.headers.get("Origin", "")
     if origin in _CORS_ORIGINS:
@@ -9488,11 +9490,13 @@ def health_check():
         "msfvenom", "msfconsole", "graphql-scanner", "jwt-analyzer"
     ]
 
-    all_tools = (
+    # Deduplicate while preserving insertion order so len(all_tools) ==
+    # len(tools_status) and total_tools_count is always accurate.
+    all_tools = list(dict.fromkeys(
         essential_tools + network_tools + web_security_tools + vuln_scanning_tools +
         password_tools + binary_tools + forensics_tools + cloud_tools +
         osint_tools + exploitation_tools + api_tools + wireless_tools + additional_tools
-    )
+    ))
     tools_status = {}
 
     for tool in all_tools:

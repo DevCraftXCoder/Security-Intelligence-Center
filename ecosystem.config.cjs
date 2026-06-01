@@ -7,16 +7,34 @@ const PYTHON = "C:/Users/J/AppData/Local/Programs/Python/Python312/python.exe";
 module.exports = {
   apps: [
     {
-      name: "sic",
-      script: "server.py",
+      name: "sic-main",
+      script: "start_server.py",
       interpreter: PYTHON,
       windowsHide: true,
+      args: "--port 9890",
       env: {
         SIC_ENV: "development",
+        SIC_PORT: "9888",
+        HEXSTRIKE_PORT: "9890",
       },
       max_memory_restart: "1G",
       error_file: "logs/sic-error.log",
       out_file: "logs/sic-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+    },
+    {
+      name: "sic-mcp",
+      script: "mcp_server.py",
+      interpreter: PYTHON,
+      windowsHide: true,
+      env: {
+        SIC_ENV: "development",
+        SIC_PORT: "9888",
+        HEXSTRIKE_PORT: "9890",
+      },
+      max_memory_restart: "512M",
+      error_file: "logs/sic-mcp-error.log",
+      out_file: "logs/sic-mcp-out.log",
       log_date_format: "YYYY-MM-DD HH:mm:ss",
     },
     {
