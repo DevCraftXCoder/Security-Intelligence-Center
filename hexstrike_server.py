@@ -17425,4 +17425,9 @@ if __name__ == "__main__":
         if line.strip():
             logger.info(line)
 
+    # Production guard — DEBUG_MODE is ignored when SIC_ENV=production
+    if os.environ.get("SIC_ENV") == "production" and DEBUG_MODE:
+        DEBUG_MODE = False
+        print("[WARN] DEBUG_MODE ignored in production (SIC_ENV=production)")
+
     app.run(host=API_HOST, port=API_PORT, debug=DEBUG_MODE)

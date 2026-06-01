@@ -151,7 +151,11 @@ limiter = Limiter(
     _get_real_ip,
     app=app,
     default_limits=["200 per minute"],
-    storage_uri="memory://",
+    # SQLite backend — survives multi-worker restarts; memory:// is per-process
+    # and silently bypassed under Gunicorn/uWSGI multi-worker configs.
+    storage_uri="sqlite:////" + os.path.join(
+        os.path.expanduser("~"), ".sic", "rate_limit.db"
+    ).replace("\\", "/"),
 )
 
 

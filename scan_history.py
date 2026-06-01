@@ -53,9 +53,11 @@ def _db_path() -> Path:
 
 
 def _connect() -> sqlite3.Connection:
-    """Return a sqlite3 connection with Row factory enabled."""
+    """Return a sqlite3 connection with Row factory, WAL mode, and busy timeout."""
     conn = sqlite3.connect(str(_db_path()))
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 

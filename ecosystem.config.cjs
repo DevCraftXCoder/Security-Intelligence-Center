@@ -9,6 +9,7 @@ module.exports = {
     {
       name: "sic-main",
       script: "start_server.py",
+      cwd: "C:/Za/sic",
       interpreter: PYTHON,
       windowsHide: true,
       args: "--port 9890",
@@ -42,6 +43,7 @@ module.exports = {
     {
       name: "sic-billing",
       script: "billing_server.py",
+      cwd: "C:/Za/sic",
       interpreter: PYTHON,
       windowsHide: true,
       env: {
