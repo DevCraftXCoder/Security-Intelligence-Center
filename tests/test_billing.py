@@ -421,7 +421,12 @@ class TestDiscordBillingAlert:
 
 class TestMissingSicTierDefaultsToCommunity:
     def test_checkout_missing_sic_tier_defaults_to_community(self, client) -> None:
-        """checkout.session.completed with no sic_tier in metadata must provision community tier."""
+        """checkout.session.completed with no sic_tier creates community/pending_review row.
+
+        A paid customer with missing/invalid sic_tier metadata gets a DB row with
+        tier='community' and status='pending_review' so the operator can manually
+        correct their tier.  Previously returned early without writing any row.
+        """
         c, db_path, env = client
         secret = env["STRIPE_WEBHOOK_SECRET"]
 
@@ -456,4 +461,7 @@ class TestMissingSicTierDefaultsToCommunity:
         assert sub is not None, "Subscription row must be created even without sic_tier"
         assert sub["tier"] == "community", (
             f"Expected tier='community' when sic_tier missing, got tier='{sub['tier']}'"
+        )
+        assert sub["status"] == "pending_review", (
+            f"Expected status='pending_review' for manual review, got status='{sub['status']}'"
         )

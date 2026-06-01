@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import threading
+import urllib.parse
 
 import requests as _requests
 
@@ -168,6 +169,9 @@ def checkout():
     init_db()
     body = request.get_json(silent=True) or {}
     tier = body.get("tier")
+    interval = (body.get("interval") or "month").strip().lower()
+    if interval not in ("month", "year"):
+        interval = "month"
 
     if tier not in _VALID_PAID_TIERS:
         return (
@@ -195,6 +199,7 @@ def checkout():
         session = create_checkout_session(
             email=email,
             tier=tier,
+            interval=interval,
             success_url=success_url,
             cancel_url=cancel_url,
             customer_id=customer_id,
@@ -375,6 +380,9 @@ def webhook():
         elif event_type == "invoice.payment_failed":
             _handle_payment_failed(event, email)
 
+        elif event_type == "payment_intent.payment_failed":
+            _handle_payment_intent_failed(event, email)
+
         else:
             logger.debug("unhandled webhook event type: %s", event_type)
 
@@ -494,6 +502,11 @@ def _send_provisioning_email(email: str, session_obj: dict) -> None:  # noqa: AR
                 "for email %.6s***",
                 email[:6],
             )
+            _discord_billing_alert(
+                f"**Provisioning email skipped** — RESEND_API_KEY or SIC_ALERT_FROM not "
+                f"configured. Customer `{email[:6]}***` paid but received no magic link. "
+                f"Manual provisioning required."
+            )
     except Exception as _e:
         logger.warning("auto-provision email failed for %.6s***: %s", email[:6], _e)
 
@@ -520,17 +533,25 @@ def _handle_checkout_completed(event, email: str | None) -> None:
     if not sic_tier or sic_tier not in ("community", "team", "studio"):
         print(
             f"[billing WARNING] checkout.session.completed missing valid sic_tier in "
-            f"metadata. Session ID: {obj.get('id')}. Not provisioning."
+            f"metadata. Session ID: {obj.get('id')}. Provisioning community/pending_review."
         )
         logger.warning(
             "checkout.session.completed: sic_tier metadata missing or invalid "
-            "(got %r) for session %s — not provisioning",
+            "(got %r) for session %s — provisioning community with pending_review status",
             sic_tier,
             obj.get("id", "unknown"),
         )
         _discord_billing_alert(
             f"**Billing alert — invalid sic_tier** `{sic_tier!r}` "
-            f"in checkout session `{obj.get('id', '?')}`. Not provisioned."
+            f"in checkout session `{obj.get('id', '?')}`. "
+            f"Provisioned community/pending_review for manual review."
+        )
+        upsert_subscription(
+            email=email,
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=subscription_id,
+            tier="community",
+            status="pending_review",
         )
         return
 
@@ -716,6 +737,48 @@ def _handle_invoice_paid(event, email: str | None) -> None:
     )
 
 
+def _handle_payment_intent_failed(event, email: str | None) -> None:
+    """Mark subscription as incomplete on initial card decline (pre-subscription failure).
+
+    payment_intent.payment_failed fires when a card is declined at checkout time,
+    before a Stripe Subscription object exists.  invoice.payment_failed handles
+    renewal failures — this handler covers the initial checkout decline.
+    """
+    obj = event["data"]["object"]
+    customer_id: str | None = obj.get("customer")
+
+    if not email:
+        logger.warning(
+            "payment_intent.payment_failed — no email extractable from event %s; "
+            "user is still on checkout page and can retry",
+            event.get("id"),
+        )
+        return
+
+    sub = get_subscription(email)
+    upsert_subscription(
+        email=email,
+        stripe_customer_id=customer_id,
+        stripe_subscription_id=sub["stripe_subscription_id"] if sub else None,
+        tier=sub["tier"] if sub else "community",
+        status="incomplete",
+        current_period_end=sub["current_period_end"] if sub else None,
+    )
+    failure_msg = (
+        (obj.get("last_payment_error") or {}).get("message", "unknown")
+    )
+    logger.warning(
+        "payment_intent.payment_failed — marked incomplete for email=%.6s*** reason=%s",
+        email[:6],
+        failure_msg,
+    )
+    _discord_billing_alert(
+        f"**Payment intent failed** for customer `{customer_id}` "
+        f"| reason: {failure_msg} "
+        f"| event: {event.get('id', '?')}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public (unauthenticated) checkout — for visitors on sic-signup.html
 # ---------------------------------------------------------------------------
@@ -788,7 +851,10 @@ def public_checkout():
     customer_id: str | None = sub["stripe_customer_id"] if sub else None
 
     base = _base_url()
-    success_url = f"{base}/api/billing/public-checkout-success?tier={tier}"
+    success_url = (
+        f"{base}/api/billing/public-checkout-success"
+        f"?tier={tier}&email={urllib.parse.quote(email, safe='')}"
+    )
     cancel_url = f"{base}/sic-payment-cancelled?reason=cancelled"
 
     try:
@@ -813,8 +879,12 @@ def public_checkout():
 def public_checkout_success():
     """Redirect after Stripe checkout — send user to dedicated payment success page."""
     tier = request.args.get("tier", "community")
+    email = request.args.get("email", "")
     # Validate against known tiers — prevent open redirect via unvalidated query param.
     if tier not in _ALL_VALID_TIERS:
         tier = "community"
     base = _base_url()
-    return redirect(f"{base}/sic-payment-success?tier={tier}")
+    params = f"tier={tier}"
+    if email and _EMAIL_RE.match(email):
+        params += f"&email={urllib.parse.quote(email, safe='')}"
+    return redirect(f"{base}/sic-payment-success?{params}")

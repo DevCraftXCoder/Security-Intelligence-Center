@@ -161,26 +161,40 @@ def get_subscription(email: str) -> sqlite3.Row | None:
         ).fetchone()
 
 
+_PAST_DUE_GRACE_SECONDS = 7 * 86400  # 7-day grace period before downgrading past_due
+
+
 def get_tier(email: str) -> str:
     """Return the effective billing tier for *email*, defaulting to 'community'.
 
-    Respects subscription status: canceled and unpaid subscriptions are
-    immediately downgraded to community.  past_due subscriptions retain their
-    tier as a grace period (the operator is expected to handle recovery).
+    Status mapping:
+        active / trialing               → paid tier (full access)
+        past_due                        → paid tier for 7-day grace, then community
+        incomplete                      → community (card declined / 3DS pending)
+        incomplete_expired / paused     → community
+        canceled / unpaid               → community
+        pending_review                  → community (awaiting manual operator review)
     """
     row = get_subscription(email)
     if row is None:
         return "community"
     tier = row["tier"]
-    # Guard against unexpected values already in the DB
     if tier not in ("community", "team", "studio"):
         return "community"
-    # Bug 5: Status-aware access control.
-    # canceled / unpaid → no paid access.
-    # past_due → grace period, keep tier (operator should follow up).
     status = row["status"] if row["status"] else "active"
-    if status in ("canceled", "unpaid"):
+    # Immediate downgrade statuses
+    if status in (
+        "canceled", "unpaid",
+        "incomplete", "incomplete_expired",
+        "paused", "pending_review",
+    ):
         return "community"
+    # past_due: retain tier for 7-day grace period, then downgrade
+    if status == "past_due":
+        period_end = row["current_period_end"]
+        if period_end is not None and (period_end + _PAST_DUE_GRACE_SECONDS) < int(time.time()):
+            return "community"
+        return tier
     return tier
 
 
