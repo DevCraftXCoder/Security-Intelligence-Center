@@ -29,11 +29,13 @@ module.exports = {
       cwd: "C:/Za/sic",
       interpreter: PYTHON,
       windowsHide: true,
-      args: "--server http://127.0.0.1:9890",
+      // Docker sic-scanner container at :9888 has 85 working Linux pentest tools.
+      // sic-main (:9890) is Windows-only and has 0 Linux tools. MCP must target Docker.
+      args: "--server http://127.0.0.1:9888",
       env: {
         SIC_ENV: "development",
-        SIC_PORT: "9888",
-        HEXSTRIKE_PORT: "9890",
+        HEXSTRIKE_SERVER: "http://127.0.0.1:9888",
+        HEXSTRIKE_PORT: "9888",
       },
       max_memory_restart: "512M",
       error_file: "logs/sic-mcp-error.log",
