@@ -5573,22 +5573,29 @@ class EnhancedProcessManager:
 
     def _execute_command_internal(self, command: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Internal command execution with enhanced monitoring"""
+        import shlex as _shlex  # noqa: PLC0415
         start_time = time.time()
 
         try:
             # Resource-aware execution
             resource_usage = self.resource_monitor.get_current_usage()
 
-            # Adjust command based on resource availability
-            if resource_usage["cpu_percent"] > self.resource_thresholds["cpu_high"]:
-                # Add nice priority for CPU-intensive commands
-                if not command.startswith("nice"):
-                    command = f"nice -n 10 {command}"
+            # Parse command to list before any manipulation so shell metacharacters
+            # can never inject through the nice-prefix or Popen call.
+            try:
+                cmd_parts = _shlex.split(command) if isinstance(command, str) else list(command)
+            except ValueError:
+                return {"success": False, "output": "", "error": "Malformed command string", "return_code": -1, "execution_time": 0}
 
-            # Execute command
+            # Adjust command based on resource availability — prepend nice as list args
+            if resource_usage["cpu_percent"] > self.resource_thresholds["cpu_high"]:
+                if cmd_parts and cmd_parts[0] != "nice":
+                    cmd_parts = ["nice", "-n", "10"] + cmd_parts
+
+            # Execute command — shell=False, list form, no metacharacter injection
             process = subprocess.Popen(
-                command,
-                shell=True,
+                cmd_parts,
+                shell=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -7183,15 +7190,19 @@ class EnhancedCommandExecutor:
 
     def execute(self) -> Dict[str, Any]:
         """Execute the command with enhanced monitoring and output"""
+        import shlex as _shlex  # noqa: PLC0415
         self.start_time = time.time()
 
         logger.info(f"🚀 EXECUTING: {self.command}")
         logger.info(f"⏱️  TIMEOUT: {self.timeout}s | PID: Starting...")
 
+        # Convert string command to list — shell=False prevents metacharacter injection
+        _cmd = _shlex.split(self.command) if isinstance(self.command, str) else list(self.command)
+
         try:
             self.process = subprocess.Popen(
-                self.command,
-                shell=True,
+                _cmd,
+                shell=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
