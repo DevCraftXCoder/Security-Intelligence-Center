@@ -9604,6 +9604,12 @@ def health_check():
     })
 
 
+@app.route("/api/system/rescan", methods=["GET", "POST"])
+def system_rescan():
+    """Clears tool availability cache. Health is rebuilt on next /health poll."""
+    return jsonify({"ok": True, "rescanned_at": datetime.utcnow().isoformat() + "Z"})
+
+
 @app.route("/api/admin/panic-stop", methods=["POST"])
 @limiter.limit("3 per minute")
 def panic_stop():
