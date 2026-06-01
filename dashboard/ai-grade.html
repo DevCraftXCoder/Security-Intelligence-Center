@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en" style="background:#050505">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#050505">
+<title>SIC — AI Grade</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23050505'/><text x='4' y='24' font-size='20' font-weight='900' fill='%23e94560'>S</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
+<link rel="stylesheet" href="/dashboard/style.css">
+<style>
+.ag-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .ag-layout { grid-template-columns: 1fr; }
+}
+.ag-card {
+  background: var(--sic-surface);
+  border: 1px solid var(--sic-border);
+}
+.ag-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--sic-border);
+}
+.ag-card__title {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+  margin: 0;
+}
+.ag-card__body { padding: 20px; }
+/* Result display */
+.ag-result {
+  display: none;
+}
+.ag-result.is-visible { display: block; }
+.ag-severity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  margin-bottom: 16px;
+}
+.ag-severity--critical { color: #ff4444; border-color: rgba(255,68,68,0.3); background: rgba(255,68,68,0.06); }
+.ag-severity--high     { color: #ff8844; border-color: rgba(255,136,68,0.3); background: rgba(255,136,68,0.06); }
+.ag-severity--medium   { color: #ffcc44; border-color: rgba(255,204,68,0.3); background: rgba(255,204,68,0.06); }
+.ag-severity--low      { color: #5acc8a; border-color: rgba(90,204,138,0.3); background: rgba(90,204,138,0.06); }
+.ag-severity--info     { color: var(--sic-text-muted); border-color: rgba(255,255,255,0.12); background: transparent; }
+.ag-confidence-bar {
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  margin-bottom: 16px;
+  position: relative;
+}
+.ag-confidence-bar__fill {
+  height: 100%;
+  background: var(--sic-accent);
+  transition: width 400ms ease;
+}
+.ag-confidence-label {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  color: var(--sic-text-muted);
+  margin-bottom: 4px;
+}
+.ag-field {
+  margin-bottom: 16px;
+}
+.ag-field:last-child { margin-bottom: 0; }
+.ag-field__label {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--sic-text-muted);
+  margin-bottom: 6px;
+}
+.ag-field__text {
+  font-size: 13px;
+  color: var(--sic-text);
+  line-height: 1.6;
+}
+.ag-field__code {
+  font-family: var(--sic-font-mono);
+  font-size: 12px;
+  color: #5acc8a;
+  background: rgba(90,204,138,0.06);
+  border: 1px solid rgba(90,204,138,0.15);
+  padding: 10px 14px;
+  word-break: break-all;
+}
+.ag-fp-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255,255,255,0.10);
+  color: var(--sic-text-muted);
+}
+/* Form */
+.ag-form-group { margin-bottom: 14px; }
+.ag-label {
+  display: block;
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--sic-text-muted);
+  margin-bottom: 6px;
+}
+.ag-input, .ag-textarea, .ag-select {
+  width: 100%;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--sic-text);
+  font-family: var(--sic-font-mono);
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 120ms ease;
+}
+.ag-input:focus, .ag-textarea:focus, .ag-select:focus { border-color: var(--sic-accent); }
+.ag-textarea { resize: vertical; min-height: 80px; }
+.ag-select { appearance: none; }
+.ag-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 16px;
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  border: none;
+  cursor: pointer;
+  background: var(--sic-accent);
+  color: #fff;
+  transition: background 120ms ease;
+}
+.ag-btn:hover { background: #c73550; }
+.ag-btn:disabled { background: rgba(233,69,96,0.30); cursor: not-allowed; }
+.ag-msg {
+  margin-top: 10px;
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  min-height: 16px;
+  color: var(--sic-text-muted);
+}
+.ag-msg--err { color: var(--sic-accent); }
+.ag-empty {
+  padding: 32px 20px;
+  text-align: center;
+  font-family: var(--sic-font-mono);
+  font-size: 12px;
+  color: var(--sic-text-muted);
+}
+</style>
+</head>
+<body data-page="aigrade" style="background:#050505">
+<canvas id="galaxy-canvas"></canvas>
+<div id="glitch-vignette"></div>
+<div class="sic-shell">
+
+  <header class="sic-header">
+    <div class="sic-header__brand">
+      <div class="sic-header__logo-wrap" id="logo-toggle" role="button" tabindex="0" aria-label="Toggle settings bar" aria-expanded="false" aria-controls="control-bar" title="Click to toggle settings">
+        <img src="/assets/hexstrike-logo.png" alt="SIC" style="height:28px;width:auto;">
+      </div>
+      <span class="sic-header__tagline">Security Intelligence Center</span>
+    </div>
+    <nav class="sic-nav" aria-label="Main navigation">
+      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6L12 2z"/></svg>Posture</a>
+      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Incidents</a>
+      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>AI Fix</a>
+      <a class="sic-nav__link" data-page="billing" href="/dashboard/billing.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="1" y="4" width="22" height="16" rx="0"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing</a>
+      <a class="sic-nav__link" data-page="sso" href="/dashboard/sso.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="11" width="18" height="11" rx="0"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>SSO</a>
+      <a class="sic-nav__link" data-page="workspaces" href="/dashboard/workspaces.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="M14 14h7v7h-7z"/></svg>Workspaces</a>
+      <a class="sic-nav__link" data-page="aigrade" href="/dashboard/ai-grade.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>AI Grade</a>
+    </nav>
+    <div class="sic-user">
+      <span id="user-email" class="mono">—</span>
+      <button id="logout-btn" class="sic-btn sic-btn--ghost" title="Sign out of SIC dashboard" aria-label="Sign out">Sign out</button>
+    </div>
+  </header>
+
+  <div class="sic-control-bar" id="control-bar" role="region" aria-label="Background and logo controls" aria-hidden="true">
+    <div class="sic-control-bar__inner">
+      <span class="sic-control-bar__label">LIVE BG</span>
+      <div class="sic-control-bar__segment" role="group" aria-label="Background theme">
+        <button class="sic-control-bar__btn" data-theme="glitch" type="button">Glitch</button>
+        <button class="sic-control-bar__btn" data-theme="galaxy" type="button">Galaxy</button>
+        <button class="sic-control-bar__btn" data-theme="navy" type="button">Navy (Static)</button>
+      </div>
+      <span class="sic-control-bar__divider" aria-hidden="true"></span>
+      <span class="sic-control-bar__label">LOGO</span>
+      <button class="sic-control-bar__btn sic-control-bar__btn--primary" id="logo-upload-btn" type="button">Upload Logo</button>
+      <button class="sic-control-bar__close" id="control-bar-close" type="button" aria-label="Close (Esc)" title="Close (Esc)">&times;</button>
+    </div>
+  </div>
+
+  <nav class="sic-breadcrumb" aria-label="Breadcrumb" style="margin-bottom:8px;font-family:var(--sic-font-mono);font-size:11px;color:var(--sic-text-muted)">
+    <a href="/dashboard/index.html" style="color:var(--sic-text-muted);text-decoration:none" class="sic-link" onmouseover="this.style.color='var(--sic-accent)'" onmouseout="this.style.color='var(--sic-text-muted)'">SIC</a>
+    <span style="margin:0 6px;opacity:0.4">/</span>
+    <span style="color:var(--sic-text)">AI Grade</span>
+  </nav>
+
+  <div class="sic-page-head">
+    <div>
+      <h1 class="sic-page-head__title" style="font-size:20px">AI Finding Grader</h1>
+      <p class="sic-page-head__sub">Get remediation guidance and severity assessment for security findings</p>
+    </div>
+  </div>
+
+  <div class="ag-layout">
+    <!-- Left: result display -->
+    <div>
+      <div class="ag-card">
+        <div class="ag-card__header">
+          <p class="ag-card__title">Grading Result</p>
+          <span id="ag-cache-badge" style="font-family:var(--sic-font-mono);font-size:10px;color:var(--sic-text-muted);display:none">from cache</span>
+        </div>
+        <div class="ag-card__body">
+          <div id="ag-placeholder" class="ag-empty">Submit a finding to get an AI assessment.</div>
+          <div id="ag-result" class="ag-result">
+            <span id="ag-severity-badge" class="ag-severity ag-severity--medium">Medium</span>
+
+            <div class="ag-confidence-label">
+              Confidence: <span id="ag-confidence-pct">—</span>
+            </div>
+            <div class="ag-confidence-bar">
+              <div class="ag-confidence-bar__fill" id="ag-confidence-fill" style="width:0%"></div>
+            </div>
+
+            <div class="ag-field">
+              <div class="ag-field__label">Remediation</div>
+              <div class="ag-field__text" id="ag-remediation">—</div>
+            </div>
+
+            <div class="ag-field">
+              <div class="ag-field__label">Suggested Fix</div>
+              <div class="ag-field__code" id="ag-one-line-fix">—</div>
+            </div>
+
+            <div class="ag-field">
+              <div class="ag-field__label">False Positive Risk</div>
+              <span class="ag-fp-badge" id="ag-fp-risk">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: submit form -->
+    <div class="ag-card">
+      <div class="ag-card__header">
+        <p class="ag-card__title">Submit Finding</p>
+      </div>
+      <div class="ag-card__body">
+        <div class="ag-form-group">
+          <label class="ag-label" for="ag-title">Title <span style="color:var(--sic-accent)">*</span></label>
+          <input class="ag-input" id="ag-title" type="text" placeholder="e.g. SQL injection in login endpoint" maxlength="200" autocomplete="off">
+        </div>
+        <div class="ag-form-group">
+          <label class="ag-label" for="ag-category">Category <span style="color:var(--sic-accent)">*</span></label>
+          <select class="ag-select" id="ag-category">
+            <option value="">— Select —</option>
+            <option value="injection">Injection</option>
+            <option value="authentication">Authentication</option>
+            <option value="authorization">Authorization</option>
+            <option value="xss">XSS</option>
+            <option value="ssrf">SSRF</option>
+            <option value="xxe">XXE</option>
+            <option value="insecure-deserialization">Insecure Deserialization</option>
+            <option value="security-misconfiguration">Security Misconfiguration</option>
+            <option value="sensitive-data-exposure">Sensitive Data Exposure</option>
+            <option value="broken-access-control">Broken Access Control</option>
+            <option value="cryptographic-failure">Cryptographic Failure</option>
+            <option value="vulnerable-component">Vulnerable Component</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="ag-form-group">
+          <label class="ag-label" for="ag-severity">Reported Severity</label>
+          <select class="ag-select" id="ag-severity">
+            <option value="">— Unknown —</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="info">Info</option>
+          </select>
+        </div>
+        <div class="ag-form-group">
+          <label class="ag-label" for="ag-description">Description</label>
+          <textarea class="ag-textarea" id="ag-description" placeholder="Steps to reproduce, affected endpoint, impact…" maxlength="2000"></textarea>
+        </div>
+        <button class="ag-btn" id="ag-submit-btn">Grade Finding</button>
+        <div class="ag-msg" id="ag-msg"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/dashboard/app.js"></script>
+<script>
+(function() {
+  // Active nav indicator
+  var page = document.body.dataset.page;
+  document.querySelectorAll('.sic-nav__link').forEach(function(a) {
+    if (a.dataset.page === page) a.classList.add('sic-nav__link--active');
+  });
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  var SEV_MAP = {
+    critical: 'ag-severity--critical',
+    high:     'ag-severity--high',
+    medium:   'ag-severity--medium',
+    low:      'ag-severity--low',
+    info:     'ag-severity--info'
+  };
+
+  document.getElementById('ag-submit-btn').addEventListener('click', function() {
+    var title = document.getElementById('ag-title').value.trim();
+    var category = document.getElementById('ag-category').value;
+    var severity = document.getElementById('ag-severity').value || undefined;
+    var description = document.getElementById('ag-description').value.trim();
+    var msg = document.getElementById('ag-msg');
+
+    if (!title) { msg.textContent = 'Title is required.'; msg.className = 'ag-msg ag-msg--err'; return; }
+    if (!category) { msg.textContent = 'Category is required.'; msg.className = 'ag-msg ag-msg--err'; return; }
+
+    var btn = document.getElementById('ag-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Grading…';
+    msg.textContent = 'Calling AI engine…'; msg.className = 'ag-msg';
+
+    var body = { title: title, category: category, description: description };
+    if (severity) body.severity = severity;
+
+    fetch('/api/ai/grade', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    .then(function(r) {
+      if (r.status === 503) { throw new Error('AI unavailable — set OPENROUTER_API_KEY on the server.'); }
+      if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'HTTP ' + r.status); });
+      var cached = r.headers.get('X-Cache') === 'HIT';
+      return r.json().then(function(d) { return { data: d, cached: cached }; });
+    })
+    .then(function(res) {
+      var d = res.data;
+      msg.textContent = ''; msg.className = 'ag-msg';
+      document.getElementById('ag-placeholder').style.display = 'none';
+      var result = document.getElementById('ag-result');
+      result.className = 'ag-result is-visible';
+
+      // Severity badge
+      var sev = (d.severity || 'medium').toLowerCase();
+      var badge = document.getElementById('ag-severity-badge');
+      badge.className = 'ag-severity ' + (SEV_MAP[sev] || 'ag-severity--info');
+      badge.textContent = sev.charAt(0).toUpperCase() + sev.slice(1);
+
+      // Confidence
+      var conf = Math.max(0, Math.min(1, parseFloat(d.confidence) || 0));
+      document.getElementById('ag-confidence-pct').textContent = Math.round(conf * 100) + '%';
+      document.getElementById('ag-confidence-fill').style.width = (conf * 100) + '%';
+
+      // Remediation
+      document.getElementById('ag-remediation').textContent = d.remediation || '—';
+      document.getElementById('ag-one-line-fix').textContent = d.one_line_fix || '—';
+      document.getElementById('ag-fp-risk').textContent = (d.false_positive_risk || 'unknown').toUpperCase();
+
+      // Cache badge
+      var cacheBadge = document.getElementById('ag-cache-badge');
+      cacheBadge.style.display = res.cached ? '' : 'none';
+    })
+    .catch(function(err) {
+      msg.textContent = err.message; msg.className = 'ag-msg ag-msg--err';
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Grade Finding';
+    });
+  });
+})();
+</script>
+</body>
+</html>

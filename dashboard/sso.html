@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en" style="background:#050505">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#050505">
+<title>SIC — SSO</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23050505'/><text x='4' y='24' font-size='20' font-weight='900' fill='%23e94560'>S</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
+<link rel="stylesheet" href="/dashboard/style.css">
+<style>
+.sso-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+}
+.sso-status-badge--active {
+  color: #5acc8a;
+  border-color: rgba(90,204,138,0.25);
+  background: rgba(90,204,138,0.06);
+}
+.sso-status-badge--inactive {
+  color: var(--sic-text-muted);
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+.sso-status-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.sso-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+@media (max-width: 640px) {
+  .sso-config-grid { grid-template-columns: 1fr; }
+}
+.sso-config-card {
+  background: var(--sic-surface);
+  border: 1px solid var(--sic-border);
+  padding: 20px 24px;
+}
+.sso-config-card__title {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+  margin: 0 0 16px 0;
+}
+.sso-field {
+  margin-bottom: 14px;
+}
+.sso-field:last-child { margin-bottom: 0; }
+.sso-field__label {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--sic-text-muted);
+  margin-bottom: 4px;
+  display: block;
+}
+.sso-field__value {
+  font-family: var(--sic-font-mono);
+  font-size: 12px;
+  color: var(--sic-text);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 8px 12px;
+  word-break: break-all;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+.sso-field__value--muted {
+  color: var(--sic-text-muted);
+  font-style: italic;
+}
+.sso-configs-list {
+  background: var(--sic-surface);
+  border: 1px solid var(--sic-border);
+}
+.sso-configs-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--sic-border);
+}
+.sso-configs-list__title {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+  margin: 0;
+}
+.sso-config-row {
+  display: grid;
+  grid-template-columns: 1fr 120px 120px 80px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 13px;
+}
+.sso-config-row:last-child { border-bottom: none; }
+.sso-config-row__id {
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  color: var(--sic-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sso-config-row__type {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--sic-accent);
+}
+.sso-config-row__provider {
+  font-size: 12px;
+  color: var(--sic-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sso-empty {
+  padding: 32px 20px;
+  text-align: center;
+  font-family: var(--sic-font-mono);
+  font-size: 12px;
+  color: var(--sic-text-muted);
+}
+.sso-tier-notice {
+  background: rgba(233,69,96,0.06);
+  border: 1px solid rgba(233,69,96,0.20);
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  font-size: 13px;
+  color: var(--sic-text-muted);
+}
+.sso-tier-notice strong { color: var(--sic-accent); }
+.sso-nav__link--active { /* active state override for this page */
+  border-left: 3px solid var(--sic-accent);
+  background: rgba(233,69,96,0.08);
+  color: var(--sic-accent);
+  padding-left: 9px;
+}
+</style>
+</head>
+<body data-page="sso" style="background:#050505">
+<canvas id="galaxy-canvas"></canvas>
+<div id="glitch-vignette"></div>
+<div class="sic-shell">
+
+  <header class="sic-header">
+    <div class="sic-header__brand">
+      <div class="sic-header__logo-wrap" id="logo-toggle" role="button" tabindex="0" aria-label="Toggle settings bar" aria-expanded="false" aria-controls="control-bar" title="Click to toggle settings">
+        <img src="/assets/hexstrike-logo.png" alt="SIC" style="height:28px;width:auto;">
+      </div>
+      <span class="sic-header__tagline">Security Intelligence Center</span>
+    </div>
+    <nav class="sic-nav" aria-label="Main navigation">
+      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6L12 2z"/></svg>Posture</a>
+      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Incidents</a>
+      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>AI Fix</a>
+      <a class="sic-nav__link" data-page="billing" href="/dashboard/billing.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="1" y="4" width="22" height="16" rx="0"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing</a>
+      <a class="sic-nav__link" data-page="sso" href="/dashboard/sso.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="11" width="18" height="11" rx="0"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>SSO</a>
+      <a class="sic-nav__link" data-page="workspaces" href="/dashboard/workspaces.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="M14 14h7v7h-7z"/></svg>Workspaces</a>
+      <a class="sic-nav__link" data-page="aigrade" href="/dashboard/ai-grade.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>AI Grade</a>
+    </nav>
+    <div class="sic-user">
+      <span id="user-email" class="mono">—</span>
+      <button id="logout-btn" class="sic-btn sic-btn--ghost" title="Sign out of SIC dashboard" aria-label="Sign out">Sign out</button>
+    </div>
+  </header>
+
+  <div class="sic-control-bar" id="control-bar" role="region" aria-label="Background and logo controls" aria-hidden="true">
+    <div class="sic-control-bar__inner">
+      <span class="sic-control-bar__label">LIVE BG</span>
+      <div class="sic-control-bar__segment" role="group" aria-label="Background theme">
+        <button class="sic-control-bar__btn" data-theme="glitch" type="button">Glitch</button>
+        <button class="sic-control-bar__btn" data-theme="galaxy" type="button">Galaxy</button>
+        <button class="sic-control-bar__btn" data-theme="navy" type="button">Navy (Static)</button>
+      </div>
+      <span class="sic-control-bar__divider" aria-hidden="true"></span>
+      <span class="sic-control-bar__label">LOGO</span>
+      <button class="sic-control-bar__btn sic-control-bar__btn--primary" id="logo-upload-btn" type="button">Upload Logo</button>
+      <button class="sic-control-bar__close" id="control-bar-close" type="button" aria-label="Close (Esc)" title="Close (Esc)">&times;</button>
+    </div>
+  </div>
+
+  <nav class="sic-breadcrumb" aria-label="Breadcrumb" style="margin-bottom:8px;font-family:var(--sic-font-mono);font-size:11px;color:var(--sic-text-muted)">
+    <a href="/dashboard/index.html" style="color:var(--sic-text-muted);text-decoration:none" class="sic-link" onmouseover="this.style.color='var(--sic-accent)'" onmouseout="this.style.color='var(--sic-text-muted)'">SIC</a>
+    <span style="margin:0 6px;opacity:0.4">/</span>
+    <span style="color:var(--sic-text)">SSO</span>
+  </nav>
+
+  <div class="sic-page-head">
+    <div>
+      <h1 class="sic-page-head__title" style="font-size:20px">Single Sign-On</h1>
+      <p class="sic-page-head__sub">SAML 2.0 and OIDC provider configuration</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="sso-global-badge" class="sso-status-badge sso-status-badge--inactive">
+        <span class="sso-status-badge__dot"></span>
+        <span id="sso-global-text">Loading…</span>
+      </span>
+    </div>
+  </div>
+
+  <div id="sso-tier-notice" class="sso-tier-notice" style="display:none">
+    <strong>Studio tier required.</strong> SSO is available on Studio and Enterprise plans only.
+    <a href="/dashboard/billing.html" style="color:var(--sic-accent);text-decoration:none;margin-left:8px">Upgrade &rarr;</a>
+  </div>
+
+  <!-- Status overview cards -->
+  <div class="sso-config-grid">
+    <div class="sso-config-card">
+      <p class="sso-config-card__title">SAML 2.0</p>
+      <div class="sso-field">
+        <span class="sso-field__label">Status</span>
+        <div class="sso-field__value" id="saml-status"><span style="color:var(--sic-text-muted)">Loading…</span></div>
+      </div>
+      <div class="sso-field">
+        <span class="sso-field__label">SP Metadata URL</span>
+        <div class="sso-field__value sso-field__value--muted" id="saml-metadata-url">Not configured</div>
+      </div>
+      <div class="sso-field">
+        <span class="sso-field__label">IdP Entity ID</span>
+        <div class="sso-field__value sso-field__value--muted" id="saml-idp-entity">Not configured</div>
+      </div>
+    </div>
+    <div class="sso-config-card">
+      <p class="sso-config-card__title">OIDC</p>
+      <div class="sso-field">
+        <span class="sso-field__label">Status</span>
+        <div class="sso-field__value" id="oidc-status"><span style="color:var(--sic-text-muted)">Loading…</span></div>
+      </div>
+      <div class="sso-field">
+        <span class="sso-field__label">Provider / Issuer</span>
+        <div class="sso-field__value sso-field__value--muted" id="oidc-provider">Not configured</div>
+      </div>
+      <div class="sso-field">
+        <span class="sso-field__label">Client ID</span>
+        <div class="sso-field__value sso-field__value--muted" id="oidc-client-id">Not configured</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Configured workspaces list -->
+  <div class="sso-configs-list" id="sso-configs-section">
+    <div class="sso-configs-list__header">
+      <p class="sso-configs-list__title">Workspace SSO Configurations</p>
+      <span id="sso-configs-count" style="font-family:var(--sic-font-mono);font-size:11px;color:var(--sic-text-muted)">— workspaces</span>
+    </div>
+    <div id="sso-configs-body">
+      <div class="sso-empty">Loading configurations…</div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/dashboard/app.js"></script>
+<script>
+(function() {
+  // Active nav indicator
+  var page = document.body.dataset.page;
+  document.querySelectorAll('.sic-nav__link').forEach(function(a) {
+    if (a.dataset.page === page) a.classList.add('sic-nav__link--active');
+  });
+
+  // ---- SSO data loader ----
+  function setGlobalBadge(active) {
+    var badge = document.getElementById('sso-global-badge');
+    var text = document.getElementById('sso-global-text');
+    if (active) {
+      badge.className = 'sso-status-badge sso-status-badge--active';
+      text.textContent = 'Enabled';
+    } else {
+      badge.className = 'sso-status-badge sso-status-badge--inactive';
+      text.textContent = 'Not configured';
+    }
+  }
+
+  function renderConfigRow(cfg) {
+    var proto = cfg.type || (cfg.idp_sso_url ? 'SAML' : 'OIDC');
+    var provider = cfg.issuer || cfg.idp_entity_id || cfg.client_id || '—';
+    return '<div class="sso-config-row">' +
+      '<span class="sso-config-row__id">' + escHtml(cfg.workspace_id || cfg.id || '—') + '</span>' +
+      '<span class="sso-config-row__type">' + escHtml(proto) + '</span>' +
+      '<span class="sso-config-row__provider">' + escHtml(provider) + '</span>' +
+      '<span class="sso-status-badge ' + (cfg.enabled !== false ? 'sso-status-badge--active' : 'sso-status-badge--inactive') + '">' +
+        '<span class="sso-status-badge__dot"></span>' +
+        (cfg.enabled !== false ? 'Active' : 'Disabled') +
+      '</span>' +
+    '</div>';
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function loadSSOConfigs() {
+    fetch('/api/sso/configs', { credentials: 'include' })
+      .then(function(r) {
+        if (r.status === 403 || r.status === 402) {
+          document.getElementById('sso-tier-notice').style.display = '';
+          document.getElementById('sso-configs-section').style.display = 'none';
+          setGlobalBadge(false);
+          document.getElementById('saml-status').innerHTML = '<span style="color:var(--sic-text-muted)">Studio tier required</span>';
+          document.getElementById('oidc-status').innerHTML = '<span style="color:var(--sic-text-muted)">Studio tier required</span>';
+          return null;
+        }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data) return;
+        var configs = Array.isArray(data) ? data : (data.configs || []);
+        var count = configs.length;
+        document.getElementById('sso-configs-count').textContent = count + ' workspace' + (count !== 1 ? 's' : '');
+
+        var samlCfg = configs.find(function(c) { return c.type === 'saml' || c.idp_sso_url; });
+        var oidcCfg = configs.find(function(c) { return c.type === 'oidc' || c.issuer; });
+
+        // SAML card
+        if (samlCfg) {
+          document.getElementById('saml-status').innerHTML = '<span style="color:#5acc8a">Active</span>';
+          var metaUrl = (window.location.origin + '/auth/sso/metadata/' + samlCfg.workspace_id);
+          document.getElementById('saml-metadata-url').textContent = metaUrl;
+          document.getElementById('saml-metadata-url').className = 'sso-field__value';
+          document.getElementById('saml-idp-entity').textContent = samlCfg.idp_entity_id || '—';
+          document.getElementById('saml-idp-entity').className = 'sso-field__value';
+        } else {
+          document.getElementById('saml-status').innerHTML = '<span style="color:var(--sic-text-muted)">Not configured</span>';
+        }
+
+        // OIDC card
+        if (oidcCfg) {
+          document.getElementById('oidc-status').innerHTML = '<span style="color:#5acc8a">Active</span>';
+          document.getElementById('oidc-provider').textContent = oidcCfg.issuer || oidcCfg.provider || '—';
+          document.getElementById('oidc-provider').className = 'sso-field__value';
+          document.getElementById('oidc-client-id').textContent = oidcCfg.client_id ? oidcCfg.client_id.slice(0, 16) + '…' : '—';
+          document.getElementById('oidc-client-id').className = 'sso-field__value';
+        } else {
+          document.getElementById('oidc-status').innerHTML = '<span style="color:var(--sic-text-muted)">Not configured</span>';
+        }
+
+        setGlobalBadge(count > 0);
+
+        // Configs list
+        var body = document.getElementById('sso-configs-body');
+        if (count === 0) {
+          body.innerHTML = '<div class="sso-empty">No SSO configurations found. Configure SAML or OIDC for a workspace via the API.</div>';
+        } else {
+          body.innerHTML = configs.map(renderConfigRow).join('');
+        }
+      })
+      .catch(function(err) {
+        document.getElementById('sso-configs-body').innerHTML =
+          '<div class="sso-empty" style="color:var(--sic-accent)">Failed to load SSO configs: ' + escHtml(err.message) + '</div>';
+        setGlobalBadge(false);
+        document.getElementById('saml-status').innerHTML = '<span style="color:var(--sic-text-muted)">Unavailable</span>';
+        document.getElementById('oidc-status').innerHTML = '<span style="color:var(--sic-text-muted)">Unavailable</span>';
+      });
+  }
+
+  loadSSOConfigs();
+})();
+</script>
+</body>
+</html>

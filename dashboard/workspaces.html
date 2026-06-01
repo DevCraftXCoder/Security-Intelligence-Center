@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en" style="background:#050505">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#050505">
+<title>SIC — Workspaces</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23050505'/><text x='4' y='24' font-size='20' font-weight='900' fill='%23e94560'>S</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
+<link rel="stylesheet" href="/dashboard/style.css">
+<style>
+.ws-grid {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .ws-grid { grid-template-columns: 1fr; }
+}
+.ws-list {
+  background: var(--sic-surface);
+  border: 1px solid var(--sic-border);
+}
+.ws-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--sic-border);
+}
+.ws-list__title {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+  margin: 0;
+}
+.ws-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 36px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.ws-row:last-child { border-bottom: none; }
+.ws-row:hover { background: rgba(255,255,255,0.02); }
+.ws-row.is-active { background: rgba(233,69,96,0.05); border-left: 2px solid var(--sic-accent); }
+.ws-row__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sic-text);
+}
+.ws-row__slug {
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  color: var(--sic-text-muted);
+}
+.ws-row__role {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--sic-text-muted);
+}
+.ws-row__select-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--sic-text-muted);
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.ws-row__select-btn:hover { border-color: var(--sic-accent); color: var(--sic-accent); }
+.ws-row.is-active .ws-row__select-btn { border-color: var(--sic-accent); color: var(--sic-accent); }
+.ws-panel {
+  background: var(--sic-surface);
+  border: 1px solid var(--sic-border);
+}
+.ws-panel__header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--sic-border);
+}
+.ws-panel__title {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+  margin: 0;
+}
+.ws-panel__body { padding: 20px; }
+.ws-form-group { margin-bottom: 14px; }
+.ws-form-group:last-child { margin-bottom: 0; }
+.ws-label {
+  display: block;
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--sic-text-muted);
+  margin-bottom: 6px;
+}
+.ws-input {
+  width: 100%;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--sic-text);
+  font-family: var(--sic-font-mono);
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 120ms ease;
+}
+.ws-input:focus { border-color: var(--sic-accent); }
+.ws-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.ws-btn--primary {
+  background: var(--sic-accent);
+  color: #fff;
+  border-color: var(--sic-accent);
+}
+.ws-btn--primary:hover { background: #c73550; }
+.ws-btn--ghost {
+  background: transparent;
+  color: var(--sic-text-muted);
+  border-color: rgba(255,255,255,0.08);
+}
+.ws-btn--ghost:hover { border-color: var(--sic-accent); color: var(--sic-accent); }
+.ws-msg {
+  margin-top: 10px;
+  font-family: var(--sic-font-mono);
+  font-size: 11px;
+  min-height: 16px;
+}
+.ws-msg--ok { color: #5acc8a; }
+.ws-msg--err { color: var(--sic-accent); }
+/* Tokens section */
+.ws-tokens { margin-top: 24px; }
+.ws-tokens__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.ws-tokens__title {
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--sic-text-muted);
+}
+.ws-token-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 36px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 12px;
+}
+.ws-token-row:last-child { border-bottom: none; }
+.ws-token-name { color: var(--sic-text); font-weight: 500; }
+.ws-token-prefix { font-family: var(--sic-font-mono); font-size: 11px; color: var(--sic-text-muted); }
+.ws-token-revoke {
+  background: transparent;
+  border: 1px solid rgba(233,69,96,0.30);
+  color: var(--sic-accent);
+  font-family: var(--sic-font-mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: background 120ms ease;
+}
+.ws-token-revoke:hover { background: rgba(233,69,96,0.10); }
+.ws-empty {
+  padding: 24px;
+  text-align: center;
+  font-family: var(--sic-font-mono);
+  font-size: 12px;
+  color: var(--sic-text-muted);
+}
+.ws-token-alert {
+  background: rgba(90,204,138,0.06);
+  border: 1px solid rgba(90,204,138,0.25);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  font-family: var(--sic-font-mono);
+  font-size: 12px;
+  word-break: break-all;
+  display: none;
+}
+.ws-token-alert strong { color: #5acc8a; display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body data-page="workspaces" style="background:#050505">
+<canvas id="galaxy-canvas"></canvas>
+<div id="glitch-vignette"></div>
+<div class="sic-shell">
+
+  <header class="sic-header">
+    <div class="sic-header__brand">
+      <div class="sic-header__logo-wrap" id="logo-toggle" role="button" tabindex="0" aria-label="Toggle settings bar" aria-expanded="false" aria-controls="control-bar" title="Click to toggle settings">
+        <img src="/assets/hexstrike-logo.png" alt="SIC" style="height:28px;width:auto;">
+      </div>
+      <span class="sic-header__tagline">Security Intelligence Center</span>
+    </div>
+    <nav class="sic-nav" aria-label="Main navigation">
+      <a class="sic-nav__link" data-page="dashboard" href="/dashboard/index.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a class="sic-nav__link" data-page="posture" href="/dashboard/posture-grid.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6L12 2z"/></svg>Posture</a>
+      <a class="sic-nav__link" data-page="incidents" href="/dashboard/incidents.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Incidents</a>
+      <a class="sic-nav__link" data-page="aifix" href="/dashboard/ai-fix.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>AI Fix</a>
+      <a class="sic-nav__link" data-page="billing" href="/dashboard/billing.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="1" y="4" width="22" height="16" rx="0"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Billing</a>
+      <a class="sic-nav__link" data-page="sso" href="/dashboard/sso.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="11" width="18" height="11" rx="0"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>SSO</a>
+      <a class="sic-nav__link" data-page="workspaces" href="/dashboard/workspaces.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="M14 14h7v7h-7z"/></svg>Workspaces</a>
+      <a class="sic-nav__link" data-page="aigrade" href="/dashboard/ai-grade.html">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>AI Grade</a>
+    </nav>
+    <div class="sic-user">
+      <span id="user-email" class="mono">—</span>
+      <button id="logout-btn" class="sic-btn sic-btn--ghost" title="Sign out of SIC dashboard" aria-label="Sign out">Sign out</button>
+    </div>
+  </header>
+
+  <div class="sic-control-bar" id="control-bar" role="region" aria-label="Background and logo controls" aria-hidden="true">
+    <div class="sic-control-bar__inner">
+      <span class="sic-control-bar__label">LIVE BG</span>
+      <div class="sic-control-bar__segment" role="group" aria-label="Background theme">
+        <button class="sic-control-bar__btn" data-theme="glitch" type="button">Glitch</button>
+        <button class="sic-control-bar__btn" data-theme="galaxy" type="button">Galaxy</button>
+        <button class="sic-control-bar__btn" data-theme="navy" type="button">Navy (Static)</button>
+      </div>
+      <span class="sic-control-bar__divider" aria-hidden="true"></span>
+      <span class="sic-control-bar__label">LOGO</span>
+      <button class="sic-control-bar__btn sic-control-bar__btn--primary" id="logo-upload-btn" type="button">Upload Logo</button>
+      <button class="sic-control-bar__close" id="control-bar-close" type="button" aria-label="Close (Esc)" title="Close (Esc)">&times;</button>
+    </div>
+  </div>
+
+  <nav class="sic-breadcrumb" aria-label="Breadcrumb" style="margin-bottom:8px;font-family:var(--sic-font-mono);font-size:11px;color:var(--sic-text-muted)">
+    <a href="/dashboard/index.html" style="color:var(--sic-text-muted);text-decoration:none" class="sic-link" onmouseover="this.style.color='var(--sic-accent)'" onmouseout="this.style.color='var(--sic-text-muted)'">SIC</a>
+    <span style="margin:0 6px;opacity:0.4">/</span>
+    <span style="color:var(--sic-text)">Workspaces</span>
+  </nav>
+
+  <div class="sic-page-head">
+    <div>
+      <h1 class="sic-page-head__title" style="font-size:20px">Workspaces &amp; API Tokens</h1>
+      <p class="sic-page-head__sub">Manage isolated namespaces and per-workspace API keys</p>
+    </div>
+  </div>
+
+  <div class="ws-grid">
+    <!-- Left: workspace list -->
+    <div>
+      <div class="ws-list">
+        <div class="ws-list__header">
+          <p class="ws-list__title">Your Workspaces</p>
+          <span id="ws-count" style="font-family:var(--sic-font-mono);font-size:11px;color:var(--sic-text-muted)">—</span>
+        </div>
+        <div id="ws-list-body">
+          <div class="ws-empty">Loading workspaces…</div>
+        </div>
+      </div>
+
+      <!-- Tokens section (shown when a workspace is selected) -->
+      <div class="ws-tokens" id="ws-tokens-section" style="display:none">
+        <div class="ws-list">
+          <div class="ws-list__header">
+            <p class="ws-list__title">API Tokens — <span id="ws-tokens-ws-name">—</span></p>
+            <button class="ws-btn ws-btn--ghost" id="ws-create-token-btn" style="padding:5px 12px;font-size:10px">+ New Token</button>
+          </div>
+          <div id="ws-tokens-new-alert" class="ws-token-alert">
+            <strong>Token created — copy it now. It will not be shown again.</strong>
+            <span id="ws-token-raw"></span>
+          </div>
+          <div id="ws-tokens-body">
+            <div class="ws-empty">Select a workspace to view tokens.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: create workspace panel -->
+    <div class="ws-panel">
+      <div class="ws-panel__header">
+        <p class="ws-panel__title">New Workspace</p>
+      </div>
+      <div class="ws-panel__body">
+        <div class="ws-form-group">
+          <label class="ws-label" for="ws-name-input">Name</label>
+          <input class="ws-input" id="ws-name-input" type="text" placeholder="e.g. Client Alpha" maxlength="80" autocomplete="off">
+        </div>
+        <button class="ws-btn ws-btn--primary" id="ws-create-btn" style="width:100%;justify-content:center">Create Workspace</button>
+        <div class="ws-msg" id="ws-create-msg"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/dashboard/app.js"></script>
+<script>
+(function() {
+  // Active nav indicator
+  var page = document.body.dataset.page;
+  document.querySelectorAll('.sic-nav__link').forEach(function(a) {
+    if (a.dataset.page === page) a.classList.add('sic-nav__link--active');
+  });
+
+  var selectedWsId = null;
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ---- Workspaces ----
+  function loadWorkspaces() {
+    fetch('/api/workspaces', { credentials: 'include' })
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(data) {
+        var list = Array.isArray(data) ? data : (data.workspaces || []);
+        document.getElementById('ws-count').textContent = list.length + ' workspace' + (list.length !== 1 ? 's' : '');
+        var body = document.getElementById('ws-list-body');
+        if (list.length === 0) {
+          body.innerHTML = '<div class="ws-empty">No workspaces yet. Create one to get started.</div>';
+          return;
+        }
+        body.innerHTML = list.map(function(ws) {
+          return '<div class="ws-row" data-wsid="' + escHtml(ws.id) + '" data-wsname="' + escHtml(ws.name) + '">' +
+            '<div><div class="ws-row__name">' + escHtml(ws.name) + '</div>' +
+            '<div class="ws-row__slug">' + escHtml(ws.slug || ws.id) + '</div></div>' +
+            '<span class="ws-row__role">' + escHtml(ws.role || 'member') + '</span>' +
+            '<button class="ws-row__select-btn" data-wsid="' + escHtml(ws.id) + '" data-wsname="' + escHtml(ws.name) + '">Select</button>' +
+          '</div>';
+        }).join('');
+        // Wire select buttons
+        body.querySelectorAll('.ws-row__select-btn').forEach(function(btn) {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            selectWorkspace(btn.dataset.wsid, btn.dataset.wsname);
+          });
+        });
+      })
+      .catch(function(err) {
+        document.getElementById('ws-list-body').innerHTML =
+          '<div class="ws-empty" style="color:var(--sic-accent)">Failed to load: ' + escHtml(err.message) + '</div>';
+      });
+  }
+
+  function selectWorkspace(wsId, wsName) {
+    selectedWsId = wsId;
+    document.querySelectorAll('.ws-row').forEach(function(r) {
+      r.classList.toggle('is-active', r.dataset.wsid === wsId);
+    });
+    document.getElementById('ws-tokens-section').style.display = '';
+    document.getElementById('ws-tokens-ws-name').textContent = wsName;
+    document.getElementById('ws-tokens-new-alert').style.display = 'none';
+    loadTokens(wsId);
+  }
+
+  // ---- Create workspace ----
+  document.getElementById('ws-create-btn').addEventListener('click', function() {
+    var name = document.getElementById('ws-name-input').value.trim();
+    var msg = document.getElementById('ws-create-msg');
+    if (!name) { msg.textContent = 'Name is required.'; msg.className = 'ws-msg ws-msg--err'; return; }
+    msg.textContent = 'Creating…'; msg.className = 'ws-msg';
+    fetch('/api/workspaces', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name })
+    })
+    .then(function(r) { if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'HTTP ' + r.status); }); return r.json(); })
+    .then(function() {
+      msg.textContent = 'Workspace created.'; msg.className = 'ws-msg ws-msg--ok';
+      document.getElementById('ws-name-input').value = '';
+      loadWorkspaces();
+    })
+    .catch(function(err) { msg.textContent = err.message; msg.className = 'ws-msg ws-msg--err'; });
+  });
+
+  // ---- Tokens ----
+  function loadTokens(wsId) {
+    document.getElementById('ws-tokens-body').innerHTML = '<div class="ws-empty">Loading tokens…</div>';
+    fetch('/api/tokens?workspace_id=' + encodeURIComponent(wsId), { credentials: 'include' })
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(data) {
+        var tokens = Array.isArray(data) ? data : (data.tokens || []);
+        var body = document.getElementById('ws-tokens-body');
+        if (tokens.length === 0) {
+          body.innerHTML = '<div class="ws-empty">No tokens for this workspace.</div>';
+          return;
+        }
+        body.innerHTML = '<div style="padding:0 20px">' +
+          tokens.map(function(t) {
+            return '<div class="ws-token-row">' +
+              '<div><div class="ws-token-name">' + escHtml(t.name || t.id) + '</div>' +
+              '<div class="ws-token-prefix">' + escHtml(t.prefix || t.id.slice(0,8) + '…') + '</div></div>' +
+              '<span style="font-family:var(--sic-font-mono);font-size:10px;color:var(--sic-text-muted)">' +
+                (t.last_used_at ? 'used ' + new Date(t.last_used_at).toLocaleDateString() : 'never used') +
+              '</span>' +
+              '<button class="ws-token-revoke" data-tid="' + escHtml(t.id) + '">Revoke</button>' +
+            '</div>';
+          }).join('') +
+        '</div>';
+        body.querySelectorAll('.ws-token-revoke').forEach(function(btn) {
+          btn.addEventListener('click', function() { revokeToken(btn.dataset.tid); });
+        });
+      })
+      .catch(function(err) {
+        document.getElementById('ws-tokens-body').innerHTML =
+          '<div class="ws-empty" style="color:var(--sic-accent)">Failed to load tokens: ' + escHtml(err.message) + '</div>';
+      });
+  }
+
+  document.getElementById('ws-create-token-btn').addEventListener('click', function() {
+    if (!selectedWsId) return;
+    var name = prompt('Token name (optional):') || ('token-' + Date.now());
+    fetch('/api/tokens', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, workspace_id: selectedWsId })
+    })
+    .then(function(r) { if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'HTTP ' + r.status); }); return r.json(); })
+    .then(function(data) {
+      var alert = document.getElementById('ws-tokens-new-alert');
+      document.getElementById('ws-token-raw').textContent = data.token || data.raw_token || '(see response)';
+      alert.style.display = '';
+      loadTokens(selectedWsId);
+    })
+    .catch(function(err) { alert('Failed to create token: ' + err.message); });
+  });
+
+  function revokeToken(tokenId) {
+    if (!confirm('Revoke this token? This cannot be undone.')) return;
+    fetch('/api/tokens/' + encodeURIComponent(tokenId), {
+      method: 'DELETE',
+      credentials: 'include'
+    })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
+    .then(function() { loadTokens(selectedWsId); })
+    .catch(function(err) { alert('Failed to revoke: ' + err.message); });
+  }
+
+  loadWorkspaces();
+})();
+</script>
+</body>
+</html>
