@@ -140,7 +140,15 @@ for handler in logging.getLogger().handlers:
 logger = logging.getLogger(__name__)
 
 # Default configuration
-DEFAULT_HEXSTRIKE_SERVER = "http://127.0.0.1:8888"  # Default HexStrike server URL
+# Resolve the backend URL from env so the MCP server tracks the SIC API server's
+# actual port (PM2 standardizes on HEXSTRIKE_PORT=9890). Precedence:
+#   1. explicit --server CLI arg (argparse default below)
+#   2. HEXSTRIKE_SERVER full URL
+#   3. http://127.0.0.1:${HEXSTRIKE_PORT}  (HEXSTRIKE_PORT defaults to 9890)
+DEFAULT_HEXSTRIKE_SERVER = os.environ.get(
+    "HEXSTRIKE_SERVER",
+    f"http://127.0.0.1:{os.environ.get('HEXSTRIKE_PORT', '9890')}",
+)  # Default HexStrike server URL
 DEFAULT_REQUEST_TIMEOUT = 300  # 5 minutes default timeout for API requests
 MAX_RETRIES = 3  # Maximum number of retries for connection attempts
 
