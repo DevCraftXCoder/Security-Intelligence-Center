@@ -1,0 +1,14 @@
+# ruff.toml for sic/ — hexstrike_server.py is a 17k-line monolith
+# E501 (line-too-long) suppressed project-wide: long lines are unavoidable
+# in this file (SQL payloads, URLs, long string literals).
+line-length = 200
+
+[lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+# hexstrike_server.py contains generated code templates (SQLiExploit class)
+# where ruff incorrectly reports F821 (undefined name) due to {endpoint}/{parameter}
+# template placeholders confusing scope analysis. query IS defined in the for-loop.
+"hexstrike_server.py" = ["F821"]

