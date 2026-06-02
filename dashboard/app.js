@@ -31,9 +31,12 @@ function fmtUptime(seconds) {
 }
 
 // ─── Base URLs ───────────────────────────────────────────────────────────────
-// Main SIC server on port 9890 (sic-main PM2 process). Auth routes live here.
-const SIC_MAIN_BASE = window.location.protocol + "//" + window.location.hostname + ":9890";
-// Billing server runs on a separate port.
+// server.py serves both the dashboard static files and all /auth/* + /api/*
+// routes on the same origin, so relative paths always work — whether accessed
+// directly on :9890 or through a CF Named Tunnel (e.g. https://sic.frxncois.com).
+// Hardcoding ":9890" broke tunnel access: the tunnel doesn't listen on that port.
+const SIC_MAIN_BASE = "";
+// Billing server runs on a separate port — must be absolute.
 const BILLING_BASE = window.location.protocol + "//" + window.location.hostname + ":9015";
 
 // billingFetch — routes to the separate billing server on :9015
@@ -41,7 +44,7 @@ async function billingFetch(path, options) {
   return apiFetch(BILLING_BASE + path, options);
 }
 
-// mainFetch — routes to the main SIC server on :9890 (auth, tools, scan-history)
+// mainFetch — routes to the main SIC server (same-origin)
 async function mainFetch(path, options) {
   return apiFetch(SIC_MAIN_BASE + path, options);
 }
