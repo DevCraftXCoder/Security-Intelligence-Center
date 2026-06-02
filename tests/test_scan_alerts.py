@@ -43,7 +43,7 @@ class TestFireMagicLinkEmail:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
 
-        with patch.dict("os.environ", {"RESEND_API_KEY": "re_test_key"}):
+        with patch.dict("os.environ", {"RESEND_API_KEY": "re_test_key", "SIC_ALERT_FROM": "sic@example.com"}):
             with patch("requests.post", return_value=mock_resp) as mock_post:
                 sa._fire_magic_link_email(
                     {"email": "admin@example.com", "link": "https://sic.example.com/auth/verify?token=abc123", "expires_at": int(time.time()) + 600}
@@ -68,6 +68,7 @@ class TestFireMagicLinkEmail:
             "os.environ",
             {
                 "RESEND_API_KEY": "re_test_key",
+                "SIC_ALERT_FROM": "sic@example.com",
                 "SIC_SMTP_HOST": "smtp.example.com",
                 "SIC_SMTP_USER": "user",
                 "SIC_SMTP_PASS": "pass",
