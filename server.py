@@ -154,9 +154,12 @@ if _SIC_ENV == "production":
     # H2: SIC_DEV_MODE must never be set in production — it leaks magic links in API responses
     if os.environ.get("SIC_DEV_MODE"):
         raise SystemExit("FATAL: SIC_DEV_MODE must not be set when SIC_ENV=production (leaks auth links)")
-    # M1: warn loudly if waitlist mode is open in production
+    # H4: waitlist mode bypasses billing auth — fatal in production
     if os.environ.get("SIC_WAITLIST_MODE", "").lower() in ("open", "1", "true"):
-        print("[SIC WARNING] SIC_WAITLIST_MODE=open is active in production — any email can obtain a session.")
+        raise SystemExit(
+            "FATAL: SIC_WAITLIST_MODE=open is not allowed in production — it bypasses billing "
+            "auth and grants any email a session. Set SIC_WAITLIST_MODE=off in .env."
+        )
 app.config['JSON_SORT_KEYS'] = False
 app.config['JSON_AS_ASCII'] = False
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get("SIC_MAX_REQUEST_BYTES", str(10 * 1024 * 1024)))

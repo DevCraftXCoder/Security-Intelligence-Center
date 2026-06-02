@@ -443,7 +443,7 @@ def _send_provisioning_email(email: str, session_obj: dict) -> None:  # noqa: AR
 
         _init_db()
         now = int(_time.time())
-        expires = now + 900  # 15 minutes
+        expires = now + 86400  # 24 hours — post-payment link; user may not check email immediately
         token = _make_token(email, now, expires)
 
         import hashlib as _hashlib  # noqa: PLC0415
@@ -872,6 +872,65 @@ def public_checkout():
         return jsonify({"error": "billing_unavailable"}), 402
     except Exception as exc:
         logger.error("Unhandled billing error: %s", exc, exc_info=True)
+        return jsonify({"error": "internal_error"}), 500
+
+
+@billing_bp.post("/portal-by-email")
+def portal_by_email():
+    """Create a Stripe Customer Portal session for a customer identified by email.
+
+    Called from the Next.js proxy (POST /api/sic/portal) — does not require a
+    Flask session. Requires X-Billing-Key header matching BILLING_API_KEY.
+
+    Body JSON:
+        {"email": "user@example.com", "return_url": "https://..."}
+
+    Returns:
+        200  {"portal_url": "https://billing.stripe.com/..."}
+        400  {"error": "no_stripe_customer"}
+        401  {"error": "unauthorized"}
+        402  {"error": "billing_unavailable"}
+        500  {"error": "internal_error"}
+    """
+    if not _BILLING_API_KEY:
+        if os.environ.get("SIC_ENV", "development") == "production":
+            return jsonify({"error": "BILLING_API_KEY not configured"}), 503
+        print("[billing WARNING] BILLING_API_KEY not set — M2M auth disabled (dev)")
+    else:
+        provided_key = request.headers.get("X-Billing-Key", "")
+        if not provided_key or not _secrets_equal(provided_key, _BILLING_API_KEY):
+            return jsonify({"error": "unauthorized"}), 401
+
+    init_db()
+    body = request.get_json(silent=True) or {}
+    email = (body.get("email") or "").strip().lower()
+    if not email or not _EMAIL_RE.match(email):
+        return jsonify({"error": "missing_email", "detail": "A valid email is required."}), 400
+
+    return_url = body.get("return_url") or f"{_base_url()}/sic-payment-success"
+    # Restrict return_url to allowed origins to prevent open redirect
+    _allowed = os.environ.get("SIC_ALLOWED_RETURN_ORIGINS", "https://frxncois.com").split(",")
+    from urllib.parse import urlparse as _urlparse  # noqa: PLC0415
+    parsed = _urlparse(return_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    if origin not in [o.strip() for o in _allowed]:
+        return_url = f"{_base_url()}/sic-payment-success"
+
+    sub = get_subscription(email)
+    if not sub or not sub.get("stripe_customer_id"):
+        return jsonify({"error": "no_stripe_customer", "detail": "No Stripe customer on record."}), 400
+
+    try:
+        portal_session = create_portal_session(
+            customer_id=sub["stripe_customer_id"],
+            return_url=return_url,
+        )
+        return jsonify({"portal_url": portal_session.url}), 200
+    except EnvironmentError as exc:
+        logger.error("billing env misconfigured for portal-by-email: %s", exc)
+        return jsonify({"error": "billing_unavailable"}), 402
+    except Exception as exc:
+        logger.error("Unhandled portal-by-email error: %s", exc, exc_info=True)
         return jsonify({"error": "internal_error"}), 500
 
 
