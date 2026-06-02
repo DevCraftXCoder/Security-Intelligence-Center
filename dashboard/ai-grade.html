@@ -421,6 +421,10 @@
       btn.textContent = 'Grade Finding';
     });
   });
+
+  // Auth guard — wire user email, logout button, nav active state.
+  // Redirects to /dashboard/login.html if session is invalid.
+  initHeader("aigrade");
 })();
 </script>
 </body>

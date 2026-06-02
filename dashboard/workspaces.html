@@ -477,7 +477,12 @@
     .catch(function(err) { alert('Failed to revoke: ' + err.message); });
   }
 
-  loadWorkspaces();
+  // Auth guard — wire user email, logout button, nav active state.
+  // Redirects to /dashboard/login.html if session is invalid.
+  initHeader("workspaces").then(function(me) {
+    if (!me) return;
+    loadWorkspaces();
+  });
 })();
 </script>
 </body>

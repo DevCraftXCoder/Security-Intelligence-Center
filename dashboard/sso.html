@@ -394,7 +394,12 @@
       });
   }
 
-  loadSSOConfigs();
+  // Auth guard — wire user email, logout button, nav active state.
+  // Redirects to /dashboard/login.html if session is invalid.
+  initHeader("sso").then(function(me) {
+    if (!me) return;
+    loadSSOConfigs();
+  });
 })();
 </script>
 </body>

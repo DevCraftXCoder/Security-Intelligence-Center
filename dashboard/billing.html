@@ -730,17 +730,23 @@ async function loadInvoices() {
   }
 }
 
-// Boot
-document.addEventListener("DOMContentLoaded", loadSubscription);
+// Boot — gate data fetches on auth so an expired session redirects to login
+// rather than showing empty panels with no explanation.
+document.addEventListener("DOMContentLoaded", async function() {
+  // initHeader wires user email, logout button, and nav active state.
+  // Returns null and redirects to /dashboard/login.html if session is invalid.
+  var me = await initHeader("billing");
+  if (!me) return;
 
-// Improvement 1: Active nav indicator
-(function() {
-  var page = document.body.dataset.page;
+  // Active nav indicator (moved here from separate IIFE — same effect)
   document.querySelectorAll('.sic-nav__link').forEach(function(a) {
-    if (a.dataset.page === page) a.classList.add('sic-nav__link--active');
+    if (a.dataset.page === "billing") a.classList.add('sic-nav__link--active');
   });
-})();
+
+  // Now safe to load data
+  await loadSubscription();
+  applyTierGating();
+});
 </script>
-<script>document.addEventListener("DOMContentLoaded", () => applyTierGating());</script>
 </body>
 </html>
