@@ -22,6 +22,8 @@ from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, request
 
+from feature_gates import require_tier
+
 incidents_bp = Blueprint("sic_incidents", __name__, url_prefix="/api")
 
 _DB_PATH = Path.home() / ".sic" / "state.db"
@@ -166,6 +168,7 @@ def list_incidents_route():
 
 
 @incidents_bp.post("/incidents")
+@require_tier("team")
 def create_incident_route():
     """POST /api/incidents — create a new incident."""
     email = _require_auth()
@@ -225,6 +228,7 @@ def get_incident_route(incident_id: str):
 
 
 @incidents_bp.patch("/incidents/<incident_id>")
+@require_tier("team")
 def update_incident_route(incident_id: str):
     """PATCH /api/incidents/<id> — update status and/or add a timeline note."""
     email = _require_auth()
@@ -309,6 +313,7 @@ def update_incident_route(incident_id: str):
 
 
 @incidents_bp.delete("/incidents/<incident_id>")
+@require_tier("team")
 def delete_incident_route(incident_id: str):
     """DELETE /api/incidents/<id> — soft delete."""
     email = _require_auth()

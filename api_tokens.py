@@ -30,6 +30,8 @@ from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, request
 
+from feature_gates import require_tier
+
 api_tokens_bp = Blueprint("sic_api_tokens", __name__, url_prefix="/api")
 
 _DB_PATH = Path.home() / ".sic" / "state.db"
@@ -295,6 +297,7 @@ def list_expiring_tokens_route():
 
 
 @api_tokens_bp.post("/tokens")
+@require_tier("studio")
 def create_token_route():
     """POST /api/tokens — create a new API token.
 

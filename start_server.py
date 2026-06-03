@@ -41,8 +41,10 @@ if _env_path.is_file():
 if not os.environ.get("SIC_ENV"):
     os.environ["SIC_ENV"] = "development"
 
-# Now import and run the server module as __main__
-# runpy executes server.py with __name__ == "__main__" so that
-# the argparse + app.run() block at the bottom fires correctly.
+# Now import and run the server module as __main__.
+# runpy executes hexstrike_server.py with __name__ == "__main__" so that the
+# argparse + app.run() block at the bottom (and the production startup guards:
+# DEBUG_MODE + SIC_WAITLIST_MODE + SIC_SECRET_KEY) fire correctly.
+# NOTE: the Flask app lives in hexstrike_server.py — there is no server.py.
 import runpy
-runpy.run_path(str(Path(__file__).parent / "server.py"), run_name="__main__")
+runpy.run_path(str(Path(__file__).parent / "hexstrike_server.py"), run_name="__main__")

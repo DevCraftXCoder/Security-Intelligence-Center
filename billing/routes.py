@@ -482,7 +482,7 @@ def _send_provisioning_email(email: str, session_obj: dict) -> None:  # noqa: AR
                     'padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;'
                     'margin:16px 0;">Open SIC Dashboard</a>'
                     '<p style="color:#666;font-size:12px;margin-top:24px;">'
-                    "This link expires in 15 minutes.</p>"
+                    "This link expires in 24 hours.</p>"
                     "</div>"
                 ),
             }).encode()
@@ -718,9 +718,12 @@ def _handle_invoice_paid(event, email: str | None) -> None:
         )
         return
 
-    # Preserve the existing tier — only refresh status and period_end
+    # Preserve the existing tier AND billing_interval — only refresh status and period_end.
+    # Without passing billing_interval, upsert defaults it to "month" and an annual
+    # subscription would be silently downgraded to monthly on its first renewal.
     sub = get_subscription(email)
     current_tier = sub["tier"] if sub else "community"
+    current_interval = sub["billing_interval"] if sub else "month"
 
     upsert_subscription(
         email=email,
@@ -729,6 +732,7 @@ def _handle_invoice_paid(event, email: str | None) -> None:
         tier=current_tier,
         status="active",
         current_period_end=period_end,
+        billing_interval=current_interval,
     )
     logger.info(
         "invoice.paid — subscription kept active, period_end=%s for email=%.6s***",

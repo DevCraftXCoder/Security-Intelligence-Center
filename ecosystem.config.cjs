@@ -1,3 +1,14 @@
+// ============================================================================
+// ⚠️  SIC_ENV is "development" in every app below — this is a LOCAL DEV config.
+//     For a LIVE billing deployment you MUST set SIC_ENV: "production", which:
+//       • enforces BILLING_API_KEY on the public-checkout endpoint,
+//       • uses the *_LIVE Stripe price IDs instead of test IDs,
+//       • activates the SIC_SECRET_KEY startup guard, and
+//       • refuses to start if SIC_WAITLIST_MODE is not "off".
+//     Copy this file to ecosystem.config.prod.cjs, set SIC_ENV: "production"
+//     and supply live secrets via .env before `pm2 start ecosystem.config.prod.cjs`.
+// ============================================================================
+//
 // Full interpreter path — never bare "python". A bare interpreter resolves
 // via CreateProcess search order, which hits 0-byte stub files in System32 /
 // cwd / WindowsApps before the real install and pops the Windows "Select an

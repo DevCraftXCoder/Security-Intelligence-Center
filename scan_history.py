@@ -23,6 +23,8 @@ from pathlib import Path
 
 from flask import Blueprint, Response, abort, jsonify, request
 
+from feature_gates import require_tier
+
 scan_history_bp = Blueprint("sic_scan_history", __name__, url_prefix="/api")
 
 _DB_PATH = Path.home() / ".sic" / "state.db"
@@ -590,6 +592,7 @@ def export_scan_route(scan_id: str):
 
 
 @scan_history_bp.get("/scans/diff")
+@require_tier("team")
 def diff_scans_route():
     """GET /api/scans/diff?run_a=<id>&run_b=<id> — compare two scan runs.
 
@@ -709,6 +712,7 @@ def _init_share_db() -> None:
 
 
 @scan_history_bp.post("/scans/<scan_id>/share")
+@require_tier("team")
 def create_share_token_route(scan_id: str):
     """POST /api/scans/<scan_id>/share — create a shareable read-only token.
 

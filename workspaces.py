@@ -39,6 +39,8 @@ from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, request
 
+from feature_gates import require_tier
+
 workspaces_bp = Blueprint("sic_workspaces", __name__, url_prefix="/api")
 
 _DB_PATH = Path.home() / ".sic" / "state.db"
@@ -622,6 +624,7 @@ def _hash_token(raw: str) -> str:
 
 
 @workspaces_bp.post("/workspaces/<workspace_id>/tokens")
+@require_tier("studio")
 def create_token_route(workspace_id: str):
     """POST /api/workspaces/<id>/tokens — issue a scoped API token (admin only).
 

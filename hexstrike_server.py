@@ -17429,4 +17429,25 @@ if __name__ == "__main__":
         DEBUG_MODE = False
         print("[WARN] DEBUG_MODE ignored in production (SIC_ENV=production)")
 
+    # Production guard — open waitlist mode lets ANY email bypass billing.
+    # Hard-block startup so production can never accidentally run open-access.
+    if (
+        os.environ.get("SIC_ENV") == "production"
+        and os.environ.get("SIC_WAITLIST_MODE", "off").lower() == "open"
+    ):
+        raise SystemExit(
+            "SIC_WAITLIST_MODE=open is forbidden in production — it lets any "
+            "email bypass billing. Set SIC_WAITLIST_MODE=off."
+        )
+
+    # Production guard — without a stable SIC_SECRET_KEY the app falls back to an
+    # ephemeral os.urandom key (see app.secret_key above), which silently destroys
+    # every login session on restart (paying customers get logged out and magic-link
+    # sessions break). Hard-fail so production always runs with a persistent secret.
+    if os.environ.get("SIC_ENV") == "production" and not os.environ.get("SIC_SECRET_KEY"):
+        raise SystemExit(
+            "SIC_SECRET_KEY is required in production — without it sessions reset on "
+            "every restart. Generate one: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+
     app.run(host=API_HOST, port=API_PORT, debug=DEBUG_MODE)

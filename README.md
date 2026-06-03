@@ -22,9 +22,34 @@ SIC runs as a local server exposing an MCP interface for integration with any MC
 
 ## Quick Start
 
+### Fastest path (paying customers) — one command
+
 ```bash
-# Start the full server
-python server.py
+npx sic-security
+```
+
+`npx sic-security` (the `bin/sic.js` launcher) creates the Python venv, installs
+dependencies, checks your `.env`, and starts the server for you. This is the
+recommended install path after you subscribe and receive your magic-link.
+
+### Manual path
+
+```bash
+# 1. Create + activate a virtual environment
+python -m venv .venv
+# Windows:  .venv\Scripts\activate     Linux/macOS:  source .venv/bin/activate
+
+# 2. Install dependencies
+#    Windows  → use the core set (skips Linux-only tools: angr, pwntools, mitmproxy)
+pip install -r requirements-core.txt
+#    Linux / Docker → full set
+#    pip install -r requirements.txt
+
+# 3. Configure environment (see First-Run Setup below)
+cp .env.example .env        # then edit .env
+
+# 4. Start the server
+python start_server.py      # loads .env, then runs the Flask app (hexstrike_server.py)
 
 # MCP-only mode
 python mcp_server.py
@@ -32,6 +57,10 @@ python mcp_server.py
 # CLI launcher
 python launcher.py
 ```
+
+> **Entry point note:** the Flask app lives in `hexstrike_server.py`. `start_server.py`
+> is a thin wrapper that loads `.env` and forces UTF-8 I/O before launching it — this is
+> what PM2 (`ecosystem.config.cjs`) runs. There is no `server.py`.
 
 Add to your MCP client config:
 
