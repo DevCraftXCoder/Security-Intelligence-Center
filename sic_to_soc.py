@@ -14,11 +14,15 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
+import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
+
+import project_config
 
 DEFAULT_TEMPLATE = "C:/Za/templates/soc-handoff/soc-handoff-template-blank.html"
 
@@ -181,6 +185,32 @@ def _ref(f):
     return " · ".join(parts)[:150] if parts else ""
 
 
+def _finding_fingerprint(f, slug):
+    """SHA-256 fingerprint of a finding, matching findings_db._fingerprint().
+
+    key = f"{slug}|{cve_or_check_id}|{name[:40]}" -> sha256[:32]
+
+    Computed inline (no findings_db import) so the diff stays independent. The
+    name/cve/check resolution mirrors the DB upsert path exactly so fingerprints
+    are stable across both producers.
+    """
+    enrichment = f.get("enrichment") or {}
+    name = (
+        f.get("name") or f.get("vulnerabilityName") or f.get("Title")
+        or f.get("template-id") or f.get("checkID") or "Unnamed finding"
+    )
+    cve = enrichment.get("cve_id") or None
+    if not cve:
+        for field in ("name", "template-id", "checkID", "Title"):
+            m = re.search(r"CVE-\d{4}-\d+", str(f.get(field) or ""), re.IGNORECASE)
+            if m:
+                cve = m.group(0).upper()
+                break
+    check = f.get("checkID") or f.get("check_id")
+    key = f"{slug}|{cve or check or ''}|{name[:40]}"
+    return hashlib.sha256(key.encode()).hexdigest()[:32]
+
+
 # ---------------------------------------------------------------------------
 # Week-over-week snapshot loader
 # ---------------------------------------------------------------------------
@@ -309,7 +339,16 @@ SEV_TAG = {
 
 def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=None,
                        output_path=None, score_override=None, asset_tier="production",
-                       skip_enrichment=False, skip_db=False):
+                       skip_enrichment=False, skip_db=False, config=None):
+    # --- Suppression enforcement (.sic.yaml rules) ---
+    if config:
+        kept = [f for f in findings if not project_config.is_suppressed(f, config)]
+        suppressed_n = len(findings) - len(kept)
+        if suppressed_n:
+            print(f"[sic_to_soc] {suppressed_n} findings suppressed by .sic.yaml rules",
+                  file=sys.stderr)
+        findings = kept
+
     # --- Enrichment pipeline (CISA KEV + EPSS + NVD) ---
     if not skip_enrichment:
         enrichment_mod = _try_import("enrichment")
@@ -555,6 +594,36 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
         print(f"[sic_to_soc] Week-over-week: {len(prior_snapshots)} prior snapshot(s) "
               f"+ current (score {current_score})", file=sys.stderr)
 
+    # ---- Scan diff vs previous scan ---------------------------------------
+    # Fingerprint the current finding set and compare against the prior
+    # snapshot's stored finding_fps to surface new / resolved / unchanged counts.
+    current_fps = sorted({_finding_fingerprint(f, slug) for f in findings})
+    prior_fps = []
+    if prior_snapshots:
+        raw_prior = prior_snapshots[-1].get("finding_fps") or []
+        if isinstance(raw_prior, list):
+            prior_fps = [str(x) for x in raw_prior]
+    prior_set = set(prior_fps)
+    current_set = set(current_fps)
+    has_prior = bool(prior_fps)
+    new_count = len(current_set - prior_set) if has_prior else len(current_set)
+    resolved_count = len(prior_set - current_set) if has_prior else 0
+    unchanged_count = len(current_set & prior_set) if has_prior else 0
+
+    project_data["scanDiff"] = {
+        "new":         new_count,
+        "resolved":    resolved_count,
+        "unchanged":   unchanged_count,
+        "has_prior":   has_prior,
+        "current_fps": current_fps,
+    }
+    # Also stamp the current fingerprints onto the current snapshot so the next
+    # scan can diff against this run.
+    current_snapshot["finding_fps"] = current_fps
+    if has_prior:
+        print(f"[sic_to_soc] Scan diff: {new_count} new, {resolved_count} resolved, "
+              f"{unchanged_count} unchanged", file=sys.stderr)
+
     return project_data
 
 
@@ -593,8 +662,13 @@ def main():
     )
     parser.add_argument("--scan",     required=True,
                         help="SIC scan JSON file (from sic/_runs/)")
-    parser.add_argument("--project",  required=True,
-                        help="Project display name (e.g. FrxncoisApp)")
+    parser.add_argument("--project",  default=None,
+                        help="Project display name (e.g. FrxncoisApp). Optional when "
+                             "--project-path is given (derived from .sic.yaml).")
+    parser.add_argument("--project-path", default=None,
+                        help="Path to a project dir — auto-loads its .sic.yaml "
+                             "(slug, asset_tier, suppressions). Registers from git "
+                             "remote if no .sic.yaml is found.")
     parser.add_argument("--output",   required=True,
                         help="Output HTML file path")
     parser.add_argument("--template", default=DEFAULT_TEMPLATE,
@@ -611,9 +685,44 @@ def main():
                         help="Skip CISA KEV / EPSS / NVD enrichment (faster, offline)")
     parser.add_argument("--no-db", action="store_true",
                         help="Skip DB persistence (findings_db.py upsert)")
+    parser.add_argument("--open", action="store_true",
+                        help="Open the generated report in the default browser")
     args = parser.parse_args()
 
-    slug = args.slug or re.sub(r"[^a-z0-9]+", "-", args.project.lower()).strip("-")
+    # --- Resolve project config -------------------------------------------
+    # Precedence for project path: explicit --project-path, else a registered
+    # project matching the --project slug. When found, .sic.yaml auto-loads slug
+    # + asset_tier + suppressions, so --slug / --asset-tier need not be passed.
+    config = None
+    project_path = args.project_path
+    if not project_path and args.project:
+        candidate_slug = re.sub(r"[^a-z0-9]+", "-", args.project.lower()).strip("-")
+        registered = project_config.get_project(candidate_slug)
+        if registered and registered.get("path"):
+            project_path = registered["path"]
+
+    if project_path:
+        config = project_config.load_config(project_path)
+        if config.get("_source") != "file":
+            # No .sic.yaml — try to auto-populate the registry from git remote.
+            project_config.register_from_git(project_path)
+        print(f"[sic_to_soc] Loaded config for: {config.get('name')} "
+              f"(tier={config.get('asset_tier')})", file=sys.stderr)
+
+    # --- Resolve effective project / slug / asset_tier --------------------
+    project = args.project or (config.get("name") if config else None)
+    if not project:
+        parser.error("either --project or --project-path is required")
+
+    slug = (
+        args.slug
+        or (config.get("slug") if config else None)
+        or re.sub(r"[^a-z0-9]+", "-", project.lower()).strip("-")
+    )
+    asset_tier = config.get("asset_tier") if config else args.asset_tier
+    if asset_tier not in ("production", "staging", "internal", "dev"):
+        asset_tier = args.asset_tier
+
     now  = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     print(f"[sic_to_soc] Loading {args.scan}")
@@ -622,11 +731,12 @@ def main():
 
     runs_dir = str(Path(args.output).parent.parent)  # _runs/qa/../ = _runs/
     project_data = build_project_data(
-        findings, args.project, slug, args.scan, now,
+        findings, project, slug, args.scan, now,
         runs_dir=runs_dir, output_path=args.output, score_override=args.score,
-        asset_tier=args.asset_tier,
+        asset_tier=asset_tier,
         skip_enrichment=args.no_enrichment,
         skip_db=args.no_db,
+        config=config,
     )
     total_controls = sum(len(s["items"]) for s in project_data["controls"])
     crit = project_data["caseMetadata"]["severity"]
@@ -638,7 +748,15 @@ def main():
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(out, encoding="utf-8")
     print(f"[sic_to_soc] Written -> {args.output}")
-    print(f"[sic_to_soc] Open:   file:///{args.output.replace(chr(92), '/')}")
+    output_fwd = args.output.replace(chr(92), "/")
+    print(f"[sic_to_soc] Open:   file:///{output_fwd}")
+
+    if args.open:
+        print("[sic_to_soc] Opening in browser...", file=sys.stderr)
+        try:
+            webbrowser.open(f"file:///{output_fwd}")
+        except Exception as e:
+            print(f"[sic_to_soc] Could not open browser (non-fatal): {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

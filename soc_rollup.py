@@ -70,7 +70,7 @@ def print_heat_map(rows: list[dict]) -> None:
         "kev": sum(r["kev_count"] for r in rows),
         "overdue": sum(r["overdue"] for r in rows),
     }
-    print(f"  Org totals — P0:{totals['p0']}  P1:{totals['p1']}  "
+    print(f"  Org totals - P0:{totals['p0']}  P1:{totals['p1']}  "
           f"KEV:{totals['kev']}  Overdue:{totals['overdue']}")
     print()
 

@@ -18,6 +18,8 @@ Requirements: stdlib + optional `pyyaml`. Errors are written to stderr.
 from __future__ import annotations
 
 import json
+import re
+import subprocess
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -236,6 +238,70 @@ def register_project(slug: str, path: str, config_path: str) -> None:
     else:
         projects.append(entry)
     _save_registry(registry)
+
+
+def _slug_from_remote_url(url: str) -> Optional[str]:
+    """Extract a normalized repo slug from a git remote URL.
+
+    e.g. https://github.com/turdpusher360/drop_stream(.git) -> 'drop-stream'
+         git@github.com:Org/My_Repo.git                     -> 'my-repo'
+    Returns None if no repo name can be extracted.
+    """
+    url = (url or "").strip()
+    if not url:
+        return None
+    # Strip trailing .git, then take the last path/colon-delimited segment.
+    cleaned = re.sub(r"\.git$", "", url, flags=re.IGNORECASE)
+    cleaned = cleaned.rstrip("/")
+    # Last segment after the final '/' or ':'.
+    segment = re.split(r"[/:]", cleaned)[-1] if cleaned else ""
+    segment = segment.strip()
+    if not segment:
+        return None
+    slug = re.sub(r"[^a-z0-9]+", "-", segment.lower()).strip("-")
+    return slug or None
+
+
+def register_from_git(path: str) -> Optional[dict[str, Any]]:
+    """Run `git remote get-url origin` in path, extract slug, register project.
+
+    e.g. https://github.com/turdpusher360/drop_stream -> slug=drop-stream
+
+    Returns the registered project dict (as stored in the registry) or None on
+    failure. All errors are written to stderr; this function never raises.
+    """
+    root = Path(path)
+    if not root.exists() or not root.is_dir():
+        _err(f"register_from_git: path not a directory: {path}")
+        return None
+
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        _err(f"register_from_git: git invocation failed for {path}: {exc}")
+        return None
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        _err(f"register_from_git: no origin remote in {path}: {stderr or 'unknown error'}")
+        return None
+
+    url = (result.stdout or "").strip()
+    slug = _slug_from_remote_url(url)
+    if not slug:
+        _err(f"register_from_git: could not derive slug from remote url: {url!r}")
+        return None
+
+    config_file = root / CONFIG_FILENAME
+    config_path = str(config_file) if config_file.is_file() else ""
+    register_project(slug, str(root), config_path)
+    return get_project(slug)
 
 
 def list_projects() -> list[dict[str, Any]]:

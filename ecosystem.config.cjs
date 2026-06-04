@@ -67,5 +67,43 @@ module.exports = {
       out_file: "logs/billing-out.log",
       log_date_format: "YYYY-MM-DD HH:mm:ss",
     },
+    {
+      // Weekly SOC rollup — links open P0/P1 findings to incidents (the
+      // "scan + merge" step in this codebase). Cron-only: fires Monday 9 AM
+      // and exits, so autorestart is off (otherwise PM2 would respawn it in a
+      // tight loop after each run completes).
+      name: "sic-weekly-scan",
+      script: "soc_rollup.py",
+      cwd: "C:/Za/sic",
+      interpreter: PYTHON,
+      windowsHide: true,
+      args: "--sync-incidents",
+      autorestart: false,
+      cron_restart: "0 9 * * 1",
+      env: {
+        PYTHONPATH: "C:/Za/sic",
+      },
+      max_memory_restart: "256M",
+      error_file: "logs/weekly-scan-error.log",
+      out_file: "logs/weekly-scan-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+    },
+    {
+      // SOC rollup feed — serves findings JSON over HTTP on 127.0.0.1:9016 for
+      // francois-landing's admin SystemsTab. Daemon (autorestart on).
+      name: "sic-soc-feed",
+      script: "soc_feed.py",
+      cwd: "C:/Za/sic",
+      interpreter: PYTHON,
+      windowsHide: true,
+      env: {
+        PYTHONPATH: "C:/Za/sic",
+        SIC_ENV: "development",
+      },
+      max_memory_restart: "128M",
+      error_file: "logs/soc-feed-error.log",
+      out_file: "logs/soc-feed-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+    },
   ],
 };
