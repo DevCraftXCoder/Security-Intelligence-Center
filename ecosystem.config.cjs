@@ -99,6 +99,7 @@ module.exports = {
       env: {
         PYTHONPATH: "C:/Za/sic",
         SIC_ENV: "development",
+        SOC_FEED_SECRET: "tXs-LuKirSgI9DwkzlXXMIQsqsGXJgnRO1tI5KPmGxU",
       },
       max_memory_restart: "128M",
       error_file: "logs/soc-feed-error.log",
