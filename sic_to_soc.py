@@ -23,6 +23,18 @@ from pathlib import Path
 DEFAULT_TEMPLATE = "C:/Za/templates/soc-handoff/soc-handoff-template-blank.html"
 
 # ---------------------------------------------------------------------------
+# Optional enrichment imports (non-fatal if modules missing)
+# ---------------------------------------------------------------------------
+
+
+def _try_import(module_name: str):
+    try:
+        import importlib
+        return importlib.import_module(module_name)
+    except ImportError:
+        return None
+
+# ---------------------------------------------------------------------------
 # JSON loader (shared logic with sic_to_audit.py)
 # ---------------------------------------------------------------------------
 
@@ -296,7 +308,56 @@ SEV_TAG = {
 
 
 def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=None,
-                       output_path=None, score_override=None):
+                       output_path=None, score_override=None, asset_tier="production",
+                       skip_enrichment=False, skip_db=False):
+    # --- Enrichment pipeline (CISA KEV + EPSS + NVD) ---
+    if not skip_enrichment:
+        enrichment_mod = _try_import("enrichment")
+        if enrichment_mod:
+            print("[sic_to_soc] Running enrichment pipeline...", file=sys.stderr)
+            findings = enrichment_mod.enrich_findings(findings)
+        else:
+            print("[sic_to_soc] enrichment.py not found — skipping enrichment", file=sys.stderr)
+
+    # --- CWE → OWASP mapping ---
+    cwe_mod = _try_import("cwe_owasp")
+    if cwe_mod:
+        findings = cwe_mod.enrich_with_owasp(findings)
+
+    # --- SLA calculation ---
+    sla_mod = _try_import("sla_engine")
+
+    # --- DB persistence ---
+    db_mod = _try_import("findings_db") if not skip_db else None
+    if db_mod:
+        try:
+            sla_map = {}
+            if sla_mod:
+                for f in findings:
+                    import hashlib
+                    enrichment_f = f.get("enrichment") or {}
+                    name_f = (f.get("name") or f.get("vulnerabilityName") or
+                              f.get("Title") or f.get("template-id") or
+                              f.get("checkID") or "Unnamed finding")
+                    cve_f = enrichment_f.get("cve_id") or None
+                    import re as _re
+                    if not cve_f:
+                        for field in ("name", "template-id", "checkID", "Title"):
+                            m = _re.search(r"CVE-\d{4}-\d+", str(f.get(field) or ""), _re.IGNORECASE)
+                            if m:
+                                cve_f = m.group(0).upper()
+                                break
+                    check_f = f.get("checkID") or f.get("check_id")
+                    key = f"{slug}|{cve_f or check_f or ''}|{name_f[:40]}"
+                    fp = hashlib.sha256(key.encode()).hexdigest()[:32]
+                    sla_info = sla_mod.calculate_sla_deadline(f, asset_tier=asset_tier)
+                    sla_map[fp] = sla_info
+            db_mod.upsert_findings_batch(slug, findings, asset_tier=asset_tier, sla_map=sla_map)
+            print(f"[sic_to_soc] Persisted {len(findings)} findings to DB (project={slug})",
+                  file=sys.stderr)
+        except Exception as e:
+            print(f"[sic_to_soc] DB persistence failed (non-fatal): {e}", file=sys.stderr)
+
     # Group findings by canonical severity
     buckets = {s: [] for s in SEV_ORDER}
     for f in findings:
@@ -321,14 +382,35 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
         section_id = f"sic-{sev}"
         ctrl_items = []
         for idx, f in enumerate(items, start=1):
-            ctrl_items.append({
+            enrichment = f.get("enrichment") or {}
+            item: dict = {
                 "id":   f"{section_id}-{idx:03d}",
                 "p":    SEV_TO_P.get(sev, "p3"),
                 "done": False,
                 "name": _name(f)[:80],
                 "desc": _desc(f),
                 "ref":  _ref(f),
-            })
+            }
+            # Enrichment badges — surfaced in report UI
+            if enrichment.get("kev"):
+                item["kev"] = True
+            if enrichment.get("epss") is not None:
+                item["epss"] = enrichment["epss"]
+            if enrichment.get("cvss_v3") is not None:
+                item["cvss_v3"] = enrichment["cvss_v3"]
+            if enrichment.get("cwe"):
+                item["cwe"] = enrichment["cwe"]
+            if enrichment.get("owasp_category"):
+                item["owasp"] = enrichment["owasp_category"]
+            if enrichment.get("force_p0") and sev != "critical":
+                item["forced_p0"] = True  # escalated by KEV/EPSS
+            # SLA label
+            if sla_mod:
+                sla_info = sla_mod.calculate_sla_deadline(f, asset_tier=asset_tier)
+                item["sla"] = sla_info.get("sla_label")
+                item["sla_deadline"] = sla_info.get("deadline")
+                item["overdue"] = sla_info.get("overdue", False)
+            ctrl_items.append(item)
 
         controls.append({
             "id":    section_id,
@@ -402,11 +484,16 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
             "exitCriteria": "All P0 and P1 controls marked done; P2+ accepted or remediated.",
             "handingOffTo": "",
         },
-        "attackMapping":        [],
+        "attackMapping":        (
+            cwe_mod.build_attack_mapping(findings) if cwe_mod else []
+        ),
         "detectionCoverage":    [],
         "activeThreatStatus":   {"signals": [], "lastUpdated": now_iso},
         "riskAcceptance":       [],
         "incidentLinkage":      [],
+        "slaSummary": (
+            sla_mod.sla_summary(findings, asset_tier=asset_tier) if sla_mod else {}
+        ),
         "maturity": {
             "currentStage": 1,
             "priorStage":   0,
@@ -517,6 +604,13 @@ def main():
     parser.add_argument("--score",    type=int, default=None,
                         help="Override current-week posture score (0-100) for the "
                              "week-over-week snapshot (used by the weekly harness bridge)")
+    parser.add_argument("--asset-tier", default="production",
+                        choices=["production", "staging", "internal", "dev"],
+                        help="Asset tier for SLA calculation (default: production)")
+    parser.add_argument("--no-enrichment", action="store_true",
+                        help="Skip CISA KEV / EPSS / NVD enrichment (faster, offline)")
+    parser.add_argument("--no-db", action="store_true",
+                        help="Skip DB persistence (findings_db.py upsert)")
     args = parser.parse_args()
 
     slug = args.slug or re.sub(r"[^a-z0-9]+", "-", args.project.lower()).strip("-")
@@ -530,6 +624,9 @@ def main():
     project_data = build_project_data(
         findings, args.project, slug, args.scan, now,
         runs_dir=runs_dir, output_path=args.output, score_override=args.score,
+        asset_tier=args.asset_tier,
+        skip_enrichment=args.no_enrichment,
+        skip_db=args.no_db,
     )
     total_controls = sum(len(s["items"]) for s in project_data["controls"])
     crit = project_data["caseMetadata"]["severity"]
