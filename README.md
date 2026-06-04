@@ -6,7 +6,7 @@
 ![Local First](https://img.shields.io/badge/Local--First-111111?style=flat&logo=homeassistant&logoColor=white)
 ![Tools](https://img.shields.io/badge/150%2B_Security_Tools-e94560?style=flat&logoColor=white)
 
-**Penetration testing framework — MCP interface, 150+ security tools, 12 specialized agents, Docker-sandboxed execution.**
+**Penetration testing framework — MCP interface, 85 security tools, 12 specialized agents, Docker-sandboxed execution.**
 
 > Runs as a local server exposing a REST API and MCP interface for direct integration with Claude, Cursor, or any MCP-compatible client. Connect your toolchain to purpose-built security tooling — recon, exploitation, post-exploitation, bug bounty, CTF — all sandboxed in Docker with IP allowlisting.
 
