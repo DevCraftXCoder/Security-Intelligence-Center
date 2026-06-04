@@ -45,7 +45,7 @@
 - **REST API** — full programmatic access for automation pipelines
 - **Docker sandboxing** — all tool execution isolated, IP allowlisted to home network
 - **12 specialized agents** — each owns a distinct phase of the engagement lifecycle
-- **150+ tools** — covers recon through reporting across all engagement types
+- **85 tools** — covers recon through reporting across all engagement types
 - **Billing module** — built-in quota tracking per tool, per agent, per session
 - **Incident tracker** — log findings, track severity, export reports
 - **Local-first** — no cloud dependency, no data leaves your machine
