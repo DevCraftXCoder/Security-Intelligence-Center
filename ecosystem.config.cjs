@@ -99,7 +99,9 @@ module.exports = {
       env: {
         PYTHONPATH: "C:/Za/sic",
         SIC_ENV: "development",
-        SOC_FEED_SECRET: "tXs-LuKirSgI9DwkzlXXMIQsqsGXJgnRO1tI5KPmGxU",
+        // P2-1: secret moved out of source — read from environment instead.
+        // Set SOC_FEED_SECRET in sic/.env (see .env.example for generation instructions).
+        SOC_FEED_SECRET: process.env.SOC_FEED_SECRET,
       },
       max_memory_restart: "128M",
       error_file: "logs/soc-feed-error.log",

@@ -46,13 +46,10 @@ def get_func_info(source: str) -> list[dict]:
         first_stmt = body[0]
         code_stmts = body
 
-        docstring_end_line = def_lineno  # fallback
-
         if (isinstance(first_stmt, ast.Expr) and
                 isinstance(first_stmt.value, ast.Constant) and
                 isinstance(first_stmt.value.value, str)):
             # It's a docstring
-            docstring_end_line = first_stmt.end_lineno  # 1-indexed inclusive
             code_stmts = body[1:]
 
         has_try_first = bool(code_stmts and isinstance(code_stmts[0], ast.Try))

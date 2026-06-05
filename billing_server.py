@@ -53,11 +53,51 @@ if _SIC_DIR not in sys.path:
 # Build Flask app with only the billing blueprint
 # ---------------------------------------------------------------------------
 
-from flask import Flask, Response, request  # noqa: E402
+import collections as _collections  # noqa: E402
+import threading as _threading  # noqa: E402
+import time as _time  # noqa: E402
+
+from flask import Flask, Response, jsonify, request  # noqa: E402
 from billing import billing_bp, init_db  # noqa: E402
 
 app = Flask(__name__)
 app.register_blueprint(billing_bp)
+
+# ---------------------------------------------------------------------------
+# P1: Per-IP rate limit on /api/billing/checkout — 5 req/hour
+# ---------------------------------------------------------------------------
+_CHECKOUT_RL_WINDOW = 3600   # 1 hour
+_CHECKOUT_RL_MAX = 5
+_checkout_rl: dict[str, _collections.deque] = {}
+_checkout_rl_lock = _threading.Lock()
+
+
+def _checkout_rate_check(ip: str) -> bool:
+    """Return True if within limit, False if exceeded."""
+    now = _time.time()
+    cutoff = now - _CHECKOUT_RL_WINDOW
+    with _checkout_rl_lock:
+        dq = _checkout_rl.get(ip)
+        if dq is None:
+            dq = _collections.deque(maxlen=_CHECKOUT_RL_MAX)
+            _checkout_rl[ip] = dq
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= _CHECKOUT_RL_MAX:
+            return False
+        dq.append(now)
+        return True
+
+
+@app.before_request
+def _checkout_rate_limit() -> None:  # type: ignore[return-value]
+    """P1: Rate-limit /api/billing/checkout to 5 req/hour per IP."""
+    if request.path != "/api/billing/checkout":
+        return None  # type: ignore[return-value]
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
+    if not _checkout_rate_check(client_ip):
+        return jsonify({"error": "rate_limit_exceeded", "retry_after": _CHECKOUT_RL_WINDOW}), 429  # type: ignore[return-value]
+    return None  # type: ignore[return-value]
 
 # ---------------------------------------------------------------------------
 # CORS — allow the SIC dashboard origins to reach the billing server

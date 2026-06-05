@@ -37,3 +37,8 @@ logs/
 
 # Node tooling (secretlint scanner)
 node_modules/
+
+# Database files — never track DB files in source (P2-2)
+billing/billing.db
+*.db
+*.sqlite

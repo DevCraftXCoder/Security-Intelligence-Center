@@ -16,6 +16,7 @@ Public helpers (usable outside this module):
 from __future__ import annotations
 
 import base64
+import collections
 import functools
 import hashlib
 import hmac
@@ -23,6 +24,7 @@ import logging
 import os
 import secrets
 import sqlite3
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +36,36 @@ from flask import Blueprint, jsonify, redirect, request
 # ---------------------------------------------------------------------------
 
 auth_bp = Blueprint("sic_auth", __name__, url_prefix="/auth")
+
+# ---------------------------------------------------------------------------
+# P1: Simple per-IP rate limiter for /auth/request-link (5 req/hour)
+# Uses a module-level dict — no external dep, survives blueprint reloads.
+# ---------------------------------------------------------------------------
+
+_RL_WINDOW_SECONDS = 3600  # 1 hour
+_RL_MAX_REQUESTS = 5
+
+# Stores: {ip: deque([timestamp, ...], maxlen=_RL_MAX_REQUESTS)}
+_rl_counters: dict[str, collections.deque] = {}
+_rl_lock = threading.Lock()
+
+
+def _request_link_rate_check(ip: str) -> bool:
+    """Return True if the request is within the rate limit, False if exceeded."""
+    now = time.time()
+    cutoff = now - _RL_WINDOW_SECONDS
+    with _rl_lock:
+        dq = _rl_counters.get(ip)
+        if dq is None:
+            dq = collections.deque(maxlen=_RL_MAX_REQUESTS)
+            _rl_counters[ip] = dq
+        # Evict timestamps outside the window
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= _RL_MAX_REQUESTS:
+            return False
+        dq.append(now)
+        return True
 
 _DB_PATH = Path.home() / ".sic" / "state.db"
 _KEY_PATH = Path.home() / ".sic" / "auth.key"
@@ -195,11 +227,16 @@ def _iso(ts: int) -> str:
 
 
 def _has_active_subscription(email: str) -> bool:
-    """Return True if the email has an active paid subscription in billing.db."""
+    """Return True if the email has an active paid subscription.
+
+    P2-2: DB path unified to ~/.sic/state.db (was billing/billing.db) so both
+    auth and the tier resolver read from the same file.  Override via BILLING_DB_PATH
+    env var when running tests or multiple instances.
+    """
     try:
         billing_db_path = os.environ.get(
             "BILLING_DB_PATH",
-            os.path.join(os.path.dirname(__file__), "billing", "billing.db"),
+            os.path.expanduser("~/.sic/state.db"),
         )
         conn = sqlite3.connect(billing_db_path)
         row = conn.execute(
@@ -232,6 +269,12 @@ def request_link():
       gating in feature_gates.py still restricts what they can do.
     - All others: 403 unauthorized.
     """
+    # P1: Rate limit — 5 requests per hour per IP
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
+    if not _request_link_rate_check(client_ip):
+        logger.warning("[auth] rate limit exceeded for /auth/request-link from %s", client_ip)
+        return jsonify({"error": "rate_limit_exceeded", "retry_after": _RL_WINDOW_SECONDS}), 429
+
     body = request.get_json(silent=True) or {}
     email = body.get("email")
     if not email or not isinstance(email, str):

@@ -105,6 +105,133 @@ app.secret_key = os.environ.get('SIC_SECRET_KEY') or os.urandom(32)
 API_PORT = int(os.environ.get('HEXSTRIKE_PORT', 8888))
 API_HOST = os.environ.get('HEXSTRIKE_HOST', '127.0.0.1')
 
+# ---------------------------------------------------------------------------
+# P0-1: App factory — register auth blueprint + all sub-blueprints
+# ---------------------------------------------------------------------------
+from auth import init_app as _auth_init_app  # noqa: E402
+_auth_init_app(app)
+
+from incidents import incidents_bp  # noqa: E402
+from workspaces import workspaces_bp  # noqa: E402
+from api_tokens import api_tokens_bp  # noqa: E402
+from scan_history import scan_history_bp  # noqa: E402
+
+try:
+    from sso import sso_bp  # noqa: E402
+    app.register_blueprint(sso_bp)
+except ImportError:
+    logger.warning("[startup] sso blueprint not available — skipping")
+
+app.register_blueprint(incidents_bp)
+app.register_blueprint(workspaces_bp)
+app.register_blueprint(api_tokens_bp)
+app.register_blueprint(scan_history_bp)
+
+# ---------------------------------------------------------------------------
+# P0-1: Tier gating imports + concurrent-scan counter
+# ---------------------------------------------------------------------------
+from feature_gates import require_tier, current_user_tier, get_tier_limit  # noqa: E402
+
+# Module-level per-email active-scan counter (no external dep required)
+_active_scans: dict[str, int] = {}
+_active_scans_lock = threading.Lock()
+
+
+def _check_concurrent_scan_limit() -> tuple[bool, str]:
+    """Return (allowed, reason). Enforces concurrent_scans tier limit."""
+    try:
+        from auth import get_session_email as _gse  # noqa: PLC0415
+        email = _gse()
+    except ImportError:
+        from flask import session as _s  # noqa: PLC0415
+        email = _s.get("email")
+    if not email:
+        return False, "unauthenticated"
+    tier = current_user_tier()
+    limit = get_tier_limit(tier, "concurrent_scans")
+    if limit == -1:
+        return True, "unlimited"
+    with _active_scans_lock:
+        current = _active_scans.get(email, 0)
+        if current >= limit:
+            return False, f"concurrent_scan_limit_reached: {current}/{limit} active scans"
+        _active_scans[email] = current + 1
+    return True, "ok"
+
+
+def _release_scan_slot(email: str | None) -> None:
+    """Decrement the active-scan counter for email (call in finally block)."""
+    if not email:
+        return
+    with _active_scans_lock:
+        count = _active_scans.get(email, 0)
+        if count <= 1:
+            _active_scans.pop(email, None)
+        else:
+            _active_scans[email] = count - 1
+
+# ---------------------------------------------------------------------------
+# P1: Rate limiting (flask-limiter)
+# ---------------------------------------------------------------------------
+try:
+    from flask_limiter import Limiter  # noqa: E402
+    from flask_limiter.util import get_remote_address  # noqa: E402
+
+    def _get_session_email_for_limiter() -> str:
+        """Rate-limit key function: return email from session, fall back to IP."""
+        try:
+            from auth import get_session_email as _gse_lim  # noqa: PLC0415
+            email = _gse_lim()
+            if email:
+                return email
+        except ImportError:
+            pass
+        from flask import session as _s_lim  # noqa: PLC0415
+        return _s_lim.get("email") or get_remote_address()
+
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=[],  # no global default — apply per-route only
+        storage_uri="memory://",
+    )
+    _LIMITER_AVAILABLE = True
+    logger.info("[startup] flask-limiter initialized")
+except ImportError:
+    limiter = None  # type: ignore[assignment]
+    _LIMITER_AVAILABLE = False
+    logger.warning("[startup] flask-limiter not installed — rate limiting disabled")
+
+# Scan-endpoint rate limiter: 30 req/min per authenticated email (or IP fallback).
+# Applied via before_request on high-risk paths so it works regardless of whether
+# flask-limiter is installed (falls back to in-process deque counter).
+import collections as _collections  # noqa: E402
+
+_scan_rl_window = 60   # 1 minute
+_scan_rl_max = 30      # 30 requests per minute
+_scan_rl_counters: dict[str, _collections.deque] = {}
+_scan_rl_lock = threading.Lock()
+
+_SCAN_RATE_LIMITED_PATHS = frozenset({"/api/command", "/api/intelligence/smart-scan"})
+
+
+def _scan_rate_check(key: str) -> bool:
+    """Return True if the caller is within the 30/min scan limit."""
+    now = time.time()
+    cutoff = now - _scan_rl_window
+    with _scan_rl_lock:
+        dq = _scan_rl_counters.get(key)
+        if dq is None:
+            dq = _collections.deque(maxlen=_scan_rl_max)
+            _scan_rl_counters[key] = dq
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= _scan_rl_max:
+            return False
+        dq.append(now)
+        return True
+
+
 # ============================================================================
 # AUTH MIDDLEWARE — mirrors server.py require_auth() guard
 # ============================================================================
@@ -175,6 +302,23 @@ def require_auth() -> None:
             else:
                 return jsonify({"error": "unauthorized"}), 401  # type: ignore[return-value]
 
+    return None  # type: ignore[return-value]
+
+
+@app.before_request
+def scan_rate_limit() -> None:  # type: ignore[return-value]
+    """P1: Enforce 30 req/min per-email (or per-IP) on high-risk scan endpoints."""
+    if request.path not in _SCAN_RATE_LIMITED_PATHS:
+        return None  # type: ignore[return-value]
+    try:
+        from auth import get_session_email as _gse_rl  # noqa: PLC0415
+        key = _gse_rl() or request.remote_addr or "unknown"
+    except ImportError:
+        from flask import session as _s_rl  # noqa: PLC0415
+        key = _s_rl.get("email") or request.remote_addr or "unknown"
+    if not _scan_rate_check(key):
+        logger.warning("[rate_limit] scan endpoint %s exceeded for key %s", request.path, key)
+        return jsonify({"error": "rate_limit_exceeded", "retry_after": _scan_rl_window}), 429  # type: ignore[return-value]
     return None  # type: ignore[return-value]
 
 
@@ -9226,8 +9370,25 @@ def scope_status():
 
 
 @app.route("/api/command", methods=["POST"])
+@require_tier("community")
 def generic_command():
-    """Execute any command provided in the request with enhanced logging"""
+    """Execute any command provided in the request with enhanced logging.
+
+    P0-2 hardening: target field validated against ALLOWED_TARGETS scope enforcer.
+    P0-1 hardening: requires at minimum community tier + enforces concurrent_scans limit.
+    """
+    # P0-1: concurrent-scan limit check
+    allowed, reason = _check_concurrent_scan_limit()
+    if not allowed:
+        return jsonify({"error": "scan_limit_reached", "detail": reason}), 429
+
+    try:
+        from auth import get_session_email as _gse  # noqa: PLC0415
+        _scan_email = _gse()
+    except ImportError:
+        from flask import session as _s  # noqa: PLC0415
+        _scan_email = _s.get("email")
+
     try:
         params = request.json
         command = params.get("command", "")
@@ -9239,6 +9400,15 @@ def generic_command():
                 "error": "Command parameter is required"
             }), 400
 
+        # P0-2: scope check — validate target (first token of command) against ALLOWED_TARGETS
+        target = params.get("target") or (command.split()[0] if command.strip() else "")
+        if target:
+            enforcer = get_enforcer()
+            if enforcer.allowed_targets:  # only enforce when allowlist is configured
+                if not enforcer.is_target_allowed(target):
+                    logger.warning("SCOPE BLOCKED /api/command: target=%r not in allowlist", target)
+                    return jsonify({"error": "target_not_in_scope", "target": target}), 403
+
         result = execute_command(command, use_cache=use_cache)
         return jsonify(result)
     except Exception as e:
@@ -9247,12 +9417,29 @@ def generic_command():
         return jsonify({
             "error": f"Server error: {str(e)}"
         }), 500
+    finally:
+        _release_scan_slot(_scan_email)
 
 # File Operations API Endpoints
 
+def _require_admin_role():
+    """Return a 403 Response if the current session is not admin, else None."""
+    try:
+        from auth import get_session_role  # noqa: PLC0415
+        role = get_session_role()
+    except ImportError:
+        role = None
+    if role != "admin":
+        return jsonify({"error": "admin_required"}), 403
+    return None
+
+
 @app.route("/api/files/create", methods=["POST"])
 def create_file():
-    """Create a new file"""
+    """Create a new file — admin role required (P0-2)."""
+    guard = _require_admin_role()
+    if guard is not None:
+        return guard
     try:
         params = request.json
         filename = params.get("filename", "")
@@ -9270,7 +9457,10 @@ def create_file():
 
 @app.route("/api/files/modify", methods=["POST"])
 def modify_file():
-    """Modify an existing file"""
+    """Modify an existing file — admin role required (P0-2)."""
+    guard = _require_admin_role()
+    if guard is not None:
+        return guard
     try:
         params = request.json
         filename = params.get("filename", "")
@@ -9288,7 +9478,10 @@ def modify_file():
 
 @app.route("/api/files/delete", methods=["DELETE"])
 def delete_file():
-    """Delete a file or directory"""
+    """Delete a file or directory — admin role required (P0-2)."""
+    guard = _require_admin_role()
+    if guard is not None:
+        return guard
     try:
         params = request.json
         filename = params.get("filename", "")
@@ -9761,8 +9954,24 @@ def create_attack_chain():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/intelligence/smart-scan", methods=["POST"])
+@require_tier("community")
 def intelligent_smart_scan():
-    """Execute an intelligent scan using AI-driven tool selection and parameter optimization with parallel execution"""
+    """Execute an intelligent scan using AI-driven tool selection and parameter optimization with parallel execution.
+
+    P0-1 hardening: requires at minimum community tier + enforces concurrent_scans limit.
+    """
+    # P0-1: concurrent-scan limit check
+    _allowed, _reason = _check_concurrent_scan_limit()
+    if not _allowed:
+        return jsonify({"error": "scan_limit_reached", "detail": _reason}), 429
+
+    try:
+        from auth import get_session_email as _gse2  # noqa: PLC0415
+        _smart_scan_email = _gse2()
+    except ImportError:
+        from flask import session as _s2  # noqa: PLC0415
+        _smart_scan_email = _s2.get("email")
+
     try:
         data = request.get_json()
         if not data or 'target' not in data:
@@ -9911,6 +10120,8 @@ def intelligent_smart_scan():
     except Exception as e:
         logger.error(f"💥 Error in intelligent smart scan: {str(e)}")
         return jsonify({"error": f"Server error: {str(e)}", "success": False}), 500
+    finally:
+        _release_scan_slot(_smart_scan_email)
 
 # Helper functions for intelligent smart scan tool execution
 def execute_nmap_scan(target, params):

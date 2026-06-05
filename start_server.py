@@ -46,5 +46,5 @@ if not os.environ.get("SIC_ENV"):
 # argparse + app.run() block at the bottom (and the production startup guards:
 # DEBUG_MODE + SIC_WAITLIST_MODE + SIC_SECRET_KEY) fire correctly.
 # NOTE: the Flask app lives in hexstrike_server.py — there is no server.py.
-import runpy
+import runpy  # noqa: E402
 runpy.run_path(str(Path(__file__).parent / "hexstrike_server.py"), run_name="__main__")
