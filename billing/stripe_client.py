@@ -131,7 +131,7 @@ def _webhook_secret() -> str:
 
 def create_checkout_session(
     *,
-    email: str,
+    email: str | None = None,
     tier: str,
     success_url: str,
     cancel_url: str,
@@ -166,7 +166,9 @@ def create_checkout_session(
     params = {k: v for k, v in params.items() if v is not None}
 
     logger.info(
-        "creating Stripe checkout for email=%.6s*** tier=%s", email[:6], tier
+        "creating Stripe checkout for email=%.6s*** tier=%s",
+        (email[:6] if email else "(none)"),
+        tier,
     )
     return stripe.checkout.Session.create(**params)
 
