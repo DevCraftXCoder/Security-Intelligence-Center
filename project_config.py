@@ -366,6 +366,119 @@ def detect_project_type(path: str) -> list[str]:
     return scanners
 
 
+def detect_system_profile(path: str) -> dict:
+    """Detect system components and scanners from project filesystem + content signals.
+
+    Returns:
+        {"components": [<component_key>, ...], "scanners": [<scanner_id>, ...]}
+        Components match keys in threat_catalog.SYSTEM_COMPONENTS.
+    """
+    import re as _re
+
+    root = Path(path)
+    components: list[str] = []
+    scanners: list[str] = detect_project_type(path)
+
+    def _add_component(name: str) -> None:
+        if name not in components:
+            components.append(name)
+
+    def _grep(pattern: str, *files: str) -> bool:
+        rx = _re.compile(pattern, _re.IGNORECASE)
+        for fname in files:
+            fpath = root / fname
+            try:
+                if fpath.is_file() and rx.search(
+                    fpath.read_text(encoding="utf-8", errors="ignore")
+                ):
+                    return True
+            except OSError:
+                pass
+        return False
+
+    def _grep_any(pattern: str) -> bool:
+        rx = _re.compile(pattern, _re.IGNORECASE)
+        for fpath in root.rglob("*.py"):
+            try:
+                if rx.search(fpath.read_text(encoding="utf-8", errors="ignore")):
+                    return True
+            except OSError:
+                pass
+        for fpath in root.rglob("*.ts"):
+            try:
+                if rx.search(fpath.read_text(encoding="utf-8", errors="ignore")):
+                    return True
+            except OSError:
+                pass
+        return False
+
+    # CF Workers
+    if (root / "wrangler.toml").is_file():
+        _add_component("cf-workers")
+        _add_component("edge-runtime")
+
+    # Durable Objects
+    if _grep(r"DurableObject|durableObject|DO\b", "wrangler.toml") or _grep_any(
+        r"DurableObject"
+    ):
+        _add_component("durable-objects")
+
+    # Token / JWT auth
+    if _grep_any(
+        r"HMAC|jsonwebtoken|jwt\.sign|jwt\.verify|JWT_SECRET|refreshToken|access_token"
+    ):
+        _add_component("token-auth")
+
+    # Object storage (R2 / S3)
+    if _grep_any(
+        r"\bR2\b|\.r2\.|s3\.amazonaws|S3Client|presign|PutObject|GetObject|R2Bucket"
+    ):
+        _add_component("object-storage")
+
+    # SQL / D1
+    if any(root.glob("*.sql")) or _grep_any(
+        r"\.prepare\(|D1Database|sqlite|FROM\s+\w+\s+WHERE"
+    ):
+        _add_component("sql")
+
+    # Docker
+    if (root / "Dockerfile").is_file() or any(root.glob("docker-compose*.yml")):
+        _add_component("docker")
+
+    # OAuth (Google / Discord / GitHub)
+    if _grep_any(
+        r"oauth|discord\.com/api/oauth|accounts\.google\.com|github\.com/login/oauth"
+    ):
+        _add_component("oauth")
+
+    # Stripe
+    if _grep_any(r"stripe|Stripe|constructEvent|checkout\.sessions\.create"):
+        _add_component("stripe")
+
+    # WebSocket
+    if _grep_any(r"WebSocket|ws://|wss://|upgrade.*websocket|Durable.*WebSocket"):
+        _add_component("websocket")
+
+    # Public web (Next.js, Vite, HTML)
+    if (
+        (root / "next.config.ts").is_file()
+        or (root / "next.config.js").is_file()
+        or (root / "vite.config.ts").is_file()
+        or any(root.glob("*.html"))
+    ):
+        _add_component("public-web")
+
+    # Secrets store signals (any project with .env / secret files)
+    if (
+        (root / ".env").is_file()
+        or (root / ".env.example").is_file()
+        or any(root.glob("*.env*"))
+    ):
+        _add_component("secrets-store")
+
+    return {"components": components, "scanners": scanners}
+
+
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------

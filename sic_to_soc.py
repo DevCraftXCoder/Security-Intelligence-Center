@@ -337,9 +337,79 @@ SEV_TAG = {
 }
 
 
+def compute_maturity(project_data: dict, prior_snapshots: list[dict]) -> dict:
+    """Derive maturity stage and growthDelta from project_data signals + snapshot history.
+
+    Stage thresholds (cumulative):
+      1 LITE             — any controls present
+      2 HARDENED         — attackMapping populated OR detectionCoverage populated
+      3 VALIDATED        — >=2 snapshots exist (baseline + current)
+      4 SOC-OBSERVABLE   — attackMapping AND detectionCoverage both populated
+      5 ENTERPRISE SOC   — riskAcceptance + incidentLinkage + slaSummary all present
+
+    GrowthDelta is auto-diffed against the most recent prior snapshot's stored counts.
+    """
+    controls = project_data.get("controls", [])
+    total_controls = sum(len(s.get("items", [])) for s in controls)
+    open_controls = sum(
+        1 for s in controls for i in s.get("items", []) if not i.get("done")
+    )
+    attack_mapping = project_data.get("attackMapping") or []
+    detection_coverage = project_data.get("detectionCoverage") or []
+    risk_acceptance = project_data.get("riskAcceptance") or []
+    incident_linkage = project_data.get("incidentLinkage") or []
+    sla_summary = project_data.get("slaSummary") or {}
+
+    # Derive current severity counts for activeThreats
+    crit_high_current = 0
+    for s in controls:
+        if s.get("tag") in ("CRITICAL", "HIGH"):
+            crit_high_current += len(s.get("items", []))
+
+    # Compute current stage
+    stage = 1
+    if attack_mapping or detection_coverage:
+        stage = max(stage, 2)
+    if len(prior_snapshots) >= 1:
+        stage = max(stage, 3)
+    if attack_mapping and detection_coverage:
+        stage = max(stage, 4)
+    if risk_acceptance and incident_linkage and sla_summary:
+        stage = max(stage, 5)
+
+    # Diff against most recent prior snapshot
+    prior = prior_snapshots[-1] if prior_snapshots else {}
+    prior_stage = prior.get("stage", 0)
+    prior_total = prior.get("total_controls", 0)
+    prior_open = prior.get("open_controls", 0)
+    prior_attack_len = prior.get("attack_mapping_len", 0)
+    prior_crit_high = prior.get("crit_high", 0)
+
+    growth_delta = {
+        "controlsAdded": total_controls - prior_total,
+        "attackCoverageDelta": len(attack_mapping) - prior_attack_len,
+        "openGapsDelta": open_controls - prior_open,
+        "activeThreats": {"prior": prior_crit_high, "current": crit_high_current},
+    }
+
+    return {
+        "currentStage": stage,
+        "priorStage": prior_stage,
+        "growthDelta": growth_delta,
+        # Carry-forward counts for next run to diff against
+        "_snapshot_counts": {
+            "stage": stage,
+            "total_controls": total_controls,
+            "open_controls": open_controls,
+            "attack_mapping_len": len(attack_mapping),
+            "crit_high": crit_high_current,
+        },
+    }
+
+
 def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=None,
                        output_path=None, score_override=None, asset_tier="production",
-                       skip_enrichment=False, skip_db=False, config=None):
+                       skip_enrichment=False, skip_db=False, config=None, net=None):
     # --- Suppression enforcement (.sic.yaml rules) ---
     if config:
         kept = [f for f in findings if not project_config.is_suppressed(f, config)]
@@ -348,6 +418,52 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
             print(f"[sic_to_soc] {suppressed_n} findings suppressed by .sic.yaml rules",
                   file=sys.stderr)
         findings = kept
+
+    # --- Net-based adjudication (Stage 2 / refined mode) ---
+    project_data_net_extra = None
+    if net is not None:
+        try:
+            from threat_catalog import adjudicate_net
+            net = adjudicate_net(net, findings)
+            # Build controls from net sections (proven ones become P0/P1/P2 sections)
+            # untested sections are included with a distinct tag for report UI
+            net_controls = []
+            for section in net:
+                status = section.get("status", "net")
+                items = section.get("items", [])
+                ctrl_items = []
+                for idx, f in enumerate(items, start=1):
+                    ctrl_items.append({
+                        "id": f"{section['id']}-{idx:03d}",
+                        "p": section.get("priority", "p2"),
+                        "done": False,
+                        "name": _name(f)[:80],
+                        "desc": _desc(f),
+                        "ref": _ref(f),
+                        "net_section": section["id"],
+                        "net_status": status,
+                    })
+                net_controls.append({
+                    "id": section["id"],
+                    "tag": section.get("tag", "NET"),
+                    "title": section["title"],
+                    "status": status,
+                    "items": ctrl_items,
+                    "cwe": section.get("cwe"),
+                    "owasp": section.get("owasp"),
+                    "mitre": section.get("mitre"),
+                    "priority": section.get("priority", "p2"),
+                    "description": section.get("description", ""),
+                })
+            # Attach net controls alongside severity-bucket controls
+            # (the template decides which to display)
+            project_data_net_extra = net_controls
+        except Exception as e:
+            print(
+                f"[sic_to_soc] Net adjudication failed (non-fatal): {e}",
+                file=sys.stderr,
+            )
+            project_data_net_extra = None
 
     # --- Enrichment pipeline (CISA KEV + EPSS + NVD) ---
     if not skip_enrichment:
@@ -533,16 +649,7 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
         "slaSummary": (
             sla_mod.sla_summary(findings, asset_tier=asset_tier) if sla_mod else {}
         ),
-        "maturity": {
-            "currentStage": 1,
-            "priorStage":   0,
-            "growthDelta": {
-                "controlsAdded":          total,
-                "attackCoverageDelta":     0,
-                "openGapsDelta":          total,
-                "activeThreats":          {"prior": 0, "current": crit + high},
-            },
-        },
+        "maturity": {},  # filled below after prior_snapshots are loaded
         "harnessMap": {},
         "controls":   controls,
     }
@@ -564,6 +671,16 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
         _load_prior_snapshots(project, slug, runs_dir, exclude=output_path)
         if runs_dir else []
     )
+
+    # Compute maturity using actual prior snapshot counts
+    maturity = compute_maturity(project_data, prior_snapshots)
+    project_data["maturity"] = {
+        "currentStage": maturity["currentStage"],
+        "priorStage":   maturity["priorStage"],
+        "growthDelta":  maturity["growthDelta"],
+    }
+    _snap_counts = maturity.get("_snapshot_counts", {})
+
     current_snapshot = {
         "score":      current_score,
         "checked":    {},
@@ -620,9 +737,20 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
     # Also stamp the current fingerprints onto the current snapshot so the next
     # scan can diff against this run.
     current_snapshot["finding_fps"] = current_fps
+    # Stamp maturity counts onto current snapshot for next-run diffing
+    current_snapshot.update(_snap_counts)
     if has_prior:
         print(f"[sic_to_soc] Scan diff: {new_count} new, {resolved_count} resolved, "
               f"{unchanged_count} unchanged", file=sys.stderr)
+
+    if project_data_net_extra is not None:
+        project_data["netControls"] = project_data_net_extra
+        proven = [s for s in project_data_net_extra if s.get("status") == "proven"]
+        untested = [s for s in project_data_net_extra if s.get("status") == "untested"]
+        print(
+            f"[sic_to_soc] Net: {len(proven)} proven, {len(untested)} untested sections",
+            file=sys.stderr,
+        )
 
     return project_data
 
