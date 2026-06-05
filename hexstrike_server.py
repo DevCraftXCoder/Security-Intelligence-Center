@@ -130,7 +130,7 @@ app.register_blueprint(scan_history_bp)
 # ---------------------------------------------------------------------------
 # P0-1: Tier gating imports + concurrent-scan counter
 # ---------------------------------------------------------------------------
-from feature_gates import require_tier, current_user_tier, get_tier_limit  # noqa: E402
+from feature_gates import require_tier, current_user_tier, get_tier_limit, tier_rank  # noqa: E402
 
 # Module-level per-email active-scan counter (no external dep required)
 _active_scans: dict[str, int] = {}
@@ -213,6 +213,7 @@ _scan_rl_counters: dict[str, _collections.deque] = {}
 _scan_rl_lock = threading.Lock()
 
 _SCAN_RATE_LIMITED_PATHS = frozenset({"/api/command", "/api/intelligence/smart-scan"})
+_TOOLS_RATE_LIMITED_PREFIX = "/api/tools/"
 
 
 def _scan_rate_check(key: str) -> bool:
@@ -308,7 +309,7 @@ def require_auth() -> None:
 @app.before_request
 def scan_rate_limit() -> None:  # type: ignore[return-value]
     """P1: Enforce 30 req/min per-email (or per-IP) on high-risk scan endpoints."""
-    if request.path not in _SCAN_RATE_LIMITED_PATHS:
+    if request.path not in _SCAN_RATE_LIMITED_PATHS and not request.path.startswith(_TOOLS_RATE_LIMITED_PREFIX):
         return None  # type: ignore[return-value]
     try:
         from auth import get_session_email as _gse_rl  # noqa: PLC0415
@@ -319,6 +320,25 @@ def scan_rate_limit() -> None:  # type: ignore[return-value]
     if not _scan_rate_check(key):
         logger.warning("[rate_limit] scan endpoint %s exceeded for key %s", request.path, key)
         return jsonify({"error": "rate_limit_exceeded", "retry_after": _scan_rl_window}), 429  # type: ignore[return-value]
+    return None  # type: ignore[return-value]
+
+
+@app.before_request
+def enforce_tools_tier() -> None:  # type: ignore[return-value]
+    """P0: Gate all /api/tools/* routes at community tier (SIC-FREE-SUB-001)."""
+    if not request.path.startswith(_TOOLS_RATE_LIMITED_PREFIX):
+        return None  # type: ignore[return-value]
+    email = _hexstrike_get_session_email()
+    if not email:
+        return jsonify({"error": "auth_required", "message": "Authentication required to use security tools"}), 401  # type: ignore[return-value]
+    user_tier = current_user_tier()
+    if tier_rank(user_tier) < tier_rank("community"):
+        return jsonify({  # type: ignore[return-value]
+            "error": "tier_required",
+            "required_tier": "community",
+            "current_tier": user_tier,
+            "upgrade_url": "/api/billing/checkout",
+        }), 402
     return None  # type: ignore[return-value]
 
 
