@@ -829,13 +829,9 @@ def public_checkout():
     init_db()
     body = request.get_json(silent=True) or {}
     tier = body.get("tier")
-    email = (body.get("email") or "").strip().lower()
+    email_raw = (body.get("email") or "").strip().lower()
+    email: str | None = email_raw if (_EMAIL_RE.match(email_raw) if email_raw else False) else None
     interval = (body.get("interval") or "month").strip().lower()
-
-    if not email or not _EMAIL_RE.match(email):
-        return jsonify(
-            {"error": "missing_email", "detail": "A valid email is required."}
-        ), 400
 
     if tier not in _VALID_PAID_TIERS:
         return jsonify(
@@ -850,16 +846,12 @@ def public_checkout():
             {"error": "invalid_interval", "detail": "interval must be 'month' or 'year'"}
         ), 400
 
-    # Check if this email already has an active subscription
-    sub = get_subscription(email)
+    # If email provided, check for existing subscription/customer
+    sub = get_subscription(email) if email else None
     customer_id: str | None = sub["stripe_customer_id"] if sub else None
 
-    base = _base_url()
-    success_url = (
-        f"{base}/api/billing/public-checkout-success"
-        f"?tier={tier}&email={urllib.parse.quote(email, safe='')}"
-    )
-    cancel_url = f"{base}/sic-payment-cancelled?reason=cancelled"
+    success_url = "https://frxncois.com/sic-signup?billing=success"
+    cancel_url = "https://frxncois.com/sic-signup#pricing"
 
     try:
         session = create_checkout_session(
