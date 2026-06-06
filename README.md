@@ -14,49 +14,6 @@
 
 ---
 
-## Installation
-
-**Requires Python 3.8+**
-
-```bash
-# Fastest — paying customers
-npx sic-security
-
-# Self-hosted
-git clone https://github.com/DevCraftXCoder/SIC.git
-cd SIC
-python -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements-core.txt               # Linux/Docker: requirements.txt
-cp .env.example .env                               # fill in your values
-python start_server.py                             # → http://localhost:9888
-```
-
-### MCP Setup (Claude Code / Cursor)
-
-```json
-{
-  "mcpServers": {
-    "sic": {
-      "command": "python",
-      "args": ["/path/to/SIC/mcp_server.py"]
-    }
-  }
-}
-```
-
-### Required `.env` values
-
-| Variable | Description |
-|----------|-------------|
-| `SIC_SECRET_KEY` | Random secret (min 32 chars) |
-| `SIC_ADMIN_EMAILS` | Your email address |
-| `SIC_BASE_URL` | Public URL of your SIC instance |
-| `RESEND_API_KEY` | Email delivery for magic links |
-
-Run `python sic-audit.py` to verify your setup before starting.
-
----
-
 ## Overview
 
 SIC runs as a local server exposing an MCP interface for integration with any MCP-compatible client (Claude Code, Copilot, Cursor). All scan operations are IP-allowlisted to the home network. Scan output flows through a reporting pipeline that produces both a detailed security audit report and a SOC handoff HTML — with week-over-week posture tracking built in.
@@ -65,19 +22,97 @@ SIC runs as a local server exposing an MCP interface for integration with any MC
 
 ## Quick Start
 
-```bash
-# Paying customers — fastest path
-npx sic-security
+### Fastest path (paying customers) — one command
 
-# Open dashboard
-open http://localhost:9888
+```bash
+npx sic-security
+```
+
+`npx sic-security` (the `bin/sic.js` launcher) creates the Python venv, installs
+dependencies, checks your `.env`, and starts the server for you. This is the
+recommended install path after you subscribe and receive your magic-link.
+
+### Manual path
+
+```bash
+# 1. Create + activate a virtual environment
+python -m venv .venv
+# Windows:  .venv\Scripts\activate     Linux/macOS:  source .venv/bin/activate
+
+# 2. Install dependencies
+#    Windows  → use the core set (skips Linux-only tools: angr, pwntools, mitmproxy)
+pip install -r requirements-core.txt
+#    Linux / Docker → full set
+#    pip install -r requirements.txt
+
+# 3. Configure environment (see First-Run Setup below)
+cp .env.example .env        # then edit .env
+
+# 4. Start the server
+python start_server.py      # loads .env, then runs the Flask app (hexstrike_server.py)
+
+# MCP-only mode
+python mcp_server.py
+
+# CLI launcher
+python launcher.py
 ```
 
 > **Entry point note:** the Flask app lives in `hexstrike_server.py`. `start_server.py`
 > is a thin wrapper that loads `.env` and forces UTF-8 I/O before launching it — this is
-> what PM2 (`ecosystem.config.cjs`) runs.
+> what PM2 (`ecosystem.config.cjs`) runs. There is no `server.py`.
 
-See [Installation & Setup](#installation--setup) above for all install paths (npx, manual, Docker, PM2) and full environment configuration.
+Add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "sic": {
+      "command": "python",
+      "args": ["path/to/mcp_server.py"]
+    }
+  }
+}
+```
+
+---
+
+## First-Run Setup (Required)
+
+1. **Copy `.env.example` to `.env`**  
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Set required variables in `.env`:**
+
+   | Variable | Description |
+   |----------|-------------|
+   | `SIC_SECRET_KEY` | Random secret string (min 32 chars) |
+   | `SIC_ADMIN_EMAILS` | Your email (comma-separated for multiple) |
+   | `STRIPE_SECRET_KEY` | From Stripe Dashboard → API Keys |
+   | `STRIPE_WEBHOOK_SECRET` | From Stripe Dashboard → Webhooks |
+   | `STRIPE_PRICE_TEAM` | Stripe Price ID for Team plan |
+   | `STRIPE_PRICE_STUDIO` | Stripe Price ID for Studio plan |
+   | `BILLING_API_KEY` | Random secret for billing M2M auth |
+   | `RESEND_API_KEY` | For magic link email delivery |
+   | `SIC_ALERT_FROM` | Verified sender email (e.g. sic@yourdomain.com) |
+   | `SIC_BASE_URL` | Public URL where customers reach the dashboard (required for email login links) |
+
+3. **Run the audit to verify setup:**
+   ```bash
+   python sic-audit.py
+   ```
+
+4. **Start SIC:**
+   ```bash
+   python server.py          # SIC main server (port 9888)
+   python billing_server.py  # Billing server (port 9015)
+   # Or with PM2:
+   pm2 start ecosystem.config.cjs
+   ```
+
+5. **Open your browser:** [http://localhost:9888](http://localhost:9888)
 
 ---
 
@@ -167,7 +202,7 @@ Events to subscribe: `checkout.session.completed`, `customer.subscription.update
 
 ## MCP Integration
 
-SIC exposes 85 security tools and 12+ specialized agents over MCP. Example tools: `smart-scan`, `nuclei`, `trivy`, `checkov`, `nmap`, `gobuster`, `ffuf`, `sqlmap`, and dedicated CTF, bug bounty, and recon modules.
+SIC exposes 150+ security tools and 12+ specialized agents over MCP. Example tools: `smart-scan`, `nuclei`, `trivy`, `checkov`, `nmap`, `gobuster`, `ffuf`, `sqlmap`, and dedicated CTF, bug bounty, and recon modules.
 
 All tool calls are sandboxed and scope-validated. Unauthorized targets are rejected at the API layer.
 
