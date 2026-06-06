@@ -25,10 +25,10 @@ SIC runs as a local server exposing an MCP interface for integration with any MC
 ### Fastest path (paying customers) — one command
 
 ```bash
-npx sic-security
+npx sic-security@beta
 ```
 
-`npx sic-security` (the `bin/sic.js` launcher) creates the Python venv, installs
+`npx sic-security@beta` (the `bin/sic.js` launcher) creates the Python venv, installs
 dependencies, checks your `.env`, and starts the server for you. This is the
 recommended install path after you subscribe and receive your magic-link.
 
@@ -106,7 +106,7 @@ Add to your MCP client config:
 
 4. **Start SIC:**
    ```bash
-   python server.py          # SIC main server (port 9888)
+   python start_server.py    # SIC main server (port 9888)
    python billing_server.py  # Billing server (port 9015)
    # Or with PM2:
    pm2 start ecosystem.config.cjs
@@ -202,7 +202,7 @@ Events to subscribe: `checkout.session.completed`, `customer.subscription.update
 
 ## MCP Integration
 
-SIC exposes 150+ security tools and 12+ specialized agents over MCP. Example tools: `smart-scan`, `nuclei`, `trivy`, `checkov`, `nmap`, `gobuster`, `ffuf`, `sqlmap`, and dedicated CTF, bug bounty, and recon modules.
+SIC exposes 85 security tools and 12+ specialized agents over MCP. Example tools: `smart-scan`, `nuclei`, `trivy`, `checkov`, `nmap`, `gobuster`, `ffuf`, `sqlmap`, and dedicated CTF, bug bounty, and recon modules.
 
 All tool calls are sandboxed and scope-validated. Unauthorized targets are rejected at the API layer.
 
