@@ -567,25 +567,56 @@ def _send_provisioning_email(email: str, session_obj: dict) -> None:  # noqa: AR
 
         _resend_key = os.environ.get("RESEND_API_KEY", "")
         _from = os.environ.get("SIC_ALERT_FROM", "")
+        # SIC is self-hosted (HYBRID model): the customer downloads and runs SIC
+        # locally, then activates their license via the magic link below against
+        # this hosted billing server. SIC_BASE_URL is the customer's local install
+        # origin used to build the activation link.
         _base = os.environ.get("SIC_BASE_URL", "http://localhost:9888")
+        # SIC_DOWNLOAD_URL is the operator-hosted installer / Docker artifact the
+        # customer downloads to run SIC on their own machine. Optional: if unset,
+        # the email still sends the magic link and notes the download will follow.
+        _download_url = os.environ.get("SIC_DOWNLOAD_URL", "")
         _link = f"{_base}/auth/verify?token={token}"
 
         if _resend_key and _from:
+            # Download block: real link when SIC_DOWNLOAD_URL is set, otherwise a
+            # "will follow" note so the email never references a missing artifact.
+            if _download_url:
+                _download_block = (
+                    '<p style="color:#ccc;margin-top:8px;">'
+                    "1. Download SIC and install it on your own machine:</p>"
+                    f'<a href="{_download_url}" style="display:inline-block;background:#1a1a1a;'
+                    "color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;"
+                    'font-weight:600;margin:8px 0 16px;border:1px solid #333;">'
+                    "Download SIC</a>"
+                )
+            else:
+                _download_block = (
+                    '<p style="color:#ccc;margin-top:8px;">'
+                    "1. Install SIC on your own machine with "
+                    '<code style="color:#e94560;">pip install sic-security</code> '
+                    "(or the Docker scanner). Your download link will follow "
+                    "shortly by email.</p>"
+                )
             _payload = _json.dumps({
                 "from": _from,
                 "to": [email],
-                "subject": "Welcome to SIC — your access link",
+                "subject": "Welcome to SIC — download + activation link",
                 "html": (
                     '<div style="font-family:DM Sans,sans-serif;background:#0a0a0a;color:#fff;'
                     'padding:40px;max-width:480px;margin:auto;border-radius:8px;">'
                     '<h2 style="color:#e94560;margin-top:0;">Welcome to SIC</h2>'
                     '<p style="color:#ccc;">Your subscription is active. '
-                    "Click below to access your dashboard.</p>"
+                    "SIC runs locally on your own machine — here is how to get started:</p>"
+                    + _download_block
+                    + '<p style="color:#ccc;margin-top:8px;">'
+                    "2. Open the link below to activate your license against your "
+                    "subscription:</p>"
                     f'<a href="{_link}" style="display:inline-block;background:#e94560;color:#fff;'
                     'padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;'
-                    'margin:16px 0;">Open SIC Dashboard</a>'
+                    'margin:8px 0 16px;">Activate SIC</a>'
                     '<p style="color:#666;font-size:12px;margin-top:24px;">'
-                    "This link expires in 24 hours.</p>"
+                    "This activation link expires in 24 hours.</p>"
                     "</div>"
                 ),
             }).encode()
