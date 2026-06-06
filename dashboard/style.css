@@ -7,13 +7,14 @@
 :root {
   --sic-accent: #e94560;
   --sic-accent-dim: #b02040;
-  /* Improvement 5: align to reference design-system tokens */
-  --sic-bg:       #050505;
-  --sic-surface:  #0f0f0f;
-  --sic-surface-2: #141414;
-  --sic-elevated: #1a1a1a;
+  /* Default branding: deep navy page background (out-of-the-box).
+   * Live-BG themes (galaxy/glitch) override --sic-bg with their own palettes. */
+  --sic-bg:       #0b1a2e;
+  --sic-surface:  #102338;
+  --sic-surface-2: #15293f;
+  --sic-elevated: #1b3149;
   --sic-text: #f5f2ec;
-  --sic-text-muted: #9a968d;
+  --sic-text-muted: #aebacb;
   /* Improvement 5: subtle border matching reference token rgba(255,255,255,0.06) */
   --sic-border: rgba(255,255,255,0.06);
   --sic-font-body: 'DM Sans', system-ui, sans-serif;
@@ -1144,21 +1145,21 @@ html.theme-glitch #galaxy-canvas {
   opacity: 1;
 }
 
-/* ─── Navy theme — remapped to match default #050505 palette ───────────────── */
-/* Legacy "navy" theme now resolves to the canonical dark tokens.               */
-/* Background was previously #0d1b2a; corrected to #050505.                     */
+/* ─── Navy theme — the default branding palette (deep professional navy) ────── */
+/* "Navy (Static)" in the control bar pins this same palette explicitly.        */
 html.theme-navy {
-  --sic-bg: #050505;
-  --sic-surface: #0f0f0f;
-  --sic-surface-2: #141414;
-  --sic-border: rgba(255, 255, 255, 0.06);
+  --sic-bg: #0b1a2e;
+  --sic-surface: #102338;
+  --sic-surface-2: #15293f;
+  --sic-elevated: #1b3149;
+  --sic-border: rgba(255, 255, 255, 0.08);
   --sic-text: #f5f2ec;
-  --sic-text-muted: #9a968d;
+  --sic-text-muted: #aebacb;
 }
 
-/* ─── Default/fallback background backstop ─────────────────────────────────── */
+/* ─── Default/fallback background backstop — navy out-of-the-box ───────────── */
 html, body {
-  background-color: #050505 !important;
+  background-color: #0b1a2e !important;
 }
 
 /* ─── Logo upload ───────────────────────────────────────────────────────────── */
@@ -1281,7 +1282,9 @@ html.theme-glitch #glitch-vignette { opacity: 1; }
 }
 
 .sic-control-bar.is-open {
-  display: block;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   animation: sic-bar-slide-down 200ms ease-out;
 }
 
@@ -1295,6 +1298,7 @@ html.theme-glitch #glitch-vignette { opacity: 1; }
   align-items: center;
   justify-content: center;
   gap: 14px;
+  width: 100%;
   max-width: 1100px;
   margin: 0 auto;
   flex-wrap: wrap;

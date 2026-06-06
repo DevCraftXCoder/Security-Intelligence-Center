@@ -216,7 +216,7 @@ def _set_session_cookie(response, email: str) -> None:
 def sso_login():
     """Redirect user to IdP login. workspace= query param required.
 
-    # TODO: gate behind studio tier — apply @require_tier("studio") once feature_gates is on path
+    Studio-tier gated via @_studio_gated.
     """
     workspace_id = request.args.get("workspace", "").strip()
     if not workspace_id:
@@ -281,7 +281,7 @@ def sso_login():
 def saml_callback(workspace_id: str):
     """Consume SAMLResponse, validate, mint session cookie, redirect to /dashboard.
 
-    # TODO: gate behind studio tier — apply @require_tier("studio") once feature_gates is on path
+    Studio-tier gated via @_studio_gated.
     """
     idp_config = get_config(workspace_id)
     if not idp_config:
@@ -327,7 +327,7 @@ def saml_callback(workspace_id: str):
 def oidc_callback(workspace_id: str):
     """Consume OIDC authorization code, validate ID token, mint session cookie.
 
-    # TODO: gate behind studio tier — apply @require_tier("studio") once feature_gates is on path
+    Studio-tier gated via @_studio_gated.
     """
     # Check for error from IdP
     error = request.args.get("error")
@@ -427,7 +427,7 @@ def saml_metadata(workspace_id: str):
 def list_sso_configs():
     """List all SSO configs (admin only). Secrets are redacted.
 
-    # TODO: gate behind studio tier — apply @require_tier("studio") once feature_gates is on path
+    Studio-tier gated via @_studio_gated (after @_require_auth).
     """
     configs = list_configs()
     return jsonify({"configs": configs}), 200
@@ -451,7 +451,7 @@ def create_sso_config():
         oidc_discovery_url   str  optional (OIDC)
         allowed_email_domains str optional, comma-separated
 
-    # TODO: gate behind studio tier — apply @require_tier("studio") once feature_gates is on path
+    Studio-tier gated via @_studio_gated (after @_require_auth).
     """
     body = request.get_json(silent=True) or {}
 
@@ -506,7 +506,7 @@ def create_sso_config():
 def delete_sso_config(workspace_id: str):
     """Disable SSO for a workspace (soft delete). Admin only.
 
-    # TODO: gate behind studio tier — apply @require_tier("studio") once feature_gates is on path
+    Studio-tier gated via @_studio_gated (after @_require_auth).
     """
     affected = disable_config(workspace_id)
     if not affected:

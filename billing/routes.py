@@ -1066,7 +1066,14 @@ def public_checkout():
     body = request.get_json(silent=True) or {}
     tier = body.get("tier")
     email_raw = (body.get("email") or "").strip().lower()
-    email: str | None = email_raw if (_EMAIL_RE.match(email_raw) if email_raw else False) else None
+    # An empty email is allowed (anonymous checkout — Stripe collects it on the
+    # hosted page). But if a caller *provides* an email, it must be well-formed;
+    # silently nulling a malformed address would proceed to Stripe and surface as
+    # an opaque 500. Reject up front with 400 (consistent with portal_by_email /
+    # public_trial validation).
+    if email_raw and not _EMAIL_RE.match(email_raw):
+        return jsonify({"error": "missing_email", "detail": "A valid email is required."}), 400
+    email: str | None = email_raw or None
     interval = (body.get("interval") or "month").strip().lower()
 
     if tier not in _VALID_PAID_TIERS:

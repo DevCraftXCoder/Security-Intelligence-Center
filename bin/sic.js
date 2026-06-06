@@ -103,20 +103,78 @@ function ensureDeps(version) {
   log("Dependencies ready.");
 }
 
+// ── resolve the user's codebase (the dir they ran `npx sic-security` in) ─────────
+// npm/npx exports INIT_CWD = the directory the command was invoked from. We fall
+// back to process.cwd() (which, for an npx bin, is also the invocation dir).
+// SIC scans / inspects THIS path — never SIC's own package files.
+function resolveProjectDir() {
+  const candidate = process.env.SIC_PROJECT_DIR || process.env.INIT_CWD || process.cwd();
+  try {
+    const resolved = fs.realpathSync(candidate);
+    // Never let the project root resolve to SIC's own install dir — that would
+    // scan the framework instead of the user's code.
+    if (path.resolve(resolved) === path.resolve(ROOT)) {
+      return process.cwd();
+    }
+    return resolved;
+  } catch {
+    return process.cwd();
+  }
+}
+
+// ── lightweight project-type detection for a tailored first-run message ──────────
+function detectProjectType(dir) {
+  const markers = [
+    ["package.json", "Node.js / JavaScript"],
+    ["requirements.txt", "Python"],
+    ["pyproject.toml", "Python"],
+    ["go.mod", "Go"],
+    ["Cargo.toml", "Rust"],
+    ["pom.xml", "Java (Maven)"],
+    ["build.gradle", "Java (Gradle)"],
+    ["composer.json", "PHP"],
+    ["Gemfile", "Ruby"],
+    ["Dockerfile", "Docker"],
+    [".git", "Git repository"],
+  ];
+  const found = [];
+  for (const [file, label] of markers) {
+    try {
+      if (fs.existsSync(path.join(dir, file))) found.push(label);
+    } catch {}
+  }
+  return found;
+}
+
 // ── main ────────────────────────────────────────────────────────────────────────
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 
 printBanner();
+
+const PROJECT_DIR = resolveProjectDir();
+const detected = detectProjectType(PROJECT_DIR);
+log(`Target codebase: ${PROJECT_DIR}`);
+if (detected.length) {
+  log(`Detected: ${detected.join(", ")}`);
+} else {
+  log("No recognized project markers found — scans will still run against this directory.");
+  log("Tip: run `npx sic-security` from the root of the codebase you want to inspect.");
+}
+
 ensureVenv();
 ensureDeps(pkg.version);
 
 // Strip our own flags before handing argv to the launcher.
 const args = process.argv.slice(2).filter((a) => a !== "--reinstall");
 
+// The server resolves `dashboard/`, `assets/`, and its sibling modules via
+// `Path(__file__).parent`, so cwd MUST stay at ROOT for imports to work. The
+// user's codebase is passed explicitly via SIC_PROJECT_DIR — the server confines
+// all inspect/spawn-claude operations to that root (see _resolve_spawn_cwd).
 const result = spawnSync(VENV_PYTHON, [LAUNCHER, ...args], {
   cwd: ROOT,
   stdio: "inherit",
-  env: { ...process.env, SIC_NPX: "1" },
+  env: { ...process.env, SIC_NPX: "1", SIC_PROJECT_DIR: PROJECT_DIR },
 });
 
 process.exit(result.status ?? 1);

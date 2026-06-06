@@ -25,12 +25,28 @@ SIC runs as a local server exposing an MCP interface for integration with any MC
 ### Fastest path (paying customers) — one command
 
 ```bash
+# Run this from the root of the codebase you want SIC to inspect:
+cd /path/to/your-project
 npx sic-security
 ```
 
-`npx sic-security` (the `bin/sic.js` launcher) creates the Python venv, installs
-dependencies, checks your `.env`, and starts the server for you. This is the
-recommended install path after you subscribe and receive your magic-link.
+`npx sic-security` (the `bin/sic.js` launcher) creates an isolated Python venv
+under `~/.sic-security/venv`, installs the core dependencies (first run only),
+and starts the server for you. It detects the project type of the directory you
+run it from (Node.js, Python, Go, Rust, Docker, …) and points SIC's inspect /
+Claude Code actions at **that** codebase via `SIC_PROJECT_DIR` — not at SIC's own
+files. This is the recommended install path after you subscribe and receive your
+magic-link.
+
+> **Tailored to your codebase:** SIC scans and INSPECT operations are confined to
+> the directory you launched from (or an explicit `SIC_PROJECT_DIR`). Run it from
+> your repo root for the best results.
+>
+> **Prerequisites:** a system Python 3.8+ must be on `PATH` (used once to create
+> the venv). If it is missing, the launcher prints an actionable error and exits.
+> Before first use, copy `.env.example` to `.env` and set the required variables
+> (see First-Run Setup below). Re-run with `npx sic-security --reinstall` to force
+> a dependency refresh.
 
 ### Manual path
 
