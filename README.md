@@ -4,7 +4,6 @@
 ![MCP](https://img.shields.io/badge/MCP_Interface-000000?style=flat&logo=anthropic&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker_Sandboxed-2496ED?style=flat&logo=docker&logoColor=white)
 ![Local First](https://img.shields.io/badge/Local--First-111111?style=flat&logo=homeassistant&logoColor=white)
-![Tools](https://img.shields.io/badge/150%2B_Security_Tools-e94560?style=flat&logoColor=white)
 
 **Penetration testing framework — MCP interface, 85 security tools, 12 specialized agents, Docker-sandboxed execution.**
 
