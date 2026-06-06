@@ -973,3 +973,76 @@ def public_checkout_success():
     if email and _EMAIL_RE.match(email):
         params += f"&email={urllib.parse.quote(email, safe='')}"
     return redirect(f"{base}/sic-payment-success?{params}")
+
+
+# ---------------------------------------------------------------------------
+# Community free trial — provision community tier without Stripe
+# ---------------------------------------------------------------------------
+
+_TRIAL_RATE: dict[str, list[float]] = {}  # IP → [timestamps] (in-memory, resets on restart)
+_TRIAL_MAX = 3       # requests
+_TRIAL_WINDOW = 3600  # seconds
+
+
+@billing_bp.post("/public-trial")
+def public_trial():
+    """Provision a free Community tier account and send a magic link.
+
+    No Stripe. Accepts only an email address.  Rate-limited to 3 requests per
+    hour per IP to prevent abuse.
+
+    Body: {"email": "user@example.com"}
+    Returns: 200 {"ok": true} | 400 | 429 | 500
+    """
+    import time as _time  # noqa: PLC0415
+
+    # M2M auth — same pattern as public_checkout / portal_by_email
+    if not _BILLING_API_KEY:
+        if os.environ.get("SIC_ENV", "development") == "production":
+            return jsonify({"error": "BILLING_API_KEY not configured"}), 503
+        print("[billing WARNING] BILLING_API_KEY not set — M2M auth disabled (dev)")
+    else:
+        provided_key = request.headers.get("X-Billing-Key", "")
+        if not provided_key or not _secrets_equal(provided_key, _BILLING_API_KEY):
+            return jsonify({"error": "unauthorized"}), 401
+
+    ip = (
+        request.headers.get("CF-Connecting-IP")
+        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or "unknown"
+    )
+
+    # Simple sliding-window rate limit (in-memory — resets on server restart)
+    now = _time.time()
+    bucket = _TRIAL_RATE.setdefault(ip, [])
+    _TRIAL_RATE[ip] = [t for t in bucket if now - t < _TRIAL_WINDOW]
+    if len(_TRIAL_RATE[ip]) >= _TRIAL_MAX:
+        return jsonify({"error": "rate_limited", "detail": "Too many trial requests. Try again later."}), 429
+    _TRIAL_RATE[ip].append(now)
+
+    body = request.get_json(silent=True) or {}
+    email_raw = (body.get("email") or "").strip().lower()
+    if not email_raw or not _EMAIL_RE.match(email_raw):
+        return jsonify({"error": "invalid_email"}), 400
+
+    try:
+        init_db()
+        existing = get_subscription(email_raw)
+        if existing and existing.get("tier") in ("team", "studio"):
+            # Already on a paid tier — don't downgrade, just re-send magic link
+            _send_provisioning_email(email_raw, {})
+            return jsonify({"ok": True, "note": "existing_subscription"}), 200
+
+        upsert_subscription(
+            email=email_raw,
+            stripe_customer_id=None,
+            stripe_subscription_id=None,
+            tier="community",
+            status="active",
+        )
+        _send_provisioning_email(email_raw, {})
+        logger.info("community trial provisioned for %.6s***", email_raw[:6])
+        return jsonify({"ok": True}), 200
+    except Exception as exc:
+        logger.error("public-trial error: %s", exc, exc_info=True)
+        return jsonify({"error": "internal_error"}), 500
