@@ -64,10 +64,51 @@
 | CTF | 15+ | pwntools, crypto utils, stego, reversing |
 | Forensics | 15+ | log analysis, artifact extraction, IR tools |
 
+## Installation
+
+**Requires Python 3.8+**
+
+```bash
+# Paying customers — fastest path
+npx sic-security
+
+# Self-hosted
+git clone https://github.com/DevCraftXCoder/Security-Intelligence-Center.git
+cd Security-Intelligence-Center
+python -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements-core.txt               # Linux/Docker: requirements.txt
+cp .env.example .env                               # fill in your values
+python start_server.py                             # → http://localhost:9888
+```
+
+### MCP Setup (Claude Code / Cursor)
+
+```json
+{
+  "mcpServers": {
+    "sic": {
+      "command": "python",
+      "args": ["/path/to/Security-Intelligence-Center/mcp_server.py"]
+    }
+  }
+}
+```
+
+### Required `.env` values
+
+| Variable | Description |
+|----------|-------------|
+| `SIC_SECRET_KEY` | Random secret (min 32 chars) |
+| `SIC_ADMIN_EMAILS` | Your email address |
+| `SIC_BASE_URL` | Public URL of your SIC instance |
+| `RESEND_API_KEY` | Email delivery for magic links |
+
+Run `python sic-audit.py` to verify your setup before starting.
+
 ## Health Check
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:9888/health
 ```
 
 ---
