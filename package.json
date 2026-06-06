@@ -2,10 +2,18 @@
   "name": "sic-security",
   "version": "6.0.0",
   "description": "SIC — AI-Powered Security Intelligence Center: MCP framework with 85 pentesting tools for authorized security testing, CTF, and defensive research",
-  "keywords": ["security", "pentesting", "mcp", "ai", "ctf", "bug-bounty", "red-team"],
+  "keywords": [
+    "security",
+    "pentesting",
+    "mcp",
+    "ai",
+    "ctf",
+    "bug-bounty",
+    "red-team"
+  ],
   "license": "MIT",
   "bin": {
-    "sic": "./bin/sic.js"
+    "sic": "bin/sic.js"
   },
   "scripts": {
     "scan:secrets": "secretlint \"**/*\"",
@@ -50,7 +58,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/DevCraftXCoder/sic.git"
+    "url": "git+https://github.com/DevCraftXCoder/sic.git"
   },
   "homepage": "https://frxncois.workers.dev/sic"
 }
