@@ -64,7 +64,7 @@ function printBanner() {
 
   ${bold}Security Intelligence Center${reset}  ${dim}v${pkg.version}${reset}
   ${dim}AI-Powered Pentesting MCP Framework${reset}
-  ${dim}150+ tools | 12+ agents | authorized testing only${reset}
+  ${dim}85 tools | 12+ agents | authorized testing only${reset}
 `;
   process.stdout.write(logo + "\n");
 }

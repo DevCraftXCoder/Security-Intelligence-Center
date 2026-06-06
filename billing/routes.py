@@ -601,6 +601,33 @@ def _handle_checkout_completed(event, email: str | None) -> None:
     # Auto-provision: send a magic link so the customer can log in immediately
     _send_provisioning_email(email, obj)
 
+    # Log email to stats-server (non-blocking — billing webhook must not fail over this)
+    _stats_url = os.environ.get("STATS_SERVER_URL", "")
+    _stats_secret = os.environ.get("STATS_SECRET", "")
+    if email and _stats_url and _stats_secret:
+        def _log_email_to_stats(url: str, secret: str, addr: str) -> None:
+            try:
+                import json as _json  # noqa: PLC0415
+                import urllib.request as _ur  # noqa: PLC0415
+                req = _ur.Request(
+                    f"{url}/save-email",
+                    data=_json.dumps({"email": addr}).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-stats-secret": secret,
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    method="POST",
+                )
+                _ur.urlopen(req, timeout=5)
+            except Exception as _e:  # noqa: BLE001
+                logger.warning("stats-server email log failed (non-critical): %s", _e)
+        threading.Thread(
+            target=_log_email_to_stats,
+            args=(_stats_url, _stats_secret, email),
+            daemon=True,
+        ).start()
+
 
 def _handle_subscription_updated(event, email: str | None) -> None:
     """Sync subscription tier and status after any update."""
@@ -850,7 +877,10 @@ def public_checkout():
     sub = get_subscription(email) if email else None
     customer_id: str | None = sub["stripe_customer_id"] if sub else None
 
-    success_url = "https://frxncois.com/sic-signup?billing=success"
+    _success_params = f"tier={tier}"
+    if email:
+        _success_params += f"&email={urllib.parse.quote(email, safe='')}"
+    success_url = f"https://frxncois.com/api/billing/public-checkout-success?{_success_params}"
     cancel_url = "https://frxncois.com/sic-signup#pricing"
 
     try:
