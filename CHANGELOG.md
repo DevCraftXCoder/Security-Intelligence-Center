@@ -1,5 +1,10 @@
 # SIC Changelog
 
+## 6.0.1 — 2026-06-06
+
+### Fixed
+- Republish with the current production dashboard bundle (`dashboard/*.{html,js,css}`) and production-readiness pass from 6.0.0. Synced reported version across `package.json`, launcher banner, and `/health` server version.
+
 ## 6.0.0-beta.1 — 2026-05-01
 
 ### Added

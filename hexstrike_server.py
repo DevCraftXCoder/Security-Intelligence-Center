@@ -9375,7 +9375,7 @@ def health_check():
     return jsonify({
         "status": "healthy",
         "message": "HexStrike AI Tools API Server is operational",
-        "version": "6.0.0",
+        "version": "6.0.1",
         "tools_status": tools_status,
         "all_essential_tools_available": all_essential_tools_available,
         "total_tools_available": sum(1 for tool, available in tools_status.items() if available),

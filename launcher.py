@@ -72,7 +72,7 @@ def _print_banner():
 {RED}{BOLD}  ███████║██║╚██████╗{RESET}
 {RED}{BOLD}  ╚══════╝╚═╝ ╚═════╝{RESET}
 
-  {BOLD}Security Intelligence Center{RESET}  {DIM}v6.0.0{RESET}
+  {BOLD}Security Intelligence Center{RESET}  {DIM}v6.0.1{RESET}
   {DIM}AI-Powered Pentesting MCP Framework{RESET}
   {DIM}85 tools | 12+ agents | authorized testing only{RESET}
 """
