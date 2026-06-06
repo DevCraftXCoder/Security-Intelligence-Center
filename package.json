@@ -19,7 +19,7 @@
     "bin/",
     "assets/",
     "launcher.py",
-    "server.py",
+    "hexstrike_server.py",
     "mcp_server.py",
     "scan_alerts.py",
     "scope_enforcer.py",

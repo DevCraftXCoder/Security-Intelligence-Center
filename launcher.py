@@ -85,18 +85,8 @@ def _print_banner():
 
 _print_banner()
 
-# Now import and run the real server
+# Now run the real server (same pattern as start_server.py)
 if __name__ == "__main__":
-    # Import server.py (the Flask app lives at module scope; its __main__ guard
-    # does NOT fire on import, so we drive app.run() ourselves below).
-    import server  # noqa: E402 — triggers Flask app creation
-
-    # The server's __main__ block calls app.run() — we just need to trigger it
-    port = int(os.environ.get("HEXSTRIKE_PORT", sys.argv[1] if len(sys.argv) > 1 else 9888))
-    print(f"[hexstrike-launcher] Starting on 127.0.0.1:{port}")
-    server.app.run(
-        host="127.0.0.1",
-        port=port,
-        debug=False,
-        use_reloader=False,
-    )
+    import runpy
+    server_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hexstrike_server.py")
+    runpy.run_path(server_path, run_name="__main__")
