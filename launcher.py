@@ -60,11 +60,9 @@ def _print_banner():
     DIM = "\033[2m"
     RESET = "\033[0m"
 
-    # Check for custom logo path (set by npx wrapper or user env)
-    custom = os.environ.get("SIC_LOGO_PATH", "")
-    logo_path = custom if custom and os.path.isfile(custom) else os.path.join(
-        os.path.dirname(__file__), "assets", "hexstrike-logo.png"
-    )
+    # Custom logo path (set by npx wrapper / user env) is consumed by the
+    # Node.js banner; the Python banner below is ASCII-only.
+    _ = os.environ.get("SIC_LOGO_PATH", "")
 
     banner = f"""
 {RED}{BOLD}  ███████╗██╗ ██████╗{RESET}
