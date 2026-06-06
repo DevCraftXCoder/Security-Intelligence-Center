@@ -30,7 +30,7 @@ from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, request
 
-from feature_gates import require_tier
+from feature_gates import require_tier, TIER_LIMITS, current_user_tier
 
 api_tokens_bp = Blueprint("sic_api_tokens", __name__, url_prefix="/api")
 
@@ -297,7 +297,7 @@ def list_expiring_tokens_route():
 
 
 @api_tokens_bp.post("/tokens")
-@require_tier("studio")
+@require_tier("community")
 def create_token_route():
     """POST /api/tokens — create a new API token.
 
@@ -306,6 +306,18 @@ def create_token_route():
     """
     email = _require_auth()
     api_tokens_init_db()
+
+    # Per-tier token count enforcement
+    tier = current_user_tier()
+    token_limit = TIER_LIMITS.get(tier, TIER_LIMITS["community"]).get("api_tokens", 1)
+    if token_limit != -1:
+        with _connect() as conn:
+            active_count = conn.execute(
+                "SELECT COUNT(*) FROM api_tokens WHERE created_by = ? AND revoked_at IS NULL",
+                (email,),
+            ).fetchone()[0]
+        if active_count >= token_limit:
+            return jsonify({"error": "token_limit_reached", "limit": token_limit, "tier": tier}), 403
 
     body = request.get_json(silent=True) or {}
     name = body.get("name")

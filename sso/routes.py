@@ -386,11 +386,9 @@ def oidc_callback(workspace_id: str):
 
 
 @sso_bp.get("/auth/sso/metadata/<workspace_id>")
+@_studio_gated
 def saml_metadata(workspace_id: str):
-    """Serve SP SAML metadata XML. Public — IdPs need this for configuration.
-
-    # TODO: gate behind studio tier — apply @require_tier("studio") once feature_gates is on path
-    """
+    """Serve SP SAML metadata XML — studio tier only."""
     idp_config = get_config(workspace_id)
     if not idp_config:
         return jsonify({"error": "sso_not_configured", "workspace": workspace_id}), 404

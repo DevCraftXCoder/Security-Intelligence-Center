@@ -2,6 +2,8 @@
 # Paste into your $PROFILE file (run "notepad $PROFILE" to open it),
 # or dot-source this file: . "path\to\sic\install\sic-profile.ps1"
 
+param([string]$SicToken = $env:SIC_TOKEN)
+
 $SIC_BASE = "http://127.0.0.1:9888"
 
 function sic-scan {
@@ -22,7 +24,8 @@ function sic-scan {
     )
     $body = @{ target = $Target; scan_type = $Type } | ConvertTo-Json
     $r = Invoke-RestMethod -Uri "$SIC_BASE/api/intelligence/smart-scan" -Method POST `
-        -ContentType "application/json" -Body $body
+        -ContentType "application/json" -Body $body `
+        -Headers @{ Authorization = "Bearer $SicToken" }
     $r | ConvertTo-Json -Depth 5
 }
 
@@ -33,7 +36,8 @@ function sic-health {
     .EXAMPLE
         sic-health
     #>
-    $r = Invoke-RestMethod -Uri "$SIC_BASE/health"
+    $r = Invoke-RestMethod -Uri "$SIC_BASE/health" `
+        -Headers @{ Authorization = "Bearer $SicToken" }
     $r | ConvertTo-Json -Depth 3
 }
 
@@ -44,7 +48,8 @@ function sic-incidents {
     .EXAMPLE
         sic-incidents
     #>
-    $r = Invoke-RestMethod -Uri "$SIC_BASE/api/incidents"
+    $r = Invoke-RestMethod -Uri "$SIC_BASE/api/incidents" `
+        -Headers @{ Authorization = "Bearer $SicToken" }
     $r | ConvertTo-Json -Depth 5
 }
 
@@ -60,7 +65,8 @@ function sic-fix {
     param([Parameter(Mandatory)][string]$Id)
     $body = @{ command = "remediate"; finding_id = $Id } | ConvertTo-Json
     $r = Invoke-RestMethod -Uri "$SIC_BASE/api/command" -Method POST `
-        -ContentType "application/json" -Body $body
+        -ContentType "application/json" -Body $body `
+        -Headers @{ Authorization = "Bearer $SicToken" }
     $r | ConvertTo-Json -Depth 5
 }
 
@@ -71,7 +77,8 @@ function sic-version {
     .EXAMPLE
         sic-version
     #>
-    $r = Invoke-RestMethod -Uri "$SIC_BASE/health"
+    $r = Invoke-RestMethod -Uri "$SIC_BASE/health" `
+        -Headers @{ Authorization = "Bearer $SicToken" }
     [PSCustomObject]@{
         version = $r.version
         status  = $r.status

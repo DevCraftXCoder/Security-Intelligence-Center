@@ -42,7 +42,7 @@ auth_bp = Blueprint("sic_auth", __name__, url_prefix="/auth")
 # Uses a module-level dict — no external dep, survives blueprint reloads.
 # ---------------------------------------------------------------------------
 
-_RL_WINDOW_SECONDS = 3600  # 1 hour
+_RL_WINDOW_SECONDS = 600  # 10 minutes
 _RL_MAX_REQUESTS = 5
 
 # Stores: {ip: deque([timestamp, ...], maxlen=_RL_MAX_REQUESTS)}
@@ -293,7 +293,7 @@ def request_link():
     # In waitlist mode (SIC_WAITLIST_MODE=open) any email can receive a magic link;
     # access to premium tools is still gated by feature_gates.py / subscription tier.
     if not is_admin and not _has_active_subscription(email) and not _waitlist_mode():
-        return jsonify({"error": "unauthorized", "message": "No active subscription found for this email."}), 403
+        return jsonify({"ok": True, "message": "If this email has an active subscription, a sign-in link has been sent."}), 200
 
     _init_db()
     now = int(time.time())
@@ -340,7 +340,7 @@ def request_link():
                     'padding:40px;max-width:480px;margin:auto;border-radius:8px;">'
                     '<h2 style="color:#e94560;margin-top:0;">Security Intelligence Center</h2>'
                     '<p style="color:#ccc;">Click the button below to sign in. '
-                    "This link expires in 15 minutes.</p>"
+                    "This link expires in 10 minutes.</p>"
                     f'<a href="{link}" style="display:inline-block;background:#e94560;color:#fff;'
                     'padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;'
                     'margin:16px 0;">Sign in to SIC</a>'
@@ -386,24 +386,16 @@ def verify():
     _init_db()
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
-    with sqlite3.connect(str(_DB_PATH)) as con:
-        row = con.execute(
-            "SELECT email, used_at FROM auth_tokens WHERE token_hash = ?",
-            (token_hash,),
-        ).fetchone()
-
-    if row is None:
-        return jsonify({"error": "invalid_or_expired_token"}), 401
-    if row[1] is not None:
-        return jsonify({"error": "token_already_used"}), 401
-
     used_ts = _iso(int(time.time()))
     with sqlite3.connect(str(_DB_PATH)) as con:
-        con.execute(
-            "UPDATE auth_tokens SET used_at = ? WHERE token_hash = ?",
+        cur = con.execute(
+            "UPDATE auth_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL",
             (used_ts, token_hash),
         )
         con.commit()
+
+    if cur.rowcount != 1:
+        return jsonify({"error": "invalid_or_expired_token"}), 401
 
     now = int(time.time())
     session_token = _make_token(payload["email"], now, now + _SESSION_TTL_SEC)
@@ -415,7 +407,7 @@ def verify():
         max_age=_SESSION_TTL_SEC,
         httponly=True,
         samesite="Lax",
-        secure=request.is_secure,
+        secure=os.environ.get("SIC_ENV", "development") == "production",
         path="/",
     )
     return resp
@@ -431,7 +423,7 @@ def logout():
         max_age=0,
         httponly=True,
         samesite="Lax",
-        secure=request.is_secure,
+        secure=os.environ.get("SIC_ENV", "development") == "production",
         path="/",
     )
     return resp
@@ -462,7 +454,7 @@ def me():
             max_age=_SESSION_TTL_SEC,
             httponly=True,
             samesite="Lax",
-            secure=request.is_secure,
+            secure=os.environ.get("SIC_ENV", "development") == "production",
             path="/",
         )
 

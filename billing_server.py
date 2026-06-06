@@ -92,7 +92,7 @@ def _checkout_rate_check(ip: str) -> bool:
 @app.before_request
 def _checkout_rate_limit() -> None:  # type: ignore[return-value]
     """P1: Rate-limit /api/billing/checkout to 5 req/hour per IP."""
-    if request.path != "/api/billing/checkout":
+    if request.path not in ("/api/billing/checkout", "/api/billing/public-checkout"):
         return None  # type: ignore[return-value]
     client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
     if not _checkout_rate_check(client_ip):

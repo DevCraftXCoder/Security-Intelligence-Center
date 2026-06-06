@@ -39,7 +39,7 @@ from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, request
 
-from feature_gates import require_tier
+from feature_gates import require_tier, TIER_LIMITS, current_user_tier
 
 workspaces_bp = Blueprint("sic_workspaces", __name__, url_prefix="/api")
 
@@ -448,6 +448,18 @@ def invite_member_route(workspace_id: str):
 
     if role not in _VALID_ROLES:
         return jsonify({"error": "role_invalid", "valid": sorted(_VALID_ROLES)}), 400
+
+    # Seat limit check before INSERT
+    tier = current_user_tier()
+    max_seats = TIER_LIMITS.get(tier, TIER_LIMITS["community"])["max_seats"]
+    if max_seats != -1:
+        with _connect() as conn:
+            current_count = conn.execute(
+                "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchone()[0]
+        if current_count >= max_seats:
+            return jsonify({"error": "seat_limit_reached", "limit": max_seats, "tier": tier}), 403
 
     now = _iso_now()
     try:
