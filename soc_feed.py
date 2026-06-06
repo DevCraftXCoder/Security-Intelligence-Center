@@ -16,6 +16,7 @@ header (raw value or "Bearer <value>"). Defaults to "dev" for local use.
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import sys
@@ -43,7 +44,8 @@ class SOCFeedHandler(BaseHTTPRequestHandler):
     def _authorized(self) -> bool:
         raw = self.headers.get("Authorization", "")
         token = raw[7:] if raw.startswith("Bearer ") else raw
-        return token == SECRET
+        # Timing-safe comparison so the secret can't be recovered byte-by-byte.
+        return hmac.compare_digest(token.encode(), SECRET.encode())
 
     def do_GET(self) -> None:  # noqa: N802 (BaseHTTPRequestHandler API)
         parsed = urlparse(self.path)

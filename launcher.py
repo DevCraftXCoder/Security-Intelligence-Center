@@ -74,9 +74,9 @@ def _print_banner():
 {RED}{BOLD}  ███████║██║╚██████╗{RESET}
 {RED}{BOLD}  ╚══════╝╚═╝ ╚═════╝{RESET}
 
-  {BOLD}Security Intelligence Center{RESET}  {DIM}v6.0.0-beta{RESET}
+  {BOLD}Security Intelligence Center{RESET}  {DIM}v6.0.0{RESET}
   {DIM}AI-Powered Pentesting MCP Framework{RESET}
-  {DIM}150+ tools | 12+ agents | authorized testing only{RESET}
+  {DIM}85 tools | 12+ agents | authorized testing only{RESET}
 """
     # Skip banner if already printed by the Node.js npx wrapper
     if not os.environ.get("SIC_NPX"):

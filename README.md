@@ -25,10 +25,10 @@ SIC runs as a local server exposing an MCP interface for integration with any MC
 ### Fastest path (paying customers) — one command
 
 ```bash
-npx sic-security@beta
+npx sic-security
 ```
 
-`npx sic-security@beta` (the `bin/sic.js` launcher) creates the Python venv, installs
+`npx sic-security` (the `bin/sic.js` launcher) creates the Python venv, installs
 dependencies, checks your `.env`, and starts the server for you. This is the
 recommended install path after you subscribe and receive your magic-link.
 
