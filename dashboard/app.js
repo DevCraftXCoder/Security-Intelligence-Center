@@ -33,7 +33,7 @@ function fmtUptime(seconds) {
 // ─── Base URLs ───────────────────────────────────────────────────────────────
 // server.py serves both the dashboard static files and all /auth/* + /api/*
 // routes on the same origin, so relative paths always work — whether accessed
-// directly on :9890 or through a CF Named Tunnel (e.g. https://sic.frxncois.com).
+// directly on the SIC port or through a reverse proxy / tunnel (e.g. https://sic.example.com).
 // Hardcoding ":9890" broke tunnel access: the tunnel doesn't listen on that port.
 const SIC_MAIN_BASE = "";
 // Billing server runs on a separate port — must be absolute.
@@ -298,9 +298,11 @@ async function loadHealth() {
 }
 
 async function startScan(target, type) {
-  return apiFetch("/api/command", {
+  // A3: smart-scan uses AI-driven tool selection. /api/command expects a literal
+  // shell command, so "full_scan" was never a valid command and always failed.
+  return mainFetch("/api/intelligence/smart-scan", {
     method: "POST",
-    body: { command: "full_scan", target },
+    body: { target: target, objective: type || "comprehensive" },
   });
 }
 
@@ -327,6 +329,48 @@ function initScanForm() {
       btn.disabled = false;
       btn.textContent = "Start Scan";
     }
+  });
+}
+
+// ─── INSPECT bar — spawn Claude Code in a local terminal ─────────────────────
+// Each button sends only a fixed KEY to POST /api/spawn-claude. The server
+// resolves the key to an exact command (no free text ⇒ no injection) and opens
+// a terminal on the host machine in the customer's project directory.
+
+async function spawnClaude(key) {
+  return mainFetch("/api/spawn-claude", {
+    method: "POST",
+    body: { key: key },
+  });
+}
+
+function initInspectBar() {
+  const bar = document.getElementById("inspect-bar");
+  const msg = document.getElementById("inspect-msg");
+  if (!bar) return;
+  const buttons = bar.querySelectorAll("[data-spawn-key]");
+  buttons.forEach(function (btn) {
+    btn.addEventListener("click", async function () {
+      const key = btn.getAttribute("data-spawn-key");
+      const label = btn.textContent.trim();
+      buttons.forEach(function (b) { b.disabled = true; });
+      const original = btn.textContent;
+      btn.textContent = "Spawning…";
+      if (msg) msg.innerHTML = "";
+      try {
+        const res = await spawnClaude(key);
+        if (msg) {
+          msg.innerHTML = '<span class="sic-success">Spawned "' + escapeHtml(res.label || label) +
+            '" in ' + escapeHtml(res.cwd || "project") + ' →</span>';
+        }
+      } catch (e) {
+        const reason = (e.body && (e.body.detail || e.body.error)) || e.message;
+        if (msg) msg.innerHTML = '<span class="sic-error">' + escapeHtml(reason) + "</span>";
+      } finally {
+        buttons.forEach(function (b) { b.disabled = false; });
+        btn.textContent = original;
+      }
+    });
   });
 }
 
@@ -1182,6 +1226,7 @@ async function initDashboard() {
   const me = await initHeader("dashboard");
   if (!me) return;
   initScanForm();
+  initInspectBar();
   loadStats();
   loadRecent();
   loadHealth();

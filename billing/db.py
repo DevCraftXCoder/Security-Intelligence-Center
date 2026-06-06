@@ -174,6 +174,7 @@ def get_tier(email: str) -> str:
         incomplete_expired / paused     → community
         canceled / unpaid               → community
         pending_review                  → community (awaiting manual operator review)
+        refunded / disputed             → community (full refund or chargeback — B4)
     """
     row = get_subscription(email)
     if row is None:
@@ -187,6 +188,7 @@ def get_tier(email: str) -> str:
         "canceled", "unpaid",
         "incomplete", "incomplete_expired",
         "paused", "pending_review",
+        "refunded", "disputed",
     ):
         return "community"
     # past_due: retain tier for 7-day grace period, then downgrade

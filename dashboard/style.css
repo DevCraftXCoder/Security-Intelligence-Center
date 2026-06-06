@@ -183,6 +183,65 @@ header.sic-header {
   outline: none;
 }
 
+/* ─── INSPECT bar (spawn Claude Code) ────────────────────────────────────────── */
+.sic-inspect-bar {
+  margin-bottom: 24px;
+  background: var(--sic-surface);
+  border: 1px solid var(--sic-border);
+  padding: 14px 16px;
+}
+
+.sic-inspect-bar__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sic-inspect-bar__title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--sic-text);
+  letter-spacing: .02em;
+}
+
+.sic-inspect-bar__hint {
+  font-size: 12px;
+  color: var(--sic-text-muted);
+}
+
+.sic-inspect-bar__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+@media (min-width: 768px) {
+  .sic-inspect-bar__grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 1024px) {
+  .sic-inspect-bar__grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+.sic-inspect-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.sic-inspect-btn:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+.sic-inspect-bar__msg {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
 /* ─── Grid ─────────────────────────────────────────────────────────────────── */
 .sic-grid {
   display: grid;

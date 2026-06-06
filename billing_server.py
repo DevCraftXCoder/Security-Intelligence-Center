@@ -41,6 +41,90 @@ def _load_env(path: Path) -> None:
 
 _load_env(_ENV_FILE)
 
+
+# ---------------------------------------------------------------------------
+# B3: Production startup guards.
+#
+# The ecosystem config header documents two safety nets that the operator
+# believes are enforced when SIC_ENV=production:
+#   1. SIC_SECRET_KEY must be set — without it, magic-link / session signing
+#      falls back to an ephemeral generated key that does not survive restarts
+#      and is not shared across processes, silently logging users out and
+#      breaking M2M auth.
+#   2. SIC_WAITLIST_MODE must be off — leaving the waitlist open in production
+#      lets ANY email mint a magic link (subscription bypass for sign-in).
+#
+# These guards were previously only documented, never implemented.  Refuse to
+# start (exit non-zero) so PM2 surfaces the misconfiguration instead of the
+# server coming up in an unsafe state.
+# ---------------------------------------------------------------------------
+
+
+def _is_production() -> bool:
+    return os.environ.get("SIC_ENV", "development").strip().lower() == "production"
+
+
+def _waitlist_open() -> bool:
+    return os.environ.get("SIC_WAITLIST_MODE", "").strip().lower() in ("open", "1", "true")
+
+
+def _production_startup_guards() -> None:
+    """Refuse to start in production when required safety settings are missing."""
+    if not _is_production():
+        return
+
+    errors: list[str] = []
+
+    # Guard 1: SIC_SECRET_KEY (the HMAC signing secret) must be explicitly set.
+    # auth.py reads SIC_AUTH_SECRET first, then falls back to a persisted key
+    # file; SIC_SECRET_KEY is the operator-facing name documented in the
+    # ecosystem config. Require at least one signing secret env var in prod.
+    if not (
+        os.environ.get("SIC_SECRET_KEY", "").strip()
+        or os.environ.get("SIC_AUTH_SECRET", "").strip()
+    ):
+        errors.append(
+            "SIC_SECRET_KEY (or SIC_AUTH_SECRET) is not set. In production the "
+            "HMAC signing secret must be provided explicitly so sessions and "
+            "magic links survive restarts and are stable across processes."
+        )
+
+    # Guard 2: BILLING_API_KEY must be set so the public M2M endpoints enforce
+    # auth (in dev they fall through with a warning; in prod that would expose
+    # checkout/trial/portal to the open internet).
+    if not os.environ.get("BILLING_API_KEY", "").strip():
+        errors.append(
+            "BILLING_API_KEY is not set. In production the public-checkout / "
+            "public-trial / portal-by-email endpoints require it for M2M auth."
+        )
+
+    # Guard 3: waitlist must be off in production.
+    if _waitlist_open():
+        errors.append(
+            "SIC_WAITLIST_MODE is open. Waitlist mode lets any email request a "
+            "magic link regardless of subscription — it must be off in "
+            "production. Unset SIC_WAITLIST_MODE or set it to 'off'."
+        )
+
+    if errors:
+        sys.stderr.write(
+            "[billing FATAL] Refusing to start in production — "
+            "the following safety guards failed:\n"
+        )
+        for e in errors:
+            sys.stderr.write(f"  - {e}\n")
+        sys.stderr.flush()
+        sys.exit(1)
+
+
+_production_startup_guards()
+
+# Bridge SIC_SECRET_KEY → SIC_AUTH_SECRET so auth.py (which reads
+# SIC_AUTH_SECRET) honours the operator-facing SIC_SECRET_KEY name without
+# requiring both to be set.
+if os.environ.get("SIC_SECRET_KEY") and not os.environ.get("SIC_AUTH_SECRET"):
+    os.environ["SIC_AUTH_SECRET"] = os.environ["SIC_SECRET_KEY"]
+
 # ---------------------------------------------------------------------------
 # Ensure sic/ is on the path so `from auth import ...` works in billing/routes.py
 # ---------------------------------------------------------------------------

@@ -28,7 +28,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 import findings_db  # noqa: E402
 
 _SENT_PATH = Path.home() / ".sic" / "sla_alerts_sent.json"
-_SIC_CLI = "python C:/Za/sic/sic_cli.py remediate"
+# Remediation CLI command — resolved relative to this module (portable).
+# Override with the SIC_CLI_CMD env var if SIC is installed elsewhere.
+_SIC_CLI = os.environ.get(
+    "SIC_CLI_CMD",
+    f"python {Path(__file__).resolve().parent / 'sic_cli.py'} remediate",
+)
 
 
 def _today() -> date:

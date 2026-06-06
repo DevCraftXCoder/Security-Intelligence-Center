@@ -229,26 +229,66 @@ def _iso(ts: int) -> str:
 def _has_active_subscription(email: str) -> bool:
     """Return True if the email has an active paid subscription.
 
-    P2-2: DB path unified to ~/.sic/state.db (was billing/billing.db) so both
-    auth and the tier resolver read from the same file.  Override via BILLING_DB_PATH
-    env var when running tests or multiple instances.
+    P1-1 fix: the real ``subscriptions`` table (in ~/.sic/state.db) has
+    PRIMARY KEY ``email`` — there is no ``customer_email`` and no ``created_at``
+    column.  The previous query referenced both, raised
+    ``sqlite3.OperationalError`` on every call, was swallowed, and returned
+    False — so a genuine paying customer was always denied a magic link.
+
+    The schema enforces one row per email (PK), so no ORDER BY / LIMIT is
+    needed.  We delegate the status→entitlement decision to the canonical
+    tier resolver (billing.db.get_tier) when available so the 7-day past_due
+    grace window and all status mappings stay in one place; we fall back to a
+    direct query against the real columns if billing is not importable.
+
+    P2-2: DB path unified to ~/.sic/state.db so both auth and the tier resolver
+    read from the same file.  Override via BILLING_DB_PATH env var for tests.
     """
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+
+    # Preferred path: reuse the canonical status→tier resolver (handles
+    # past_due grace, canceled/expired/incomplete downgrades, etc.).
+    try:
+        from billing import get_user_tier  # noqa: PLC0415
+
+        return get_user_tier(email) in ("team", "studio")
+    except Exception as e:  # noqa: BLE001 — billing not importable / stripe env missing
+        logger.debug("[auth] billing.get_user_tier unavailable, using direct query: %s", e)
+
+    # Fallback: query the real columns directly (email PK, status column).
     try:
         billing_db_path = os.environ.get(
             "BILLING_DB_PATH",
             os.path.expanduser("~/.sic/state.db"),
         )
         conn = sqlite3.connect(billing_db_path)
-        row = conn.execute(
-            "SELECT tier, status FROM subscriptions WHERE customer_email = ? ORDER BY created_at DESC LIMIT 1",
-            (email,),
-        ).fetchone()
-        conn.close()
-        if row:
-            tier, status = row
-            return tier in ("team", "studio") and status in ("active", "trialing", "past_due")
+        try:
+            row = conn.execute(
+                "SELECT tier, status, current_period_end FROM subscriptions WHERE email = ?",
+                (email,),
+            ).fetchone()
+        finally:
+            conn.close()
+        if not row:
+            return False
+        tier, status, period_end = row
+        if tier not in ("team", "studio"):
+            return False
+        status = status or "active"
+        # active / trialing → entitled.  past_due → entitled within 7-day grace.
+        if status in ("active", "trialing"):
+            return True
+        if status == "past_due":
+            grace = 7 * 86400
+            if period_end is not None and (period_end + grace) < int(time.time()):
+                return False  # grace expired
+            return True
+        # canceled / unpaid / incomplete / incomplete_expired / paused /
+        # pending_review → not entitled.
         return False
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning("[auth] billing DB check failed: %s", e)
         return False
 

@@ -6,16 +6,20 @@ Builds a project-data JSON from SIC scan findings (grouped by severity into
 P0/P1/P2/P3 control sections) and injects it into the SOC handoff template.
 
 Usage:
-    python C:/Za/sic/sic_to_soc.py \
-        --scan     C:/Za/sic/_runs/scan-20260529-120000.json \
-        --project  "FrxncoisApp" \
-        --output   C:/Za/sic/_runs/qa/FrxncoisApp-soc-20260529-120000.html \
-        [--template C:/Za/templates/soc-handoff/soc-handoff-template-blank.html]
+    python sic_to_soc.py \
+        --scan     ./_runs/scan-20260529-120000.json \
+        --project  "MyProject" \
+        --output   ./_runs/qa/MyProject-soc-20260529-120000.html \
+        [--template ./templates/soc-handoff/soc-handoff-template-blank.html]
+
+The template defaults to <sic_dir>/templates/soc-handoff/soc-handoff-template-blank.html
+and can be overridden with --template or the SIC_SOC_TEMPLATE env var.
 """
 
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import webbrowser
@@ -24,7 +28,12 @@ from pathlib import Path
 
 import project_config
 
-DEFAULT_TEMPLATE = "C:/Za/templates/soc-handoff/soc-handoff-template-blank.html"
+# Resolve the SOC handoff template relative to this module (portable across machines).
+# Override via --template CLI flag or the SIC_SOC_TEMPLATE environment variable.
+DEFAULT_TEMPLATE = os.environ.get(
+    "SIC_SOC_TEMPLATE",
+    str(Path(__file__).resolve().parent / "templates" / "soc-handoff" / "soc-handoff-template-blank.html"),
+)
 
 # ---------------------------------------------------------------------------
 # Optional enrichment imports (non-fatal if modules missing)

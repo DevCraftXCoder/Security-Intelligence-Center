@@ -127,6 +127,14 @@ app.register_blueprint(workspaces_bp)
 app.register_blueprint(api_tokens_bp)
 app.register_blueprint(scan_history_bp)
 
+# A4: AI grading blueprint (POST /api/ai/grade) — was defined but never registered.
+try:
+    from ai_grade import ai_grade_bp, ai_grade_init_db  # noqa: E402
+    app.register_blueprint(ai_grade_bp)
+    ai_grade_init_db()
+except ImportError as _e:
+    logger.warning("[startup] ai_grade blueprint not available — skipping (%s)", _e)
+
 # ---------------------------------------------------------------------------
 # P0-1: Tier gating imports + concurrent-scan counter
 # ---------------------------------------------------------------------------
@@ -9389,6 +9397,21 @@ def scope_status():
         return jsonify({"error": str(e)}), 500
 
 
+def _is_loopback_target(target: str) -> bool:
+    """A6: return True if target resolves to loopback/localhost (default-deny scope)."""
+    if not target:
+        return False
+    raw = target.strip()
+    # Strip scheme if a URL was passed
+    parsed = urlparse(raw if "://" in raw else f"//{raw}")
+    host = (parsed.hostname or raw).strip().lower()
+    if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        return True
+    if host.startswith("127."):
+        return True
+    return False
+
+
 @app.route("/api/command", methods=["POST"])
 @require_tier("community")
 def generic_command():
@@ -9420,14 +9443,27 @@ def generic_command():
                 "error": "Command parameter is required"
             }), 400
 
-        # P0-2: scope check — validate target (first token of command) against ALLOWED_TARGETS
+        # P0-2 / A6: scope check — validate target against ALLOWED_TARGETS.
+        # DEFAULT-DENY: when ALLOWED_TARGETS is empty, restrict to loopback/localhost
+        # only (a fresh install must NOT be an open scanner).
         target = params.get("target") or (command.split()[0] if command.strip() else "")
         if target:
             enforcer = get_enforcer()
-            if enforcer.allowed_targets:  # only enforce when allowlist is configured
+            if enforcer.allowed_targets:  # explicit allowlist configured
                 if not enforcer.is_target_allowed(target):
                     logger.warning("SCOPE BLOCKED /api/command: target=%r not in allowlist", target)
                     return jsonify({"error": "target_not_in_scope", "target": target}), 403
+            elif not _is_loopback_target(target):
+                logger.warning(
+                    "SCOPE BLOCKED /api/command: ALLOWED_TARGETS empty — default-deny to loopback; target=%r",
+                    target,
+                )
+                return jsonify({
+                    "error": "scope_not_configured",
+                    "detail": "ALLOWED_TARGETS is empty. Set it to the host(s) you are authorized to scan. "
+                              "Until then, only loopback/localhost targets are permitted.",
+                    "target": target,
+                }), 403
 
         result = execute_command(command, use_cache=use_cache)
         return jsonify(result)
@@ -9452,6 +9488,164 @@ def _require_admin_role():
     if role != "admin":
         return jsonify({"error": "admin_required"}), 403
     return None
+
+
+def _require_localhost():
+    """Return a 403 Response if the request did not originate from loopback, else None."""
+    remote = request.remote_addr or ""
+    if remote not in ("127.0.0.1", "::1", "localhost"):
+        return jsonify({"error": "localhost_only", "detail": "This endpoint may only be called from the local host."}), 403
+    return None
+
+
+# A1: server-side command map for /api/spawn-claude.
+# The client only ever sends a KEY from this map — never free text — so there is
+# no path for shell/prompt injection. Slash-command keys pass the command as a
+# CLI argument; prompt keys pass a canned prompt via `claude -p "<prompt>"`.
+_SPAWN_CLAUDE_COMMANDS: dict[str, dict[str, str]] = {
+    "init": {"kind": "slash", "arg": "/init",
+             "label": "Init Project"},
+    "security-review": {"kind": "slash", "arg": "/security-review",
+                        "label": "Security Review"},
+    "review": {"kind": "slash", "arg": "/review",
+               "label": "Review Changes"},
+    "find-bugs": {"kind": "prompt",
+                  "arg": "Scan this codebase for bugs and security issues; list findings by severity with file:line.",
+                  "label": "Find Bugs"},
+    "explain": {"kind": "prompt",
+                "arg": "Give me a high-level architecture overview of this codebase.",
+                "label": "Explain Codebase"},
+    "add-tests": {"kind": "prompt",
+                  "arg": "Identify the most important untested code paths and write tests for them.",
+                  "label": "Add Tests"},
+}
+
+
+def _resolve_spawn_cwd(requested: str | None) -> tuple[str | None, str | None]:
+    """Resolve and validate the working directory for a claude spawn.
+
+    Returns (cwd, error). The cwd must resolve to a real directory under the
+    customer's allowed project root (SIC_PROJECT_DIR, default = current working
+    directory). Never hardcodes a vendor path.
+    """
+    root_env = os.environ.get("SIC_PROJECT_DIR") or os.getcwd()
+    try:
+        root = Path(root_env).expanduser().resolve()
+    except Exception:  # noqa: BLE001
+        return None, "invalid_project_root"
+
+    if not requested:
+        target = root
+    else:
+        try:
+            candidate = Path(requested).expanduser()
+            if not candidate.is_absolute():
+                candidate = root / candidate
+            target = candidate.resolve()
+        except Exception:  # noqa: BLE001
+            return None, "invalid_cwd"
+        # Confine to the allowed project root (no traversal outside SIC_PROJECT_DIR)
+        try:
+            target.relative_to(root)
+        except ValueError:
+            return None, "cwd_outside_project_root"
+
+    if not target.is_dir():
+        return None, "cwd_not_a_directory"
+    return str(target), None
+
+
+def _build_claude_argv(spec: dict, claude_bin: str) -> list[str]:
+    """Build the claude argv list for the resolved command spec (list-form, no shell)."""
+    if spec["kind"] == "slash":
+        return [claude_bin, spec["arg"]]
+    # prompt kind → headless prompt invocation
+    return [claude_bin, "-p", spec["arg"]]
+
+
+@app.route("/api/spawn-claude", methods=["POST"])
+def spawn_claude():
+    """A1: Spawn Claude Code in a NEW local terminal running a fixed, server-mapped command.
+
+    Security model:
+      - localhost-only (terminal spawn on the server host is meaningless/dangerous remotely)
+      - admin-role required
+      - client sends only a KEY; the server resolves KEY → exact command via
+        _SPAWN_CLAUDE_COMMANDS (no free-text from client ⇒ no injection)
+      - subprocess.Popen LIST-FORM, never shell=True with interpolated input
+      - working dir validated under SIC_PROJECT_DIR (no vendor hardcodes)
+    """
+    guard = _require_localhost()
+    if guard is not None:
+        return guard
+    guard = _require_admin_role()
+    if guard is not None:
+        return guard
+
+    params = request.get_json(silent=True) or {}
+    key = params.get("key")
+    if not key or not isinstance(key, str):
+        return jsonify({"error": "key_required", "valid_keys": sorted(_SPAWN_CLAUDE_COMMANDS)}), 400
+    spec = _SPAWN_CLAUDE_COMMANDS.get(key)
+    if spec is None:
+        return jsonify({"error": "unknown_key", "valid_keys": sorted(_SPAWN_CLAUDE_COMMANDS)}), 400
+
+    cwd, cwd_err = _resolve_spawn_cwd(params.get("cwd"))
+    if cwd_err is not None:
+        return jsonify({"error": cwd_err}), 400
+
+    claude_bin = os.environ.get("CLAUDE_BIN", "claude")
+    argv = _build_claude_argv(spec, claude_bin)
+
+    try:
+        plat = sys.platform
+        if plat.startswith("win"):
+            # Prefer Windows Terminal (wt) opened in the project dir; fall back to cmd /k.
+            wt_path = shutil.which("wt")
+            if wt_path:
+                spawn_argv = [wt_path, "-d", cwd] + argv
+                subprocess.Popen(spawn_argv, close_fds=True)  # noqa: S603 — list-form, server-mapped args
+            else:
+                # cmd /c start "" cmd /k <claude ...>  — list-form, no shell string interpolation
+                spawn_argv = ["cmd", "/c", "start", "", "cmd", "/k"] + argv
+                subprocess.Popen(spawn_argv, cwd=cwd, close_fds=True)  # noqa: S603
+        elif plat == "darwin":
+            # macOS: open a new Terminal window and run the claude command in the project dir.
+            # Build a safely-quoted shell line for AppleScript's "do script".
+            import shlex as _shlex  # noqa: PLC0415
+            shell_line = "cd " + _shlex.quote(cwd) + " && " + " ".join(_shlex.quote(a) for a in argv)
+            osa = 'tell application "Terminal" to do script ' + json.dumps(shell_line)
+            subprocess.Popen(["osascript", "-e", osa], close_fds=True)  # noqa: S603
+        else:
+            # Linux: try common terminal emulators in order.
+            import shlex as _shlex  # noqa: PLC0415
+            shell_line = "cd " + _shlex.quote(cwd) + " && " + " ".join(_shlex.quote(a) for a in argv) + "; exec $SHELL"
+            launched = False
+            for term in ("gnome-terminal", "konsole", "x-terminal-emulator", "xterm"):
+                term_path = shutil.which(term)
+                if not term_path:
+                    continue
+                if term == "gnome-terminal":
+                    spawn_argv = [term_path, "--", "bash", "-lc", shell_line]
+                elif term == "konsole":
+                    spawn_argv = [term_path, "-e", "bash", "-lc", shell_line]
+                else:
+                    spawn_argv = [term_path, "-e", "bash", "-lc", shell_line]
+                subprocess.Popen(spawn_argv, close_fds=True)  # noqa: S603
+                launched = True
+                break
+            if not launched:
+                return jsonify({"error": "no_terminal_emulator",
+                                "detail": "No supported terminal emulator found (gnome-terminal/konsole/x-terminal-emulator/xterm)."}), 500
+    except FileNotFoundError as exc:
+        logger.error("spawn-claude: binary not found: %s", exc)
+        return jsonify({"error": "spawn_failed", "detail": "claude or terminal binary not found on PATH (set CLAUDE_BIN)."}), 500
+    except Exception as exc:  # noqa: BLE001
+        logger.error("spawn-claude: spawn error: %s", exc)
+        return jsonify({"error": "spawn_failed", "detail": "Could not spawn terminal."}), 500
+
+    logger.info("spawn-claude: launched key=%s cwd=%s", key, cwd)
+    return jsonify({"success": True, "key": key, "label": spec["label"], "cwd": cwd})
 
 
 @app.route("/api/files/create", methods=["POST"])
@@ -14822,7 +15016,16 @@ def install_python_package():
 
 @app.route("/api/python/execute", methods=["POST"])
 def execute_python_script():
-    """Execute a Python script in a virtual environment"""
+    """Execute a Python script in a virtual environment.
+
+    A5 (SECURITY): arbitrary code execution — gated to admin role + localhost only.
+    """
+    guard = _require_localhost()
+    if guard is not None:
+        return guard
+    guard = _require_admin_role()
+    if guard is not None:
+        return guard
     try:
         params = request.json
         script = params.get("script", "")

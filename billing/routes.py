@@ -132,19 +132,119 @@ def _email_from_event(event) -> str | None:
         if email:
             return email.strip().lower()
 
+    # charge.refunded / charge.dispute.created carry billing_details.email and a
+    # customer id, but rarely the sic_email metadata.  Try billing_details first,
+    # then resolve the local subscription row by stripe_customer_id.
+    email = (obj.get("billing_details") or {}).get("email") or obj.get("receipt_email")
+    if email:
+        return email.strip().lower()
+
+    customer_id = obj.get("customer")
+    if customer_id:
+        resolved = _email_by_customer_id(customer_id)
+        if resolved:
+            return resolved
+
     return None
 
 
-def _tier_from_status_and_meta(sub_obj) -> str:
-    """Derive a DB tier from a Stripe Subscription object."""
+def _email_by_customer_id(customer_id: str) -> str | None:
+    """Resolve a local subscription email from a Stripe customer id.
+
+    Used for events (charges/disputes) that carry a customer id but no
+    sic_email metadata.  Returns the email of the subscriptions row whose
+    stripe_customer_id matches, or None.
+    """
+    if not customer_id:
+        return None
+    try:
+        from .db import _connect  # noqa: PLC0415
+
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT email FROM subscriptions WHERE stripe_customer_id = ? LIMIT 1",
+                (customer_id,),
+            ).fetchone()
+        return row["email"] if row else None
+    except Exception:  # noqa: BLE001
+        logger.debug("could not resolve email for customer %s", customer_id)
+        return None
+
+
+def _tier_from_price_id(price_id: str) -> str | None:
+    """Map a Stripe Price ID back to a SIC tier using configured env price IDs.
+
+    Returns "team" / "studio" if the price matches a configured price env var,
+    else None.  This is authoritative for plan up/downgrades made via the
+    Stripe Customer Portal, which do NOT update subscription metadata — so the
+    sic_tier metadata is stale after a portal swap (B5).
+
+    Checks both interval (month/year) env vars for each tier.  get_price_id
+    raises EnvironmentError when an env var is unset; we treat that as "no
+    match" rather than failing the whole resolution.
+    """
+    if not price_id:
+        return None
+    for tier in ("team", "studio"):
+        for interval in ("month", "year"):
+            try:
+                if get_price_id(tier, interval) == price_id:
+                    return tier
+            except (EnvironmentError, ValueError):
+                continue
+    return None
+
+
+def _price_id_from_subscription(sub_obj) -> str | None:
+    """Extract the active Price ID from a Stripe Subscription object."""
+    items = (sub_obj.get("items") or {}).get("data") or []
+    if not items:
+        return None
+    price = items[0].get("price") or {}
+    return price.get("id")
+
+
+# Statuses for which the PAID tier value should be preserved in the row so the
+# downstream get_tier() grace logic can apply (e.g. past_due keeps the tier and
+# get_tier honours the 7-day grace window before downgrading to community).
+_GRACE_STATUSES = frozenset({"past_due"})
+
+
+def _resolve_paid_tier(sub_obj) -> str:
+    """Resolve the configured paid tier (team/studio) for a subscription object.
+
+    B5: PRICE-based resolution first (authoritative for Customer-Portal plan
+    swaps, which leave the sic_tier metadata stale), then fall back to the
+    sic_tier metadata. Returns 'community' only when nothing resolves to a
+    paid tier.
+    """
+    price_tier = _tier_from_price_id(_price_id_from_subscription(sub_obj))
+    if price_tier:
+        return price_tier
     meta = sub_obj.get("metadata") or {}
     label = meta.get("sic_tier", "community").lower()
-    tier = _TIER_LABEL_MAP.get(label, "community")
+    return _TIER_LABEL_MAP.get(label, "community")
+
+
+def _tier_from_status_and_meta(sub_obj) -> str:
+    """Derive the DB tier value to store from a Stripe Subscription object.
+
+    - active / trialing  → the resolved paid tier (price-based, then metadata).
+    - past_due           → preserve the paid tier so get_tier() can apply the
+                           7-day grace window (B7 fix — previously this returned
+                           community immediately, defeating the grace).
+    - anything else      → community (canceled/unpaid/incomplete/etc.).
+
+    Note: get_tier() is the single source of truth for *effective* access; this
+    function only decides what tier value to persist on the row.
+    """
     status = sub_obj.get("status", "")
-    # Downgrade to community if subscription is not active/trialing
-    if status not in _ACTIVE_STATUSES:
-        return "community"
-    return tier
+
+    if status in _ACTIVE_STATUSES or status in _GRACE_STATUSES:
+        return _resolve_paid_tier(sub_obj)
+
+    # Terminal / non-entitled statuses → community.
+    return "community"
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +482,9 @@ def webhook():
 
         elif event_type == "payment_intent.payment_failed":
             _handle_payment_intent_failed(event, email)
+
+        elif event_type in ("charge.refunded", "charge.dispute.created"):
+            _handle_charge_revoked(event, email, event_type)
 
         else:
             logger.debug("unhandled webhook event type: %s", event_type)
@@ -807,6 +910,81 @@ def _handle_payment_intent_failed(event, email: str | None) -> None:
         f"**Payment intent failed** for customer `{customer_id}` "
         f"| reason: {failure_msg} "
         f"| event: {event.get('id', '?')}"
+    )
+
+
+def _handle_charge_revoked(event, email: str | None, event_type: str) -> None:
+    """Revoke entitlement on refund or dispute (chargeback).
+
+    B4: a refunded or disputed customer must lose paid access immediately.
+    Previously these events were ignored, so a refunded user kept full tier
+    access until the subscription separately cancelled (which may never
+    happen for one-off refunds).
+
+    For ``charge.refunded`` we only revoke on a FULL refund (refunded == amount)
+    so a partial refund does not strip access.  ``charge.dispute.created``
+    always revokes — a chargeback is adversarial and access should be cut
+    immediately pending resolution.
+    """
+    obj = event["data"]["object"]
+    customer_id: str | None = obj.get("customer")
+
+    if not email:
+        logger.warning(
+            "%s — no email extractable from event %s; cannot revoke access",
+            event_type,
+            event.get("id"),
+        )
+        _discord_billing_alert(
+            f"**{event_type}** received but no SIC email could be resolved "
+            f"(customer `{customer_id}`, event `{event.get('id', '?')}`). "
+            f"Manual review required — access NOT revoked automatically."
+        )
+        return
+
+    # charge.refunded: only act on a full refund.
+    if event_type == "charge.refunded":
+        amount = obj.get("amount", 0) or 0
+        amount_refunded = obj.get("amount_refunded", 0) or 0
+        fully_refunded = bool(obj.get("refunded")) or (
+            amount > 0 and amount_refunded >= amount
+        )
+        if not fully_refunded:
+            logger.info(
+                "charge.refunded (partial: %s/%s) for email=%.6s*** — "
+                "access retained",
+                amount_refunded,
+                amount,
+                email[:6],
+            )
+            _discord_billing_alert(
+                f"**Partial refund** (${amount_refunded / 100:.2f} of "
+                f"${amount / 100:.2f}) for `{email[:6]}***` — access retained "
+                f"(event `{event.get('id', '?')}`)."
+            )
+            return
+
+    sub = get_subscription(email)
+    subscription_id = sub["stripe_subscription_id"] if sub else None
+    revoke_status = "refunded" if event_type == "charge.refunded" else "disputed"
+
+    upsert_subscription(
+        email=email,
+        stripe_customer_id=customer_id,
+        stripe_subscription_id=subscription_id,
+        tier="community",
+        status=revoke_status,
+        current_period_end=None,
+    )
+    logger.warning(
+        "%s — revoked entitlement (tier→community, status=%s) for email=%.6s***",
+        event_type,
+        revoke_status,
+        email[:6],
+    )
+    _discord_billing_alert(
+        f"**Entitlement revoked** ({event_type}) for `{email[:6]}***` "
+        f"— downgraded to community (event `{event.get('id', '?')}`)."
     )
 
 

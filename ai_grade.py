@@ -252,13 +252,118 @@ def _call_ai(title: str, description: str, category: str, severity: str | None) 
 # ---------------------------------------------------------------------------
 
 
+def _grade_one(title: str, description: str, category: str, severity: str | None) -> dict:
+    """Grade a single finding with caching. Returns the result dict (no Flask wrapping)."""
+    title = (title or "").strip()
+    description = (description or "").strip()
+    category = (category or "uncategorized").strip()
+    key = _cache_key(title, description)
+    cached = _cache_get(key)
+    if cached is not None:
+        return {"cached": True, **cached}
+    result = _call_ai(title, description, category, severity)
+    _cache_set(key, result)
+    return {"cached": False, **result}
+
+
+_LETTER_GRADES = ["A", "B", "C", "D", "F"]
+
+
+def _scan_letter_grade(findings: list) -> str:
+    """Derive an overall letter grade from finding severities."""
+    weights = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
+    if not findings:
+        return "A"
+    score = 0
+    for f in findings:
+        sev = ""
+        if isinstance(f, dict):
+            sev = str(f.get("severity", "")).lower()
+        score += weights.get(sev, 1)
+    if score == 0:
+        return "A"
+    if score <= 2:
+        return "B"
+    if score <= 5:
+        return "C"
+    if score <= 10:
+        return "D"
+    return "F"
+
+
+def _grade_scan(scan_id: str) -> tuple[dict, int]:
+    """Grade an entire scan's findings. Returns (response_dict, http_status)."""
+    try:
+        from scan_history import get_scan  # noqa: PLC0415
+    except ImportError:
+        return {"error": "scan_lookup_unavailable"}, 500
+
+    scan = get_scan(scan_id)
+    if scan is None:
+        return {"error": "scan_not_found", "scan_id": scan_id}, 404
+
+    findings = scan.get("findings") or []
+    remediations: list[dict] = []
+    # Grade up to 10 findings to bound AI cost/latency
+    for f in findings[:10]:
+        if not isinstance(f, dict):
+            f = {"title": str(f)}
+        f_title = f.get("title") or f.get("name") or f.get("id") or "Unnamed finding"
+        f_desc = f.get("description") or f.get("detail") or ""
+        f_cat = f.get("category") or f.get("type") or "security"
+        f_sev = f.get("severity")
+        try:
+            graded = _grade_one(str(f_title), str(f_desc), str(f_cat), f_sev)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ai_grade: failed to grade finding %r: %s", f_title, exc)
+            continue
+        remediations.append({
+            "title": str(f_title),
+            "severity": graded.get("severity") or f_sev or "medium",
+            "fix": graded.get("one_line_fix") or graded.get("remediation") or "",
+            "description": graded.get("remediation") or "",
+        })
+
+    grade = _scan_letter_grade(findings)
+    summary = f"Scan graded {grade} — {len(findings)} finding(s) analyzed."
+    return {
+        "scan_id": scan_id,
+        "grade": grade,
+        "summary": summary,
+        "findings_count": len(findings),
+        "remediations": remediations,
+    }, 200
+
+
 @ai_grade_bp.post("/grade")
 def grade_finding_route():
-    """POST /api/ai/grade — AI-grade a security finding."""
+    """POST /api/ai/grade — AI-grade a security finding or an entire scan.
+
+    Two request contracts are supported:
+      - Scan-level: {"scan_id": "..."} → {grade, summary, findings_count, remediations[]}
+      - Finding-level: {"title","category","severity?","description?"} → remediation guidance.
+    """
     if not os.environ.get("OPENROUTER_API_KEY") and not os.environ.get("ANTHROPIC_API_KEY"):
         return jsonify({"error": "AI_UNAVAILABLE", "message": "Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY"}), 503
 
     body = request.get_json(silent=True) or {}
+
+    # Scan-level grading path
+    scan_id = body.get("scan_id")
+    if scan_id and isinstance(scan_id, str) and scan_id.strip():
+        try:
+            resp, status = _grade_scan(scan_id.strip())
+        except ImportError:
+            return jsonify({"error": "AI_UNAVAILABLE", "message": "anthropic SDK not installed"}), 503
+        except RuntimeError as exc:
+            return jsonify({"error": "AI_UNAVAILABLE", "message": str(exc)}), 503
+        except Exception as exc:  # noqa: BLE001
+            logger.error("ai_grade: scan grade failed: %s", exc)
+            return jsonify({"error": "AI_ERROR", "message": "Scan grading failed"}), 502
+        _evict_expired_cache()
+        return jsonify(resp), status
+
+    # Finding-level grading path
     title = body.get("title")
     description = body.get("description", "")
     category = body.get("category")
