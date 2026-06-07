@@ -7,6 +7,7 @@ used by the refinement stage to match scanner findings.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 # 12 system component types → threat control templates.
@@ -30,6 +31,7 @@ SYSTEM_COMPONENTS: dict[str, list[dict[str, Any]]] = {
             "owasp": "A02:2021",
             "mitre": "T1552.001",
             "probes": ["secret", "env", "worker", "wrangler", "credential"],
+            "covered_by": ["trivy", "gitleaks"],
         },
         {
             "id": "net-cfworkers-cors",
@@ -178,6 +180,7 @@ SYSTEM_COMPONENTS: dict[str, list[dict[str, Any]]] = {
             "owasp": "A03:2021",
             "mitre": "T1190",
             "probes": ["sql", "injection", "sqli", "query", "interpolat", "bind"],
+            "covered_by": ["nuclei", "trivy"],
         },
         {
             "id": "net-sql-audit",
@@ -208,6 +211,7 @@ SYSTEM_COMPONENTS: dict[str, list[dict[str, Any]]] = {
             "owasp": "A05:2021",
             "mitre": "T1611",
             "probes": ["root", "user", "privilege", "uid", "container", "docker"],
+            "covered_by": ["checkov", "trivy"],
         },
         {
             "id": "net-docker-secrets",
@@ -222,6 +226,7 @@ SYSTEM_COMPONENTS: dict[str, list[dict[str, Any]]] = {
             "owasp": "A02:2021",
             "mitre": "T1552.001",
             "probes": ["env", "arg", "secret", "layer", "image", "dockerfile", "history"],
+            "covered_by": ["checkov", "trivy"],
         },
         {
             "id": "net-docker-network",
@@ -372,6 +377,7 @@ SYSTEM_COMPONENTS: dict[str, list[dict[str, Any]]] = {
             "owasp": "A02:2021",
             "mitre": "T1552.001",
             "probes": ["hardcoded", "secret", "api_key", "password", "token", "commit"],
+            "covered_by": ["trivy", "gitleaks"],
         },
         {
             "id": "net-secrets-rotation",
@@ -439,6 +445,96 @@ SYSTEM_COMPONENTS: dict[str, list[dict[str, Any]]] = {
             "probes": ["rate", "limit", "throttle", "brute", "auth", "login"],
         },
     ],
+    "app-server": [
+        {
+            "id": "net-appserver-authmw",
+            "tag": "MISSING-AUTHZ",
+            "title": "Missing Auth Middleware on Protected Routes",
+            "priority": "p0",
+            "description": (
+                "Application routes that mutate or expose user data without an "
+                "authentication / authorization middleware gate — anonymous "
+                "callers reach privileged handlers."
+            ),
+            "cwe": "CWE-306",
+            "owasp": "A01:2021",
+            "mitre": "T1190",
+            "probes": [
+                "auth middleware",
+                "authentication",
+                "authorization",
+                "missing auth",
+                "unauthenticated",
+                "access control",
+            ],
+            "covered_by": ["nuclei"],
+        },
+        {
+            "id": "net-appserver-injection",
+            "tag": "INPUT-INJECTION",
+            "title": "Unvalidated Input / Injection",
+            "priority": "p0",
+            "description": (
+                "Request parameters, bodies, or headers consumed without "
+                "schema validation — feeds injection (SQLi/command/template) "
+                "and logic-abuse vectors."
+            ),
+            "cwe": "CWE-20",
+            "owasp": "A03:2021",
+            "mitre": "T1190",
+            "probes": [
+                "injection",
+                "unvalidated",
+                "input validation",
+                "sqli",
+                "command injection",
+                "deserialization",
+            ],
+            "covered_by": ["nuclei", "trivy"],
+        },
+        {
+            "id": "net-appserver-errorleak",
+            "tag": "ERROR-LEAK",
+            "title": "Verbose Error / Stack-Trace Leakage",
+            "priority": "p1",
+            "description": (
+                "Internal exceptions, stack traces, or DB error strings returned "
+                "to API consumers — leaks implementation detail and aids attackers."
+            ),
+            "cwe": "CWE-209",
+            "owasp": "A05:2021",
+            "mitre": "T1592",
+            "probes": [
+                "stack trace",
+                "stacktrace",
+                "error leak",
+                "verbose error",
+                "exception",
+                "information disclosure",
+            ],
+            "covered_by": ["nuclei"],
+        },
+        {
+            "id": "net-appserver-ratelimit",
+            "tag": "NO-RATELIMIT",
+            "title": "Missing Rate Limiting on API Endpoints",
+            "priority": "p1",
+            "description": (
+                "API endpoints lack per-IP / per-user rate limiting — enables "
+                "brute force, scraping, and resource-exhaustion abuse (OWASP API4)."
+            ),
+            "cwe": "CWE-770",
+            "owasp": "API4:2023",
+            "mitre": "T1499",
+            "probes": [
+                "rate limit",
+                "rate limiting",
+                "throttle",
+                "brute force",
+                "resource exhaustion",
+            ],
+        },
+    ],
 }
 
 
@@ -473,7 +569,13 @@ def build_net(profile: dict) -> list[dict]:
 
 
 def _probe_match(finding: dict, probes: list[str]) -> bool:
-    """Return True if any probe string appears in key finding fields."""
+    """Return True if any probe matches a semantic field of the finding.
+
+    Matching is token-boundary (whole-word) and only considers semantic
+    identity fields — NOT severity/type/category, which carry no topical
+    meaning and would otherwise make every "high" finding match every probe
+    list that happens to contain a generic word.
+    """
     parts = [
         str(finding.get("name") or ""),
         str(finding.get("vulnerabilityName") or ""),
@@ -482,9 +584,6 @@ def _probe_match(finding: dict, probes: list[str]) -> bool:
         str(finding.get("checkID") or ""),
         str(finding.get("description") or ""),
         str(finding.get("message") or ""),
-        str(finding.get("severity") or ""),
-        str(finding.get("category") or ""),
-        str(finding.get("type") or ""),
         str(finding.get("rule_id") or ""),
         str(finding.get("rule") or ""),
     ]
@@ -493,27 +592,53 @@ def _probe_match(finding: dict, probes: list[str]) -> bool:
         parts.extend(str(t) for t in tags)
     elif isinstance(tags, str):
         parts.append(tags)
-    haystack = " ".join(parts).lower()
-    return any(p.lower() in haystack for p in probes)
+    haystack = " ".join(parts)
+    for p in probes:
+        if re.search(r"\b" + re.escape(p) + r"\b", haystack, re.IGNORECASE):
+            return True
+    return False
 
 
-def adjudicate_net(net: list[dict], findings: list[dict]) -> list[dict]:
-    """Match scanner findings against net sections; update status to proven/untested.
+def adjudicate_net(
+    net: list[dict],
+    findings: list[dict],
+    scanners_run: list[str] | None = None,
+) -> list[dict]:
+    """Match scanner findings against net sections; set proven/refuted/untested.
+
+    Status semantics:
+      - ``proven``   — a scanner finding matched the section's probes.
+      - ``refuted``  — the section declares a ``covered_by`` scanner that DID
+                       run, and that scanner produced no matching finding. The
+                       absence is meaningful: the surface was tested and clean.
+      - ``untested`` — no match, and no scanner covering this section ran (or
+                       the section declares no coverage). The absence is NOT
+                       evidence of safety.
 
     Args:
         net: Output of build_net() — list of control section dicts.
         findings: Raw merged scanner findings list.
+        scanners_run: List of scanner source labels that actually ran
+            (e.g. merge_meta.sources). Used to decide refuted vs untested.
 
     Returns:
         Updated net with status set and matched findings attached to each section.
     """
+    ran = {str(s).lower() for s in (scanners_run or [])}
+
     for section in net:
         probes = section.get("probes", [])
         matched = [f for f in findings if _probe_match(f, probes)]
         if matched:
             section["status"] = "proven"
             section["items"] = matched
+            continue
+
+        section["items"] = []
+        covered_by = [str(c).lower() for c in (section.get("covered_by") or [])]
+        # Refuted only when a covering scanner actually ran and found nothing.
+        if covered_by and any(c in ran for c in covered_by):
+            section["status"] = "refuted"
         else:
             section["status"] = "untested"
-            section["items"] = []
     return net

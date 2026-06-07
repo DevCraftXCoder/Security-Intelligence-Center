@@ -39,22 +39,61 @@ def _output_dir(base: str | None, slug: str) -> Path:
 
 
 _SOC_SCORE_RE = re.compile(r"<!--soc-score:(\d+)-->")
+_SOC_VERDICT_RE = re.compile(r"<!--soc-verdict:(\w+)-->")
 
 
-def _extract_score(html_path: str) -> int | None:
-    """Read <!--soc-score:NN--> from the first 20 lines of the output HTML."""
+def _extract_posture(html_path: str) -> dict:
+    """Read <!--soc-score:NN--> and <!--soc-verdict:VV--> from the output HTML.
+
+    Scans the first 30 lines for the stamped comments. Falls back to the
+    embedded project-data JSON `posture` block when comments are absent.
+    Always returns a dict with at least `score`, `verdict`, `scanned` keys.
+    """
+    score: int | None = None
+    verdict: str | None = None
     try:
         with open(html_path, encoding="utf-8") as f:
-            for _ in range(20):
+            for _ in range(30):
                 line = f.readline()
                 if not line:
                     break
-                m = _SOC_SCORE_RE.search(line)
-                if m:
-                    return int(m.group(1))
-        return None
+                if score is None:
+                    m = _SOC_SCORE_RE.search(line)
+                    if m:
+                        score = int(m.group(1))
+                if verdict is None:
+                    mv = _SOC_VERDICT_RE.search(line)
+                    if mv:
+                        verdict = mv.group(1)
+                if score is not None and verdict is not None:
+                    break
     except OSError:
-        return None
+        pass
+
+    if score is not None or verdict is not None:
+        return {
+            "score": score if score is not None else 0,
+            "verdict": verdict or "NET",
+            "scanned": (verdict or "NET") != "NET",
+        }
+
+    # Fall back to embedded project-data posture JSON
+    try:
+        import sic_to_soc
+
+        html = Path(html_path).read_text(encoding="utf-8", errors="replace")
+        pd = sic_to_soc._extract_project_data(html)
+        if pd and isinstance(pd.get("posture"), dict):
+            posture = pd["posture"]
+            return {
+                "score": posture.get("score", 0) or 0,
+                "verdict": posture.get("verdict", "NET"),
+                "scanned": bool(posture.get("scanned", False)),
+            }
+    except (OSError, ImportError):
+        pass
+
+    return {"score": 0, "verdict": "NET", "scanned": False}
 
 
 def stage1_net(
@@ -186,10 +225,23 @@ def stage1_net(
         "scanDiff":    {"new": 0, "resolved": 0, "unchanged": 0, "has_prior": False},
     }
 
+    # Wide-net stage is architecture-only — no scanner data, so the posture is
+    # explicitly unscanned (verdict NET). No "score >= 95 -> PASS" shortcut.
+    posture = sic_to_soc.compute_posture(
+        all_items=[], net_sections=net, scanned=False
+    )
+    project_data["posture"] = posture
+
     out_path = out_dir / f"{slug}-soc-net-{ts}.html"
     tpl = template_path or sic_to_soc.DEFAULT_TEMPLATE
-    template = Path(tpl).read_text(encoding="utf-8")
+    try:
+        template = Path(tpl).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"[soc_pipeline] FATAL: could not read template {tpl}: {exc}",
+              file=sys.stderr)
+        sys.exit(1)
     html = sic_to_soc.inject_project_data(template, project_data)
+    html = sic_to_soc.stamp_score(html, posture)
     out_path.write_text(html, encoding="utf-8")
     print(f"[soc_pipeline] Stage 1 output: {out_path}", file=sys.stderr)
 
@@ -229,8 +281,13 @@ def stage2_refine(
     # Run scanner or load existing scan JSON
     if scan_json and Path(scan_json).is_file():
         print(f"[soc_pipeline] Stage 2: loading existing scan {scan_json!r}", file=sys.stderr)
-        with open(scan_json, encoding="utf-8") as f:
-            merged = json.load(f)
+        try:
+            with open(scan_json, encoding="utf-8") as f:
+                merged = json.load(f)
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"[soc_pipeline] FATAL: could not load scan JSON {scan_json}: {exc}",
+                  file=sys.stderr)
+            sys.exit(1)
         merged_path = scan_json
     else:
         print(
@@ -239,8 +296,13 @@ def stage2_refine(
         )
         runner = soc_runner.SOCRunner(project_path=project_path)
         merged_path = runner.scan(str(out_dir))
-        with open(merged_path, encoding="utf-8") as f:
-            merged = json.load(f)
+        try:
+            with open(merged_path, encoding="utf-8") as f:
+                merged = json.load(f)
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"[soc_pipeline] FATAL: could not load merged scan {merged_path}: {exc}",
+                  file=sys.stderr)
+            sys.exit(1)
 
     # Collect findings from merged JSON
     findings = sic_to_soc._collect(merged)
@@ -248,6 +310,13 @@ def stage2_refine(
         f"[soc_pipeline] {len(findings)} findings collected from scanner",
         file=sys.stderr,
     )
+
+    # Which scanners actually ran — used to distinguish refuted (scanner ran,
+    # found nothing) from untested (scanner never ran for that surface).
+    scanners_run = []
+    if isinstance(merged, dict):
+        meta = merged.get("merge_meta") or {}
+        scanners_run = list(meta.get("sources") or [])
 
     ts = now[:10].replace("-", "")
     out_path = out_dir / f"{slug}-soc-refined-{ts}.html"
@@ -263,11 +332,18 @@ def stage2_refine(
         output_path=str(out_path),
         asset_tier="production",
         net=net,
+        scanners_run=scanners_run,
     )
 
     tpl = template_path or sic_to_soc.DEFAULT_TEMPLATE
-    template = Path(tpl).read_text(encoding="utf-8")
+    try:
+        template = Path(tpl).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"[soc_pipeline] FATAL: could not read template {tpl}: {exc}",
+              file=sys.stderr)
+        sys.exit(1)
     html = sic_to_soc.inject_project_data(template, project_data)
+    html = sic_to_soc.stamp_score(html, project_data.get("posture", {}))
     out_path.write_text(html, encoding="utf-8")
     print(f"[soc_pipeline] Stage 2 output: {out_path}", file=sys.stderr)
 
@@ -338,37 +414,51 @@ def _notify_discord(
     output_path: str,
     result: dict,
 ) -> None:
-    """Send a Discord embed summarising the pipeline stage result, with the
-    report HTML attached and the score extracted from <!--soc-score:NN-->."""
+    """Send a Discord embed summarising the pipeline stage result.
+
+    The score AND verdict are read from the stamped HTML (<!--soc-score:NN-->,
+    <!--soc-verdict:VV-->) — the single authoritative posture computed by the
+    Python score engine. The verdict picks the embed color via VERDICT_COLORS,
+    so Discord never disagrees with the report. No hardcoded green PASS.
+    """
     import os
 
-    score = _extract_score(output_path)
-    score_str = f"{score}/100" if score is not None else "N/A"
+    from sic_to_soc import VERDICT_COLORS
+
+    posture = _extract_posture(output_path)
+    score = posture.get("score")
+    verdict = posture.get("verdict", "NET")
+    scanned = posture.get("scanned", False)
+    score_str = f"{score}/100" if (scanned and score is not None) else "N/A"
+    color = VERDICT_COLORS.get(verdict, VERDICT_COLORS["NET"])
 
     if stage == "wide-net":
         net_count = len(result.get("net", []))
         components = result.get("profile", {}).get("components", [])
-        if score is not None and score >= 95:
-            verdict = "PASS"
-            color = 0x4ADE80
-        elif score is not None and score >= 70:
-            verdict = "REVIEW"
-            color = 0xB89100
+        if verdict == "NET":
+            title = f"SOC NET -- {slug.upper()} — architecture-only, not yet assessed"
+            desc = (
+                f"**NET — architecture-only, not yet assessed**\n"
+                f"**{net_count}** threat classes identified from architecture profile.\n"
+                f"Components: {', '.join(components) or 'none'}\n\n"
+                f"Run `--refine` to produce the Refined Verdict."
+            )
         else:
-            verdict = "NET"
-            color = 0xB89100
-        embed = {
-            "title": f"SOC Wide-Net -- {slug.upper()}",
-            "description": (
+            title = f"SOC Wide-Net -- {slug.upper()} ({score_str}, {verdict})"
+            desc = (
                 f"**Score: {score_str} - {verdict}**\n"
                 f"**{net_count}** threat classes identified from architecture profile.\n"
                 f"Components: {', '.join(components) or 'none'}\n\n"
                 f"Run `--refine` to produce the Refined Verdict."
-            ),
+            )
+        embed = {
+            "title": title,
+            "description": desc,
             "color": color,
             "fields": [
                 {"name": "Stage", "value": "1 - Wide Net", "inline": True},
                 {"name": "Score", "value": score_str, "inline": True},
+                {"name": "Verdict", "value": verdict, "inline": True},
                 {"name": "Sections", "value": str(net_count), "inline": True},
             ],
             "footer": {"text": f"3SIXTYCO. SOC Pipeline - {os.path.basename(output_path)}"},
@@ -376,15 +466,6 @@ def _notify_discord(
     else:
         proven = result.get("proven_count", 0)
         untested = result.get("untested_count", 0)
-        if score is not None and score >= 95:
-            verdict = "PASS"
-            color = 0x4ADE80
-        elif score is not None and score >= 70:
-            verdict = "REVIEW"
-            color = 0xB89100
-        else:
-            verdict = "FAIL" if (score is not None and score < 70) else "REVIEW"
-            color = 0xFF3B3B if proven > 0 else 0x4ADE80
         embed = {
             "title": f"SOC Refined Verdict -- {slug.upper()} ({score_str}, {verdict})",
             "description": (
@@ -395,6 +476,7 @@ def _notify_discord(
             "fields": [
                 {"name": "Stage", "value": "2 - Refined Verdict", "inline": True},
                 {"name": "Score", "value": score_str, "inline": True},
+                {"name": "Verdict", "value": verdict, "inline": True},
                 {"name": "Proven", "value": str(proven), "inline": True},
                 {"name": "Untested", "value": str(untested), "inline": True},
             ],
@@ -403,7 +485,8 @@ def _notify_discord(
 
     ok = _post_discord(webhook_url, [embed], file_path=output_path)
     if ok:
-        print(f"[soc_pipeline] Discord notification sent for {stage} (score={score_str})", file=sys.stderr)
+        print(f"[soc_pipeline] Discord notification sent for {stage} "
+              f"(score={score_str}, verdict={verdict})", file=sys.stderr)
     else:
         print(f"[soc_pipeline] Discord notification FAILED for {stage}", file=sys.stderr)
 
@@ -455,12 +538,25 @@ def main() -> None:
         parser.error("Specify --net, --refine, or --auto")
 
     import os
-    discord_url = os.environ.get("DISCORD_WEBHOOK_SOC", "").strip() if args.discord else ""
-    if args.discord and not discord_url:
-        print(
-            "[soc_pipeline] WARNING: --discord requested but DISCORD_WEBHOOK_SOC not set",
-            file=sys.stderr,
-        )
+    discord_url = ""
+    if args.discord:
+        discord_url = (os.environ.get("DISCORD_WEBHOOK_SOC") or "").strip()
+        if not discord_url:
+            legacy = (os.environ.get("DROPSTREAM_SOC_DISCORD_WEBHOOK") or "").strip()
+            if legacy:
+                print(
+                    "[soc_pipeline] WARNING: DISCORD_WEBHOOK_SOC not set — falling back "
+                    "to deprecated DROPSTREAM_SOC_DISCORD_WEBHOOK. Migrate to "
+                    "DISCORD_WEBHOOK_SOC.",
+                    file=sys.stderr,
+                )
+                discord_url = legacy
+        if not discord_url:
+            print(
+                "[soc_pipeline] WARNING: --discord requested but neither "
+                "DISCORD_WEBHOOK_SOC nor DROPSTREAM_SOC_DISCORD_WEBHOOK is set",
+                file=sys.stderr,
+            )
 
     if args.auto or args.net:
         result1 = stage1_net(args.path, args.output_dir, args.template)

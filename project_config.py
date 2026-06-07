@@ -43,6 +43,18 @@ CONFIG_FILENAME: str = ".sic.yaml"
 
 VALID_ASSET_TIERS: tuple[str, ...] = ("production", "staging", "internal", "dev")
 
+# Source-file suffixes scanned for content-detection signals. Broadened beyond
+# the original .py/.ts pair so polyglot repos (Go, Rust, frontend, templates)
+# are profiled correctly.
+CONTENT_SUFFIXES: tuple[str, ...] = (
+    ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java",
+    ".html", ".vue", ".svelte",
+)
+# Directories never worth grepping — vendored deps, build output, archives.
+SKIP_DIRS: frozenset[str] = frozenset(
+    {"node_modules", ".git", "dist", ".next", "_archive", "__pycache__", ".venv"}
+)
+
 
 # ---------------------------------------------------------------------------
 # Low-level helpers
@@ -398,15 +410,15 @@ def detect_system_profile(path: str) -> dict:
 
     def _grep_any(pattern: str) -> bool:
         rx = _re.compile(pattern, _re.IGNORECASE)
-        for fpath in root.rglob("*.py"):
+        for fpath in root.rglob("*"):
+            if fpath.suffix.lower() not in CONTENT_SUFFIXES:
+                continue
+            if any(part in SKIP_DIRS for part in fpath.parts):
+                continue
             try:
-                if rx.search(fpath.read_text(encoding="utf-8", errors="ignore")):
-                    return True
-            except OSError:
-                pass
-        for fpath in root.rglob("*.ts"):
-            try:
-                if rx.search(fpath.read_text(encoding="utf-8", errors="ignore")):
+                if fpath.is_file() and rx.search(
+                    fpath.read_text(encoding="utf-8", errors="ignore")
+                ):
                     return True
             except OSError:
                 pass
@@ -475,6 +487,12 @@ def detect_system_profile(path: str) -> dict:
         or any(root.glob("*.env*"))
     ):
         _add_component("secrets-store")
+
+    # Application server (FastAPI / Hono / Express / generic HTTP listener)
+    if _grep_any(
+        r"from\s+fastapi|new\s+Hono\(|express\(\)|app\.listen|FastAPI\("
+    ):
+        _add_component("app-server")
 
     return {"components": components, "scanners": scanners}
 

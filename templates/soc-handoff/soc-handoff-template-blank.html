@@ -1112,7 +1112,7 @@ document.getElementById('importinput').onchange=function(e){
    done:1 = control verified implemented (pre-checked on first load).
    Carried over 1:1 from 01-LITE @ f5d2c0c.
 ───────────────────────────────────────────── */
-const DATA=[
+const DATA_FALLBACK=[
   {id:'s01',tag:'#RENDERTOKEN',title:'Private render-link token plane (S005-S012)',items:[
     {id:'rt01',p:'p0',done:1,name:'Token secret is CSPRNG; raw is never persisted — only the HMAC hash is stored',desc:'generateRenderToken: 128-bit crypto.getRandomValues raw with dsl_ prefix; TokenRecord has no raw field; storage key is the HMAC-SHA256 hash.',ref:'CWE-330 · NIST SP 800-133 · renderToken.ts'},
     {id:'rt02',p:'p0',done:1,name:'HMAC secret only via wrangler secret put — never in vars or client bundle; 32-char floor enforced',desc:'wrangler.jsonc declares no vars (deploy-clobber guard); MIN_HMAC_SECRET_LEN gate in hashRenderToken + requireHmacSecret. Safety harness regression-locks the no-vars rule.',ref:'CWE-312 · OWASP A02:2021 · wrangler.jsonc · renderToken.ts'},
@@ -1173,11 +1173,30 @@ const DATA=[
   ]},
 ];
 
+/* ─── project-data loader (Bridge integration) ─────────────────────────────
+   sic_to_soc.py injects a <script id="project-data"> JSON block carrying the
+   server-computed `controls`, `posture` (authoritative score/verdict), and
+   week-over-week `snapshots`. When present we drive the report from that data
+   instead of the hardcoded DATA_FALLBACK sample (the old DropStream demo).
+   The blank template has no project-data block → falls back cleanly. ──────── */
+const PD=(()=>{
+  try{
+    const el=document.getElementById('project-data');
+    return el?JSON.parse(el.textContent):{};
+  }catch(e){return {};}
+})();
+const DATA=(PD.controls&&PD.controls.length)?PD.controls:DATA_FALLBACK;
+/* DEFAULT_DONE base: controls flagged done in the injected data take priority;
+   otherwise fall back to the static DEFAULT_DONE list defined below. */
+const DEFAULT_DONE_BASE=Array.isArray(PD.controls)
+  ? PD.controls.flatMap(s=>(s.items||[]).filter(c=>c.done).map(c=>c.id))
+  : [];
+
 /* ─── engine (3SIXTYCO v1.2 — DOM via createElement/textContent, no markup injection) ─── */
 const W={p0:4,p1:3,p2:2,p3:1};
 const RC=2*Math.PI*62;
 const SK='ds-soc-handoff-blank';
-const DEFAULT_DONE=[];
+const DEFAULT_DONE=(DEFAULT_DONE_BASE&&DEFAULT_DONE_BASE.length)?DEFAULT_DONE_BASE:[];
 let saved={};try{saved=JSON.parse(localStorage.getItem(SK)||'{}')}catch(e){}
 let checked=new Set(Array.isArray(saved.checked)?saved.checked:DEFAULT_DONE);
 let weekOff=saved.week||0;
@@ -1247,7 +1266,18 @@ function recalc(){
     const w=W[i.p];max+=w;bp[i.p].t++;
     if(checked.has(i.id)){earned+=w;bp[i.p].d++;}
   }));
-  const score=max>0?Math.round(earned/max*100):0;
+  const checklistScore=max>0?Math.round(earned/max*100):0;
+
+  /* Authoritative-score short-circuit (Bridge integration):
+     If the server stamped a posture and the analyst hasn't manually edited
+     anything this session, the ring + score number + grade reflect the
+     server-computed posture.score/posture.verdict directly. Once the analyst
+     toggles a control (window._analystEdited), we revert to the checklist score
+     so manual edits are honored. Per-priority counters + backlog always reflect
+     the live checklist regardless. */
+  const useServerPosture = PD.posture && PD.posture.score!==undefined && PD.posture.score!==null && !window._analystEdited;
+  const score = useServerPosture ? PD.posture.score : checklistScore;
+  const gradeLabel = useServerPosture && PD.posture.verdict ? PD.posture.verdict : sg(score);
 
   const arc=(score/100)*RC;
   const ring=document.getElementById('arc');
@@ -1258,7 +1288,7 @@ function recalc(){
   sn.textContent=score;
   sn.style.color=sc(score);
   const sg2=document.getElementById('sgrade');
-  sg2.textContent=sg(score);
+  sg2.textContent=gradeLabel;
   sg2.style.color=sc(score);
   document.getElementById('fscore').textContent=score;
 
@@ -1350,7 +1380,7 @@ function render(){
         E('span',{class:'stitle',text:sec.title})
       ),
       E('div',{class:'sright'},
-        (function(){var _s=sec;var ba=E('button',{class:'sec-bulk',type:'button',title:'Mark all PASS',text:'✓ ALL'});var bc=E('button',{class:'sec-bulk clr',type:'button',title:'Clear section',text:'○ CLEAR'});ba.onclick=function(ev){ev.stopPropagation();_s.items.forEach(function(it){checked.add(it.id);timestamps[it.id]=new Date().toISOString().slice(0,10);});persist();render();};bc.onclick=function(ev){ev.stopPropagation();_s.items.forEach(function(it){checked.delete(it.id);delete timestamps[it.id];});persist();render();};return E('div',{class:'sec-bulk-row'},ba,bc);})(),
+        (function(){var _s=sec;var ba=E('button',{class:'sec-bulk',type:'button',title:'Mark all PASS',text:'✓ ALL'});var bc=E('button',{class:'sec-bulk clr',type:'button',title:'Clear section',text:'○ CLEAR'});ba.onclick=function(ev){ev.stopPropagation();window._analystEdited=true;_s.items.forEach(function(it){checked.add(it.id);timestamps[it.id]=new Date().toISOString().slice(0,10);});persist();render();};bc.onclick=function(ev){ev.stopPropagation();window._analystEdited=true;_s.items.forEach(function(it){checked.delete(it.id);delete timestamps[it.id];});persist();render();};return E('div',{class:'sec-bulk-row'},ba,bc);})(),
         E('div',{class:'sprog'},
           E('span',{class:'sfrac'},dnSpan,' / '+tot),
           E('div',{class:'spbar'},pf)
@@ -1372,6 +1402,9 @@ function render(){
 
 document.getElementById('secs').addEventListener('change',function(e){
   if(e.target.type!=='checkbox')return;
+  /* Analyst manually toggled a control — from here on recalc() recomputes the
+     score from the checklist instead of honoring the server posture short-circuit. */
+  window._analystEdited=true;
   const id=e.target.dataset.id;
   const row=e.target.closest('.item');
   const p=row.dataset.p;
@@ -2024,8 +2057,19 @@ buildSparkline();
 updateSignoffPrompt();
 </script>
 
-<script>/* soc-runner pre-seed */
-try{localStorage.setItem('ds-soc-handoff-blank',"{\"checked\":[\"rt01\",\"rt02\",\"rt03\",\"rt04\",\"rt05\",\"rt06\",\"rt07\",\"rt08\",\"rt09\",\"rt10\",\"rt11\",\"rt12\",\"ed01\",\"ed02\",\"ed03\",\"ed04\",\"ed05\",\"ed06\",\"ed07\",\"ed09\",\"lk01\",\"lk02\",\"lk03\",\"lk04\",\"lk05\",\"lk06\",\"lk07\",\"sp01\",\"sp02\",\"sp03\",\"sp06\",\"dp01\",\"dp02\",\"dp03\",\"dp04\",\"dp05\",\"dp06\"],\"signoff\":{\"name\":\"Jowey Pierre-Francois\",\"role\":\"Lead Systems Engineer — 3SixtyCo.\"},\"week\":0,\"notes\":{},\"snapshots\":{},\"itemText\":{},\"timestamps\":{\"rt01\":\"2026-05-30\",\"rt02\":\"2026-05-30\",\"rt03\":\"2026-05-30\",\"rt04\":\"2026-05-30\",\"rt05\":\"2026-05-30\",\"rt06\":\"2026-05-30\",\"rt07\":\"2026-05-30\",\"rt08\":\"2026-05-30\",\"rt09\":\"2026-05-30\",\"rt10\":\"2026-05-30\",\"rt11\":\"2026-05-30\",\"rt12\":\"2026-05-30\",\"ed01\":\"2026-05-30\",\"ed02\":\"2026-05-30\",\"ed03\":\"2026-05-30\",\"ed04\":\"2026-05-30\",\"ed05\":\"2026-05-30\",\"ed06\":\"2026-05-30\",\"ed07\":\"2026-05-30\",\"ed09\":\"2026-05-30\",\"lk01\":\"2026-05-30\",\"lk02\":\"2026-05-30\",\"lk03\":\"2026-05-30\",\"lk04\":\"2026-05-30\",\"lk05\":\"2026-05-30\",\"lk06\":\"2026-05-30\",\"lk07\":\"2026-05-30\",\"sp01\":\"2026-05-30\",\"sp02\":\"2026-05-30\",\"sp03\":\"2026-05-30\",\"sp06\":\"2026-05-30\",\"dp01\":\"2026-05-30\",\"dp02\":\"2026-05-30\",\"dp03\":\"2026-05-30\",\"dp04\":\"2026-05-30\",\"dp05\":\"2026-05-30\",\"dp06\":\"2026-05-30\"},\"evidence\":{}}");}catch(e){}
+<script>/* soc-runner pre-seed (DropStream demo sample) ──────────────────────────────
+   GUARDED (Bridge integration): this block hardcodes the 37-control DropStream
+   sample into localStorage. It must ONLY run for the raw blank template demo,
+   never for a sic_to_soc.py-generated report — otherwise DropStream samples
+   bleed over the server-injected controls/posture. We skip it whenever a
+   <script id="project-data"> block is present (i.e. a real generated report).
+   The original unconditional seed is preserved verbatim inside the guard. */
+(function(){
+  try{
+    if(document.getElementById('project-data'))return; /* generated report — do not seed demo */
+    localStorage.setItem('ds-soc-handoff-blank',"{\"checked\":[\"rt01\",\"rt02\",\"rt03\",\"rt04\",\"rt05\",\"rt06\",\"rt07\",\"rt08\",\"rt09\",\"rt10\",\"rt11\",\"rt12\",\"ed01\",\"ed02\",\"ed03\",\"ed04\",\"ed05\",\"ed06\",\"ed07\",\"ed09\",\"lk01\",\"lk02\",\"lk03\",\"lk04\",\"lk05\",\"lk06\",\"lk07\",\"sp01\",\"sp02\",\"sp03\",\"sp06\",\"dp01\",\"dp02\",\"dp03\",\"dp04\",\"dp05\",\"dp06\"],\"signoff\":{\"name\":\"Jowey Pierre-Francois\",\"role\":\"Lead Systems Engineer — 3SixtyCo.\"},\"week\":0,\"notes\":{},\"snapshots\":{},\"itemText\":{},\"timestamps\":{\"rt01\":\"2026-05-30\",\"rt02\":\"2026-05-30\",\"rt03\":\"2026-05-30\",\"rt04\":\"2026-05-30\",\"rt05\":\"2026-05-30\",\"rt06\":\"2026-05-30\",\"rt07\":\"2026-05-30\",\"rt08\":\"2026-05-30\",\"rt09\":\"2026-05-30\",\"rt10\":\"2026-05-30\",\"rt11\":\"2026-05-30\",\"rt12\":\"2026-05-30\",\"ed01\":\"2026-05-30\",\"ed02\":\"2026-05-30\",\"ed03\":\"2026-05-30\",\"ed04\":\"2026-05-30\",\"ed05\":\"2026-05-30\",\"ed06\":\"2026-05-30\",\"ed07\":\"2026-05-30\",\"ed09\":\"2026-05-30\",\"lk01\":\"2026-05-30\",\"lk02\":\"2026-05-30\",\"lk03\":\"2026-05-30\",\"lk04\":\"2026-05-30\",\"lk05\":\"2026-05-30\",\"lk06\":\"2026-05-30\",\"lk07\":\"2026-05-30\",\"sp01\":\"2026-05-30\",\"sp02\":\"2026-05-30\",\"sp03\":\"2026-05-30\",\"sp06\":\"2026-05-30\",\"dp01\":\"2026-05-30\",\"dp02\":\"2026-05-30\",\"dp03\":\"2026-05-30\",\"dp04\":\"2026-05-30\",\"dp05\":\"2026-05-30\",\"dp06\":\"2026-05-30\"},\"evidence\":{}}");
+  }catch(e){}
+})();
 </script>
 </body>
 </html>

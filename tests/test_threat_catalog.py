@@ -10,11 +10,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from threat_catalog import SYSTEM_COMPONENTS, _probe_match, adjudicate_net, build_net
 
 
-def test_system_components_has_twelve_keys() -> None:
-    """SYSTEM_COMPONENTS must contain exactly 12 component entries."""
-    assert len(SYSTEM_COMPONENTS) == 12, (
-        f"Expected 12 components, got {len(SYSTEM_COMPONENTS)}: {list(SYSTEM_COMPONENTS)}"
+def test_system_components_has_thirteen_keys() -> None:
+    """SYSTEM_COMPONENTS must contain 13 component entries (12 + app-server)."""
+    assert len(SYSTEM_COMPONENTS) == 13, (
+        f"Expected 13 components, got {len(SYSTEM_COMPONENTS)}: {list(SYSTEM_COMPONENTS)}"
     )
+
+
+def test_app_server_component_present() -> None:
+    """app-server must be registered with its four threat sections."""
+    assert "app-server" in SYSTEM_COMPONENTS
+    ids = {s["id"] for s in SYSTEM_COMPONENTS["app-server"]}
+    assert ids == {
+        "net-appserver-authmw",
+        "net-appserver-injection",
+        "net-appserver-errorleak",
+        "net-appserver-ratelimit",
+    }
 
 
 def test_all_sections_have_required_fields() -> None:
@@ -74,6 +86,61 @@ def test_probe_match_miss() -> None:
     finding = {"name": "open port 22", "description": "SSH exposed"}
     probes = ["jwt", "sql injection", "cors misconfiguration"]
     assert _probe_match(finding, probes) is False
+
+
+def test_probe_match_ignores_severity_only_finding() -> None:
+    """A finding whose only signal is severity:'high' must match zero net sections.
+
+    Severity is not a topical field — matching against it made every high
+    finding bind to every section. _probe_match must ignore it entirely.
+    """
+    finding = {"severity": "high", "type": "high", "category": "high"}
+    matched_any = False
+    for sections in SYSTEM_COMPONENTS.values():
+        for section in sections:
+            if _probe_match(finding, section.get("probes", [])):
+                matched_any = True
+    assert matched_any is False, "severity-only finding should match no net section"
+
+
+def test_probe_match_cors_wildcard_hits_cors_section() -> None:
+    """A 'CORS wildcard origin' finding matches the cf-workers CORS section."""
+    finding = {"name": "CORS wildcard origin", "description": "Access-Control-Allow-Origin: *"}
+    cors_section = next(
+        s for s in SYSTEM_COMPONENTS["cf-workers"] if s["id"] == "net-cfworkers-cors"
+    )
+    assert _probe_match(finding, cors_section["probes"]) is True
+
+
+def test_probe_match_whole_word_not_substring() -> None:
+    """Token-boundary matching: a probe must not match inside a larger word."""
+    # 'ws' probe should NOT match 'awsome' (substring) but SHOULD match 'ws' token
+    finding = {"name": "awsome feature", "description": ""}
+    assert _probe_match(finding, ["ws"]) is False
+
+
+def test_adjudicate_net_refuted_when_scanner_ran_clean() -> None:
+    """A covered section with no findings is refuted when its scanner ran."""
+    section = dict(
+        next(s for s in SYSTEM_COMPONENTS["secrets-store"]
+             if s["id"] == "net-secrets-hardcoded")
+    )
+    net = [section]
+    result = adjudicate_net(net, findings=[], scanners_run=["trivy"])
+    assert result[0]["status"] == "refuted", (
+        "covered section + scanner ran + no findings should be refuted"
+    )
+
+
+def test_adjudicate_net_untested_when_scanner_absent() -> None:
+    """A covered section with no findings is untested when its scanner did NOT run."""
+    section = dict(
+        next(s for s in SYSTEM_COMPONENTS["secrets-store"]
+             if s["id"] == "net-secrets-hardcoded")
+    )
+    net = [section]
+    result = adjudicate_net(net, findings=[], scanners_run=["nuclei"])
+    assert result[0]["status"] == "untested"
 
 
 def test_adjudicate_net_marks_proven_and_untested() -> None:

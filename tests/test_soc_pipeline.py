@@ -10,6 +10,9 @@ from unittest.mock import patch
 _SIC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SIC))
 
+import pytest  # noqa: E402
+
+import sic_to_soc  # noqa: E402
 import soc_pipeline  # noqa: E402
 
 
@@ -187,6 +190,109 @@ def test_stage2_refine_with_scan_json(tmp_path: Path) -> None:
     assert out.exists()
     assert result["proven_count"] == 1
     assert result["untested_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Posture / score-stamp round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_compute_posture_open_p0_drops_score_below_90() -> None:
+    """An open P0 item must push the score below the PASS threshold."""
+    items = [{"p": "p0", "done": False}]
+    posture = sic_to_soc.compute_posture(items, net_sections=None, scanned=True)
+    assert posture["scanned"] is True
+    assert posture["score"] < 90
+    assert posture["verdict"] != "PASS"
+
+
+def test_compute_posture_unscanned_is_net() -> None:
+    """Unscanned posture is always NET / score 0 / scanned False."""
+    posture = sic_to_soc.compute_posture([], net_sections=[], scanned=False)
+    assert posture["verdict"] == "NET"
+    assert posture["scanned"] is False
+    assert posture["score"] == 0
+
+
+def test_stamp_score_round_trip_below_90(tmp_path: Path) -> None:
+    """Rendered HTML carries <!--soc-score:NN--> (<90) when there is an open P0."""
+    items = [{"p": "p0", "done": False}, {"p": "p2", "done": False}]
+    posture = sic_to_soc.compute_posture(items, net_sections=None, scanned=True)
+    html = sic_to_soc.stamp_score("<html><head></head><body></body></html>", posture)
+
+    out = tmp_path / "report.html"
+    out.write_text(html, encoding="utf-8")
+
+    recovered = soc_pipeline._extract_posture(str(out))
+    assert recovered["score"] == posture["score"]
+    assert recovered["score"] < 90
+    assert recovered["verdict"] == posture["verdict"]
+    assert f"<!--soc-score:{posture['score']}-->" in html
+    assert f"<!--soc-verdict:{posture['verdict']}-->" in html
+
+
+def test_extract_posture_reads_stamp(tmp_path: Path) -> None:
+    """_extract_posture returns the stamped score + verdict from HTML head."""
+    html = "<html>\n<head>\n<!--soc-score:42-->\n<!--soc-verdict:ATTENTION-->\n</head></html>"
+    out = tmp_path / "r.html"
+    out.write_text(html, encoding="utf-8")
+    posture = soc_pipeline._extract_posture(str(out))
+    assert posture["score"] == 42
+    assert posture["verdict"] == "ATTENTION"
+    assert posture["scanned"] is True
+
+
+def test_notify_discord_net_posts_amber_not_green(tmp_path: Path) -> None:
+    """Stage-1 / unscanned report must notify NET (amber), never PASS (green)."""
+    from sic_to_soc import VERDICT_COLORS
+
+    html = "<html>\n<head>\n<!--soc-score:0-->\n<!--soc-verdict:NET-->\n</head></html>"
+    out = tmp_path / "net.html"
+    out.write_text(html, encoding="utf-8")
+
+    captured: dict = {}
+
+    def _fake_post(webhook_url, embeds, file_path=None):
+        captured["embed"] = embeds[0]
+        return True
+
+    with patch.object(soc_pipeline, "_post_discord", side_effect=_fake_post):
+        soc_pipeline._notify_discord(
+            "https://example.invalid/webhook",
+            "wide-net",
+            "demo",
+            str(out),
+            {"net": [], "profile": {"components": []}},
+        )
+
+    embed = captured["embed"]
+    assert embed["color"] == VERDICT_COLORS["NET"]
+    assert embed["color"] != VERDICT_COLORS["PASS"]
+    assert "not yet assessed" in embed["title"].lower()
+
+
+def test_stage2_refine_malformed_scan_json_exits(tmp_path: Path) -> None:
+    """A malformed scan JSON must cause a non-zero exit (SystemExit)."""
+    _make_template(tmp_path)
+    bad = tmp_path / "bad.json"
+    bad.write_text("{ this is not json", encoding="utf-8")
+
+    import threat_catalog
+
+    with (
+        patch.object(
+            __import__("project_config"), "detect_system_profile", return_value=FAKE_PROFILE
+        ),
+        patch.object(threat_catalog, "build_net", return_value=FAKE_NET),
+        patch.object(sic_to_soc, "DEFAULT_TEMPLATE", str(tmp_path / "template.html")),
+    ):
+        with pytest.raises(SystemExit) as exc:
+            soc_pipeline.stage2_refine(
+                str(tmp_path),
+                scan_json=str(bad),
+                output_base=str(tmp_path / "out"),
+            )
+    assert exc.value.code != 0
 
 
 def test_stage2_refine_counts_zero_when_no_net_controls(tmp_path: Path) -> None:

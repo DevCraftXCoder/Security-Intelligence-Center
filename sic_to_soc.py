@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import project_config
+from scan_merge import _collect  # single authoritative finding collector
 
 # Resolve the SOC handoff template relative to this module (portable across machines).
 # Override via --template CLI flag or the SIC_SOC_TEMPLATE environment variable.
@@ -49,84 +50,11 @@ def _try_import(module_name: str):
 
 # ---------------------------------------------------------------------------
 # JSON loader (shared logic with sic_to_audit.py)
+#
+# Finding collection (`_collect`) is imported from scan_merge to keep a single
+# authoritative implementation — it now also reads trivy Secrets[] and
+# Misconfigurations[] in addition to Vulnerabilities[] and checkov failed_checks.
 # ---------------------------------------------------------------------------
-
-def _collect(obj):
-    """Recursively collect dicts that look like individual findings.
-
-    Handles three schemas beyond the generic nuclei/smart-scan format:
-    - trivy: Results[].Vulnerabilities[] with VulnerabilityID/Severity/Title/Description
-    - checkov: results.failed_checks[] with check_id/severity/resource/check_result
-    """
-    if isinstance(obj, list):
-        out = []
-        for item in obj:
-            out.extend(_collect(item))
-        return out
-    if isinstance(obj, dict):
-        # trivy: top-level Results array containing Vulnerabilities sub-arrays
-        if "Results" in obj and isinstance(obj["Results"], list):
-            out = []
-            for result in obj["Results"]:
-                vulns = result.get("Vulnerabilities") or []
-                for v in vulns:
-                    out.append({
-                        "name":            v.get("VulnerabilityID") or v.get("Title") or "Unknown CVE",
-                        "vulnerabilityName": v.get("Title") or v.get("VulnerabilityID") or "",
-                        "severity":        (v.get("Severity") or "unknown").lower(),
-                        "description":     v.get("Description") or "",
-                        "template-id":     v.get("VulnerabilityID") or "",
-                        "tags":            ["cve", "vulnerability"],
-                        "references":      v.get("References") or [],
-                        "_source":         "trivy",
-                    })
-            # Results is authoritative: a vuln-free trivy scan returns [] here
-            # rather than falling through and being mis-read as a single finding.
-            return out
-
-        # checkov: results.failed_checks[] (may appear as top-level results key)
-        failed = (
-            (obj.get("results") or {}).get("failed_checks")
-            if isinstance(obj.get("results"), dict)
-            else None
-        )
-        if isinstance(failed, list) and failed:
-            out = []
-            for fc in failed:
-                sev = str(fc.get("severity") or "unknown").lower()
-                if sev not in ("critical", "high", "medium", "low", "info"):
-                    sev = "unknown"
-                out.append({
-                    "name":        fc.get("check_id") or "CKV_UNKNOWN",
-                    "Title":       fc.get("check_id") or "Checkov finding",
-                    "severity":    sev,
-                    "description": (
-                        f"Resource: {fc.get('resource') or 'unknown'}. "
-                        f"File: {(fc.get('repo_file_path') or fc.get('file_path') or '')}. "
-                        f"Lines: {fc.get('file_line_range') or ''}."
-                    ),
-                    "checkID":     fc.get("check_id") or "",
-                    "tags":        ["misconfig", "iac"],
-                    "_source":     "checkov",
-                })
-            if out:
-                return out
-
-        # Generic nuclei / smart-scan findings
-        finding_keys = {"severity", "Severity", "vulnerabilityName", "name",
-                        "template-id", "templateID", "Title", "checkID"}
-        if finding_keys & obj.keys():
-            sub = obj.get("findings") or obj.get("results") or obj.get("Vulnerabilities")
-            if isinstance(sub, list):
-                return _collect(sub)
-            return [obj]
-        # recurse into nested list AND dict values — findings can be dict-nested
-        out = []
-        for v in obj.values():
-            if isinstance(v, (list, dict)):
-                out.extend(_collect(v))
-        return out
-    return []
 
 
 def load_findings(path):
@@ -346,6 +274,111 @@ SEV_TAG = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Authoritative posture / score computation (single source of truth)
+# ---------------------------------------------------------------------------
+
+
+def verdict_for(score, scanned):
+    """Single verdict mapping — one vocabulary for all consumers."""
+    if not scanned:
+        return "NET"
+    if score >= 90:
+        return "PASS"
+    if score >= 70:
+        return "REVIEW"
+    if score >= 40:
+        return "ATTENTION"
+    return "BLOCK"
+
+
+VERDICT_COLORS = {
+    "PASS": 0x4ADE80,
+    "REVIEW": 0xB89100,
+    "ATTENTION": 0xF59E0B,
+    "BLOCK": 0xFF3B3B,
+    "NET": 0xB89100,
+}
+
+
+def compute_posture(all_items, net_sections, scanned, score_override=None):
+    """Single authoritative score computation — inverse-risk model."""
+    weights = {"p0": 40, "p1": 15, "p2": 5, "p3": 1}
+
+    if not scanned:
+        return {
+            "score": 0,
+            "verdict": "NET",
+            "model": "net-only",
+            "scanned": False,
+            "weights": weights,
+            "counts": {},
+            "rationale": "Architecture-only analysis — no scanner data. Not yet assessed.",
+        }
+
+    # Count open items per priority
+    counts = {p: {"open": 0, "total": 0} for p in weights}
+    for item in all_items:
+        p = item.get("priority") or item.get("p") or "p2"
+        if p not in counts:
+            p = "p2"
+        counts[p]["total"] += 1
+        is_done = item.get("done") or item.get("net_status") == "refuted"
+        if not is_done:
+            counts[p]["open"] += 1
+
+    risk = sum(weights[p] * counts[p]["open"] for p in weights)
+    max_risk = sum(weights[p] * counts[p]["total"] for p in weights)
+
+    if score_override is not None:
+        score = int(score_override)
+    elif max_risk == 0:
+        score = 100
+    else:
+        score = round(100 * (1 - risk / max_risk))
+
+    score = max(0, min(100, score))
+    verdict = verdict_for(score, scanned=True)
+
+    open_p0 = counts["p0"]["open"]
+    rationale = (
+        f"Score {score}/100 — {open_p0} open P0 item(s)"
+        if open_p0
+        else f"Score {score}/100 — no open P0 items"
+    )
+
+    return {
+        "score": score,
+        "verdict": verdict,
+        "model": "inverse-risk",
+        "scanned": True,
+        "weights": weights,
+        "counts": counts,
+        "rationale": rationale,
+    }
+
+
+def stamp_score(html, posture):
+    """Write <!--soc-score:NN--> and <!--soc-verdict:VV--> into the HTML head."""
+    score = posture.get("score", 0) or 0
+    verdict = posture.get("verdict", "NET")
+
+    score_comment = f"<!--soc-score:{score}-->"
+    verdict_comment = f"<!--soc-verdict:{verdict}-->"
+
+    # Replace existing comments
+    html = re.sub(r'<!--soc-score:\d+-->', score_comment, html)
+    html = re.sub(r'<!--soc-verdict:\w+-->', verdict_comment, html)
+
+    # If no existing comment, insert after <head>
+    if score_comment not in html:
+        html = html.replace('<head>', f'<head>\n{score_comment}\n{verdict_comment}', 1)
+    elif verdict_comment not in html:
+        html = html.replace(score_comment, f'{score_comment}\n{verdict_comment}', 1)
+
+    return html
+
+
 def compute_maturity(project_data: dict, prior_snapshots: list[dict]) -> dict:
     """Derive maturity stage and growthDelta from project_data signals + snapshot history.
 
@@ -418,7 +451,8 @@ def compute_maturity(project_data: dict, prior_snapshots: list[dict]) -> dict:
 
 def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=None,
                        output_path=None, score_override=None, asset_tier="production",
-                       skip_enrichment=False, skip_db=False, config=None, net=None):
+                       skip_enrichment=False, skip_db=False, config=None, net=None,
+                       scanners_run=None):
     # --- Suppression enforcement (.sic.yaml rules) ---
     if config:
         kept = [f for f in findings if not project_config.is_suppressed(f, config)]
@@ -433,7 +467,7 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
     if net is not None:
         try:
             from threat_catalog import adjudicate_net
-            net = adjudicate_net(net, findings)
+            net = adjudicate_net(net, findings, scanners_run=scanners_run)
             # Build controls from net sections (proven ones become P0/P1/P2 sections)
             # untested sections are included with a distinct tag for report UI
             net_controls = []
@@ -663,18 +697,28 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
         "controls":   controls,
     }
 
-    # ---- Week-over-week history -------------------------------------------
-    # Current-week posture score: % of items remediated (done). Fresh scans
-    # start at 0% (nothing remediated yet). score_override lets an upstream
-    # runner (e.g. the weekly harness bridge) supply its own weighted score.
-    all_items = [i for s in controls for i in s.get("items", [])]
-    if score_override is not None:
-        current_score = max(0, min(100, int(score_override)))
-    elif all_items:
-        done = sum(1 for i in all_items if i.get("done"))
-        current_score = round(done / len(all_items) * 100)
+    # ---- Authoritative posture / score -----------------------------------
+    # The single source of truth for the report score + verdict. Uses the
+    # inverse-risk model: open high-priority findings drive the score down.
+    # score_override lets an upstream runner supply its own weighted score.
+    #
+    # When net adjudication ran, prefer the net controls (which carry per-item
+    # priority + net_status, including refuted) so the posture reflects the
+    # refined verdict rather than raw severity buckets.
+    if project_data_net_extra is not None:
+        posture_items = [
+            i for s in project_data_net_extra for i in s.get("items", [])
+        ]
     else:
-        current_score = 0
+        posture_items = [i for s in controls for i in s.get("items", [])]
+    posture = compute_posture(
+        posture_items,
+        project_data_net_extra,
+        scanned=True,
+        score_override=score_override,
+    )
+    project_data["posture"] = posture
+    current_score = posture["score"]
 
     prior_snapshots = (
         _load_prior_snapshots(project, slug, runs_dir, exclude=output_path)
@@ -879,8 +923,16 @@ def main():
     crit = project_data["caseMetadata"]["severity"]
     print(f"[sic_to_soc] Severity: {crit}  Controls: {total_controls} across {len(project_data['controls'])} section(s)")
 
-    tpl = Path(args.template).read_text(encoding="utf-8", errors="replace")
+    try:
+        tpl = Path(args.template).read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        print(f"[sic_to_soc] FATAL: could not read template {args.template}: {exc}",
+              file=sys.stderr)
+        sys.exit(1)
     out = inject_project_data(tpl, project_data)
+    # Stamp the authoritative score + verdict into the HTML head so all
+    # downstream consumers (soc_pipeline, dropstream) read one number.
+    out = stamp_score(out, project_data.get("posture", {}))
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(out, encoding="utf-8")

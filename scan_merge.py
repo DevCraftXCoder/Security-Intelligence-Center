@@ -71,6 +71,28 @@ def _collect(obj: Any) -> list[dict[str, Any]]:
                         "references":      v.get("References") or [],
                         "_source":         "trivy",
                     })
+            # trivy-fs also reports leaked Secrets[] and Misconfigurations[] per result
+            for result in obj["Results"]:
+                for s in result.get("Secrets") or []:
+                    out.append({
+                        "name":            s.get("RuleID") or s.get("Title") or "Exposed secret",
+                        "Title":           s.get("Title") or s.get("RuleID") or "",
+                        "severity":        (s.get("Severity") or "high").lower(),
+                        "description":     s.get("Match") or s.get("Title") or "",
+                        "rule_id":         s.get("RuleID") or "",
+                        "tags":            ["secret", "exposure"],
+                        "_source":         "trivy",
+                    })
+                for m in result.get("Misconfigurations") or []:
+                    out.append({
+                        "name":            m.get("ID") or m.get("Title") or "Misconfiguration",
+                        "Title":           m.get("Title") or m.get("ID") or "",
+                        "severity":        (m.get("Severity") or "unknown").lower(),
+                        "description":     m.get("Description") or m.get("Message") or "",
+                        "checkID":         m.get("ID") or "",
+                        "tags":            ["misconfig", "iac"],
+                        "_source":         "trivy",
+                    })
             # Results is authoritative: a vuln-free trivy scan returns [] here
             # rather than falling through and being mis-read as a single finding.
             return out
