@@ -14,6 +14,8 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 # Allow importing sibling modules when run directly
 _HERE = Path(__file__).resolve().parent
@@ -35,7 +37,11 @@ def _output_dir(base: str | None, slug: str) -> Path:
     return _HERE / "_runs" / "qa"
 
 
-def stage1_net(project_path: str, output_base: str | None = None) -> dict:
+def stage1_net(
+    project_path: str,
+    output_base: str | None = None,
+    template_path: str | None = None,
+) -> dict:
     """Stage 1: Generate Wide-Net SOC template from architecture profile.
 
     Returns dict with keys: output_path, net, profile, slug
@@ -161,7 +167,8 @@ def stage1_net(project_path: str, output_base: str | None = None) -> dict:
     }
 
     out_path = out_dir / f"{slug}-soc-net-{ts}.html"
-    template = Path(sic_to_soc.DEFAULT_TEMPLATE).read_text(encoding="utf-8")
+    tpl = template_path or sic_to_soc.DEFAULT_TEMPLATE
+    template = Path(tpl).read_text(encoding="utf-8")
     html = sic_to_soc.inject_project_data(template, project_data)
     out_path.write_text(html, encoding="utf-8")
     print(f"[soc_pipeline] Stage 1 output: {out_path}", file=sys.stderr)
@@ -173,6 +180,7 @@ def stage2_refine(
     project_path: str,
     scan_json: str | None = None,
     output_base: str | None = None,
+    template_path: str | None = None,
 ) -> dict:
     """Stage 2: Run SIC scanner, adjudicate net, produce Refined Verdict report.
 
@@ -237,7 +245,8 @@ def stage2_refine(
         net=net,
     )
 
-    template = Path(sic_to_soc.DEFAULT_TEMPLATE).read_text(encoding="utf-8")
+    tpl = template_path or sic_to_soc.DEFAULT_TEMPLATE
+    template = Path(tpl).read_text(encoding="utf-8")
     html = sic_to_soc.inject_project_data(template, project_data)
     out_path.write_text(html, encoding="utf-8")
     print(f"[soc_pipeline] Stage 2 output: {out_path}", file=sys.stderr)
@@ -252,6 +261,75 @@ def stage2_refine(
         "proven_count":   len(proven),
         "untested_count": len(untested),
     }
+
+
+def _post_discord(webhook_url: str, embeds: list[dict]) -> bool:
+    """Post a Discord webhook message with embed(s). Returns True on success."""
+    payload = json.dumps({"embeds": embeds}).encode()
+    req = Request(
+        webhook_url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=15) as resp:
+            return 200 <= resp.status < 300
+    except (URLError, OSError) as exc:
+        print(f"[soc_pipeline] Discord POST failed: {exc}", file=sys.stderr)
+        return False
+
+
+def _notify_discord(
+    webhook_url: str,
+    stage: str,
+    slug: str,
+    output_path: str,
+    result: dict,
+) -> None:
+    """Send a Discord embed summarising the pipeline stage result."""
+    import os
+
+    if stage == "wide-net":
+        net_count = len(result.get("net", []))
+        components = result.get("profile", {}).get("components", [])
+        embed = {
+            "title": f"SOC Wide-Net: {slug.upper()}",
+            "description": (
+                f"**{net_count}** threat classes identified from architecture profile.\n"
+                f"Components: {', '.join(components) or 'none'}\n\n"
+                f"Run `--refine` to produce the Refined Verdict."
+            ),
+            "color": 0xB89100,
+            "fields": [
+                {"name": "Stage", "value": "1 — Wide Net", "inline": True},
+                {"name": "Sections", "value": str(net_count), "inline": True},
+            ],
+            "footer": {"text": f"Output: {os.path.basename(output_path)}"},
+        }
+    else:
+        proven = result.get("proven_count", 0)
+        untested = result.get("untested_count", 0)
+        color = 0xFF3B3B if proven > 0 else 0x4ADE80
+        embed = {
+            "title": f"SOC Refined Verdict: {slug.upper()}",
+            "description": (
+                f"**{proven}** proven threat classes, **{untested}** untested.\n"
+            ),
+            "color": color,
+            "fields": [
+                {"name": "Stage", "value": "2 — Refined Verdict", "inline": True},
+                {"name": "Proven", "value": str(proven), "inline": True},
+                {"name": "Untested", "value": str(untested), "inline": True},
+            ],
+            "footer": {"text": f"Output: {os.path.basename(output_path)}"},
+        }
+
+    ok = _post_discord(webhook_url, [embed])
+    if ok:
+        print(f"[soc_pipeline] Discord notification sent for {stage}", file=sys.stderr)
+    else:
+        print(f"[soc_pipeline] Discord notification FAILED for {stage}", file=sys.stderr)
 
 
 def main() -> None:
@@ -285,21 +363,43 @@ def main() -> None:
         "--output-dir",
         help="Output directory (default: sic/_runs/qa/)",
     )
+    parser.add_argument(
+        "--template",
+        default=None,
+        help="Override SOC handoff HTML template path (default: sic/templates/soc-handoff/soc-handoff-template-blank.html)",
+    )
+    parser.add_argument(
+        "--discord",
+        action="store_true",
+        help="Post results to the Discord SOC report channel (uses DISCORD_WEBHOOK_SOC env var)",
+    )
     args = parser.parse_args()
 
     if not (args.net or args.refine or args.auto):
         parser.error("Specify --net, --refine, or --auto")
 
+    import os
+    discord_url = os.environ.get("DISCORD_WEBHOOK_SOC", "").strip() if args.discord else ""
+    if args.discord and not discord_url:
+        print(
+            "[soc_pipeline] WARNING: --discord requested but DISCORD_WEBHOOK_SOC not set",
+            file=sys.stderr,
+        )
+
     if args.auto or args.net:
-        result1 = stage1_net(args.path, args.output_dir)
+        result1 = stage1_net(args.path, args.output_dir, args.template)
         print(f"Stage 1 complete: {result1['output_path']}")
         print(f"  Components: {result1['profile'].get('components', [])}")
         print(f"  Net sections: {len(result1['net'])}")
+        if discord_url:
+            _notify_discord(discord_url, "wide-net", result1["slug"], result1["output_path"], result1)
 
     if args.auto or args.refine:
-        result2 = stage2_refine(args.path, args.scan_json, args.output_dir)
+        result2 = stage2_refine(args.path, args.scan_json, args.output_dir, args.template)
         print(f"Stage 2 complete: {result2['output_path']}")
         print(f"  Proven: {result2['proven_count']}  Untested: {result2['untested_count']}")
+        if discord_url:
+            _notify_discord(discord_url, "refined-verdict", result2["slug"], result2["output_path"], result2)
 
 
 if __name__ == "__main__":

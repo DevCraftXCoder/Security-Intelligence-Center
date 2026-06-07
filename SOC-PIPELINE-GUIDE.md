@@ -31,7 +31,7 @@ The core philosophy: cast a wide net first (don't miss anything), then refine ag
 All commands run from `C:\Za\sic\`:
 
 ```
-python soc_pipeline.py --path <project-root> [--net | --refine | --auto] [--scan-json <file>] [--output-dir <dir>]
+python soc_pipeline.py --path <project-root> [--net | --refine | --auto] [--scan-json <file>] [--output-dir <dir>] [--template <path>] [--discord]
 ```
 
 ### Flags
@@ -44,6 +44,8 @@ python soc_pipeline.py --path <project-root> [--net | --refine | --auto] [--scan
 | `--auto` | Both | Run Stage 1 then Stage 2 in sequence — the standard full-pipeline mode |
 | `--scan-json` | 2 | Skip live scan, load an existing merged scan JSON file instead |
 | `--output-dir` | Both | Where to write output HTML files (default: `C:\Za\sic\_runs\qa\`) |
+| `--template` | Both | Override the SOC handoff HTML template (default: `sic/templates/soc-handoff/soc-handoff-template-blank.html`) |
+| `--discord` | Both | Post stage results to the Discord SOC report channel (requires `DISCORD_WEBHOOK_SOC` env var) |
 
 ---
 
@@ -74,6 +76,20 @@ Use when you already have a SIC scan JSON from a prior run and want to regenerat
 
 ```bash
 python soc_pipeline.py --path C:\Za\packages\underground-api --refine --scan-json sic/_runs/qa/merged-scan.json
+```
+
+### Full pipeline with Discord notifications
+
+```bash
+DISCORD_WEBHOOK_SOC=https://discord.com/api/webhooks/... python soc_pipeline.py --path C:\Za\packages\underground-api --auto --discord
+```
+
+Posts an embed to the SOC report channel after each stage completes (Wide-Net summary, then Refined Verdict with proven/untested counts).
+
+### Custom template
+
+```bash
+python soc_pipeline.py --path C:\Za\packages\underground-api --auto --template C:\Za\.tmp-soc\index.html
 ```
 
 ### Custom output directory

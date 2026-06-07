@@ -474,7 +474,7 @@ def build_net(profile: dict) -> list[dict]:
 
 def _probe_match(finding: dict, probes: list[str]) -> bool:
     """Return True if any probe string appears in key finding fields."""
-    haystack = " ".join([
+    parts = [
         str(finding.get("name") or ""),
         str(finding.get("vulnerabilityName") or ""),
         str(finding.get("Title") or ""),
@@ -482,7 +482,18 @@ def _probe_match(finding: dict, probes: list[str]) -> bool:
         str(finding.get("checkID") or ""),
         str(finding.get("description") or ""),
         str(finding.get("message") or ""),
-    ]).lower()
+        str(finding.get("severity") or ""),
+        str(finding.get("category") or ""),
+        str(finding.get("type") or ""),
+        str(finding.get("rule_id") or ""),
+        str(finding.get("rule") or ""),
+    ]
+    tags = finding.get("tags")
+    if isinstance(tags, list):
+        parts.extend(str(t) for t in tags)
+    elif isinstance(tags, str):
+        parts.append(tags)
+    haystack = " ".join(parts).lower()
     return any(p.lower() in haystack for p in probes)
 
 

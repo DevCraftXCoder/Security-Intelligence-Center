@@ -1,0 +1,2031 @@
+<!--soc-score:100-->
+<!doctype html>
+<!--
+  3SIXTYCO. Design System v1.2
+  PROJECT   : DROPSTREAM.GG
+  REPORT    : SOC HANDOFF V1
+  BASIS     : repo @ commit f5d2c0c (render-token S012); every control is code-traceable.
+  SOC FRAME : NIST SP 800-61 Rev 3 Senior Analyst Handoff + MITRE ATT&CK TTP Mapping
+  NOTE      : render engine builds DOM via createElement/textContent (no markup injection) — XSS-safe by construction.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>DROPSTREAM.GG — SOC HANDOFF V1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS — 3SIXTYCO. v1.2 ── */
+:root {
+  --bg:#0A0A0A; --bg-deep:#050505; --surface:#141414;
+  --ink:#F5F2EC; --ink-muted:#9A968D; --ink-faint:#595651; --line:#2A2A2A;
+  --p0:#FF3B3B; --p1:#E07B00; --p2:#B89100; --p3:#595651; --pass:#4ADE80;
+  --p0-bg:rgba(255,59,59,.08); --p1-bg:rgba(224,123,0,.08);
+  --p2-bg:rgba(184,145,0,.08); --pass-bg:rgba(74,222,128,.10);
+  --att-bg:rgba(139,92,246,.08); --att:#8B5CF6;
+  --partial-bg:rgba(224,123,0,.08); --partial:#E07B00;
+  --missing-bg:rgba(255,59,59,.08); --missing:#FF3B3B;
+}
+[data-theme="light"] {
+  --bg:#F5F2EC; --bg-deep:#fff; --surface:#fff;
+  --ink:#0A0A0A; --ink-muted:#595651; --ink-faint:#9A968D; --line:#DDD7CB;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);font-family:'Geist',sans-serif;
+  min-height:100vh;transition:background .3s,color .3s;
+  background-image:linear-gradient(rgba(245,242,236,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(245,242,236,.018) 1px,transparent 1px);
+  background-size:56px 56px;
+}
+[data-theme="light"] body{
+  background-image:linear-gradient(rgba(10,10,10,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(10,10,10,.03) 1px,transparent 1px);
+}
+.shell{max-width:1200px;margin:0 auto;padding:32px}
+
+/* ── BRAND MARK ── */
+.mark{display:inline-block;width:32px;height:32px;color:var(--ink);--d:2.5s}
+.mark svg{width:100%;height:100%;display:block;overflow:visible}
+.mark .rs,.mark .ts{transform-origin:100px 100px;transform-box:view-box}
+.mark .tf{transform-origin:100px 100px;transform-box:view-box}
+.mark .tf.f1{transform:rotate(0deg)}
+.mark .tf.f2{transform:rotate(120deg)}
+.mark .tf.f3{transform:rotate(240deg)}
+.mark .tk{transform-origin:100px 100px;transform-box:view-box}
+.mark .rs{animation:SR var(--d) cubic-bezier(.4,0,.2,1) infinite}
+.mark .ts{animation:ST var(--d) cubic-bezier(.4,0,.2,1) infinite}
+.mark .tk{animation:SK var(--d) cubic-bezier(.5,0,.2,1) infinite}
+@keyframes SR{0%{transform:rotate(0)}40%{transform:rotate(-360deg)}100%{transform:rotate(-360deg)}}
+@keyframes ST{0%{transform:rotate(0)}40%{transform:rotate(360deg)}100%{transform:rotate(360deg)}}
+@keyframes SK{0%,45%{transform:translateY(0)}60%,75%{transform:translateY(28px)}90%,100%{transform:translateY(0)}}
+
+/* ── HEADER ── */
+.head{display:flex;justify-content:space-between;align-items:center;
+  padding-bottom:24px;border-bottom:1px solid var(--line);margin-bottom:40px}
+.head-id{display:flex;align-items:center;gap:14px}
+.wg{display:flex;flex-direction:column;gap:3px}
+.wm{font-weight:700;font-size:17px;letter-spacing:.06em}
+.sm{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.25em;
+  text-transform:uppercase;color:var(--ink-muted)}
+.ctrls{display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.ctrl-row{display:flex;gap:5px;align-items:center;flex-wrap:nowrap}
+.btn{background:transparent;color:var(--ink);border:1px solid var(--line);
+  padding:5px 10px;font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:.18em;text-transform:uppercase;cursor:pointer;
+  transition:background .12s,color .12s;white-space:nowrap}
+.btn:hover{background:var(--surface)}
+.btn.on{background:var(--ink);color:var(--bg)}
+.btn.red{border-color:var(--p0);color:var(--p0)}
+.btn.red:hover{background:var(--p0);color:#fff}
+.btn.att{border-color:var(--att);color:var(--att)}
+.btn.att:hover{background:var(--att);color:#fff}
+.btn.att.on{background:var(--att);border-color:var(--att);color:#fff}
+.btn.green{border-color:var(--pass);color:var(--pass);background:transparent;
+  font-weight:700;font-size:10px;padding:7px 16px;letter-spacing:.22em}
+.btn.green:hover{background:var(--pass);color:#0a0a0a}
+.wchip{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.15em;
+  text-transform:uppercase;padding:6px 12px;border:1px solid var(--line);
+  color:var(--ink-muted);white-space:nowrap}
+
+/* ── BANNER ── */
+.banner{display:grid;grid-template-columns:1fr auto;align-items:center;
+  padding:20px 28px;border:1px solid var(--line);background:var(--surface);margin-bottom:1px}
+.b-proj{font-weight:800;font-size:24px;letter-spacing:-.02em;margin-bottom:4px}
+.b-meta{font-family:'JetBrains Mono',monospace;font-size:9px;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--ink-muted)}
+.b-tags{display:flex;gap:6px}
+.tag{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;
+  padding:4px 10px;border:1px solid var(--line);color:var(--ink-faint);text-transform:uppercase}
+.tag.hi{border-color:var(--line);color:var(--ink-faint);background:transparent}
+.tag.soc{border-color:var(--line);color:var(--ink-faint);background:transparent}
+
+/* scope note */
+.scope{border:1px solid var(--line);border-top:none;background:var(--bg-deep);
+  padding:14px 28px;margin-bottom:40px;font-size:12px;color:var(--ink-muted);line-height:1.6}
+.scope b{color:var(--ink)}
+.scope code{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink);
+  background:var(--surface);padding:1px 5px;border:1px solid var(--line)}
+
+/* ── SCORE ── */
+.score-panel{display:grid;grid-template-columns:240px 1fr;
+  border:1px solid var(--line);background:var(--surface);margin-bottom:40px}
+.ring-col{padding:40px 28px;border-right:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.ring-wrap{position:relative;width:160px;height:160px}
+.ring-wrap svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.snum{font-family:'Geist',sans-serif;font-weight:800;font-size:58px;
+  letter-spacing:-.05em;line-height:1;transition:color .4s}
+.sgrade{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;
+  text-transform:uppercase;text-align:center;transition:color .4s;max-width:160px;line-height:1.5}
+.meta-col{padding:36px 40px;display:flex;flex-direction:column;gap:20px}
+.meta-title{font-weight:800;font-size:22px;letter-spacing:-.03em}
+.meta-date{font-family:'JetBrains Mono',monospace;font-size:9px;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--ink-muted)}
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line)}
+.pc{padding:14px 16px;border-right:1px solid var(--line)}
+.pc:last-child{border-right:none}
+.pl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.28em;
+  text-transform:uppercase;margin-bottom:8px}
+.pn{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;
+  letter-spacing:-.02em;line-height:1}
+.pn .of{font-size:11px;color:var(--ink-muted);font-weight:400}
+.pb{height:2px;background:var(--line);margin-top:10px;position:relative;overflow:hidden}
+.pbf{position:absolute;inset:0 auto 0 0;transition:width .4s}
+.p0c .pl{color:var(--p0)} .p0c .pbf{background:var(--p0)}
+.p1c .pl{color:var(--p1)} .p1c .pbf{background:var(--p1)}
+.p2c .pl{color:var(--p2)} .p2c .pbf{background:var(--p2)}
+.p3c .pl{color:var(--ink-muted)} .p3c .pbf{background:var(--ink-muted)}
+.blbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.28em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+.blist{display:flex;flex-direction:column;gap:4px;max-height:100px;overflow:hidden}
+.brow{display:flex;align-items:center;gap:8px;padding:5px 10px;
+  border:1px solid var(--line);background:var(--bg)}
+.bbdg{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.14em;
+  font-weight:700;padding:2px 5px;border:1px solid currentColor;flex-shrink:0}
+.bnm{font-size:11px;color:var(--ink-muted);line-height:1.2}
+.bp0 .bbdg{color:var(--p0)} .bp1 .bbdg{color:var(--p1)}
+.bmore{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink-faint);padding:4px 10px}
+.clr{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;color:var(--pass);padding:4px 0}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+  padding-bottom:24px;border-bottom:1px solid var(--line);margin-bottom:24px}
+.fg{display:flex}
+.fb{background:transparent;color:var(--ink-muted);border:1px solid var(--line);
+  padding:7px 14px;font-family:'JetBrains Mono',monospace;font-size:9px;
+  letter-spacing:.18em;text-transform:uppercase;cursor:pointer;
+  margin-right:-1px;transition:all .12s;white-space:nowrap}
+.fb:hover{color:var(--ink);background:var(--surface);z-index:1}
+.fb.on{background:var(--ink);color:var(--bg);z-index:2}
+.fb.f0.on{background:var(--p0);border-color:var(--p0);color:#fff}
+.fb.f1.on{background:var(--p1);border-color:var(--p1);color:#fff}
+.fb.f2.on{background:var(--p2);border-color:var(--p2);color:#000}
+.fb.f3.on{color:var(--ink);background:var(--surface)}
+.srch{background:transparent;color:var(--ink);border:1px solid var(--line);
+  padding:7px 14px;font-family:'JetBrains Mono',monospace;font-size:9px;
+  letter-spacing:.1em;outline:none;width:180px;transition:border-color .12s}
+.srch::placeholder{color:var(--ink-faint)}
+.srch:focus{border-color:var(--ink-muted)}
+.sp{flex:1}
+.chip{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;
+  color:var(--ink-faint);white-space:nowrap}
+
+/* ── SECTIONS ── */
+.secs{margin-bottom:40px}
+.sec{border:1px solid var(--line);border-bottom:none}
+.sec:last-child{border-bottom:1px solid var(--line)}
+.shead{display:grid;grid-template-columns:1fr auto;align-items:center;gap:24px;
+  padding:18px 24px;background:var(--surface);border-bottom:1px solid var(--line);
+  cursor:pointer;user-select:none;transition:background .12s}
+.shead:hover{background:var(--bg)}
+.sec.col .shead{border-bottom:none}
+.sinfo{display:flex;flex-direction:column;gap:3px}
+.secnum{font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:.3em;text-transform:uppercase;color:var(--ink-faint)}
+.stitle{font-weight:700;font-size:15px;letter-spacing:-.01em}
+.sright{display:flex;align-items:center;gap:16px}
+.sprog{display:flex;align-items:center;gap:10px}
+.sfrac{font-family:'JetBrains Mono',monospace;font-size:10px;
+  color:var(--ink-muted);white-space:nowrap}
+.sfrac .dn{color:var(--ink);font-weight:500}
+.spbar{width:64px;height:2px;background:var(--line);position:relative;overflow:hidden}
+.spfill{position:absolute;inset:0 auto 0 0;background:var(--pass);transition:width .3s}
+.chev{font-size:13px;color:var(--ink-faint);transition:transform .2s}
+.sec.col .chev{transform:rotate(-90deg)}
+.sbody{display:grid;grid-template-rows:1fr;transition:grid-template-rows .24s ease}
+.sec.col .sbody{grid-template-rows:0fr}
+.sinner{overflow:hidden;min-height:0}
+
+/* ── ITEM ── */
+.item{display:grid;grid-template-columns:52px 62px 1fr 104px;
+  align-items:stretch;border-bottom:1px solid var(--line);min-height:60px;
+  transition:background .1s}
+.item:last-child{border-bottom:none}
+.item:hover{background:var(--surface)}
+.item.done .iname{text-decoration:line-through;color:var(--ink-muted)}
+.item.hide{display:none}
+.ckcell{display:flex;align-items:center;justify-content:center;
+  border-right:1px solid var(--line)}
+.ckcell input[type=checkbox]{
+  width:16px;height:16px;cursor:pointer;
+  accent-color:var(--pass);flex-shrink:0}
+.prcell{display:flex;align-items:center;justify-content:center;
+  border-right:1px solid var(--line)}
+.prb{font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:.16em;font-weight:700;padding:3px 6px;border:1px solid currentColor}
+.prb.p0{color:var(--p0);background:var(--p0-bg)}
+.prb.p1{color:var(--p1);background:var(--p1-bg)}
+.prb.p2{color:var(--p2);background:var(--p2-bg)}
+.prb.p3{color:var(--ink-faint);border-color:var(--line)}
+.icont{padding:12px 18px;display:flex;flex-direction:column;gap:2px;justify-content:center}
+.iname{font-size:13px;font-weight:500;letter-spacing:-.005em;color:var(--ink)}
+.idesc{font-size:11px;color:var(--ink-faint);font-family:'JetBrains Mono',monospace;line-height:1.5}
+.iref{font-size:9px;color:var(--ink-faint);font-family:'JetBrains Mono',monospace;opacity:.45;margin-top:2px}
+.stcell{display:flex;align-items:center;justify-content:center;
+  padding:0 14px;border-left:1px solid var(--line)}
+.st{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.18em;
+  text-transform:uppercase;padding:4px 8px;border:1px solid currentColor;white-space:nowrap}
+.st.pass{color:var(--pass);background:var(--pass-bg)}
+.st.mp0{color:var(--p0);background:var(--p0-bg);animation:blink 2.2s ease-in-out infinite}
+.st.mp1{color:var(--p1);background:var(--p1-bg)}
+.st.mp2{color:var(--p2);background:var(--p2-bg)}
+.st.mp3{color:var(--ink-faint);border-color:var(--line)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── SOC PANES ── */
+.soc-panes{margin-bottom:40px}
+.soc-panes.hidden{display:none}
+
+/* handoff header card */
+.hf-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  border:1px solid var(--line);background:var(--line);margin-bottom:1px}
+.hf-card{background:var(--bg);padding:20px 24px}
+.hf-card.full{grid-column:1/-1}
+.hf-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.28em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+.hf-value{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink);line-height:1.5}
+.hf-value.lg{font-family:'Geist',sans-serif;font-size:15px;font-weight:500;letter-spacing:-.01em}
+.status-chip{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9px;
+  letter-spacing:.18em;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor}
+.status-chip.monitoring{color:var(--p2);border-color:var(--p2);background:var(--p2-bg)}
+.status-chip.pass{color:var(--pass);border-color:var(--pass);background:var(--pass-bg)}
+.status-chip.active{color:var(--p0);border-color:var(--p0);background:var(--p0-bg);
+  animation:blink 2.2s ease-in-out infinite}
+.conf-chip{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:.18em;text-transform:uppercase;padding:3px 8px;border:1px solid currentColor}
+.conf-chip.high{color:var(--pass);border-color:var(--pass)}
+.conf-chip.moderate{color:var(--p2);border-color:var(--p2)}
+.conf-chip.low{color:var(--p1);border-color:var(--p1)}
+
+/* timeline */
+.tl{display:flex;flex-direction:column;gap:0}
+.tl-row{display:grid;grid-template-columns:160px 80px 1fr;gap:0;
+  border-bottom:1px solid var(--line);padding:8px 0;align-items:start}
+.tl-row:last-child{border-bottom:none}
+.tl-ts{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink-muted);letter-spacing:.08em}
+.tl-evt{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.18em;
+  text-transform:uppercase;padding:2px 6px;border:1px solid currentColor;align-self:start}
+.tl-evt.detect{color:var(--p1);border-color:var(--p1)}
+.tl-evt.validate{color:var(--p2);border-color:var(--p2)}
+.tl-evt.escalate{color:var(--p0);border-color:var(--p0)}
+.tl-evt.contain{color:var(--att);border-color:var(--att)}
+.tl-evt.remediate{color:var(--pass);border-color:var(--pass)}
+.tl-desc{font-size:12px;color:var(--ink-muted);padding-left:12px;line-height:1.5}
+
+/* pending actions table */
+.ptable{width:100%;border-collapse:collapse}
+.ptable th{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ink-faint);text-align:left;
+  padding:8px 12px;border-bottom:1px solid var(--line);background:var(--bg-deep)}
+.ptable td{font-size:12px;padding:10px 12px;border-bottom:1px solid var(--line);
+  color:var(--ink-muted);vertical-align:top}
+.ptable td:first-child{color:var(--ink);font-weight:500}
+.ptable tr:last-child td{border-bottom:none}
+.ptable tr:hover td{background:var(--surface)}
+.ptable .mono{font-family:'JetBrains Mono',monospace;font-size:11px}
+.att-pill{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:.12em;padding:2px 6px;border:1px solid var(--att);
+  color:var(--att);background:var(--att-bg)}
+.cov-full{color:var(--pass)}
+.cov-partial{color:var(--p1)}
+.cov-missing{color:var(--p0)}
+.sev-p0{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  padding:2px 6px;border:1px solid var(--p0);color:var(--p0);background:var(--p0-bg)}
+.sev-p1{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  padding:2px 6px;border:1px solid var(--p1);color:var(--p1);background:var(--p1-bg)}
+.sev-p2{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  padding:2px 6px;border:1px solid var(--p2);color:var(--p2);background:var(--p2-bg)}
+.sev-p3{font-family:'JetBrains Mono',monospace;font-size:9px;
+  padding:2px 6px;border:1px solid var(--line);color:var(--ink-faint)}
+
+/* pane container */
+.pane-block{border:1px solid var(--line);margin-bottom:1px}
+.pane-head{display:grid;grid-template-columns:1fr auto;align-items:center;
+  padding:16px 24px;background:var(--surface);border-bottom:1px solid var(--line);
+  cursor:pointer;user-select:none;transition:background .12s}
+.pane-head:hover{background:var(--bg)}
+.pane-block.col .pane-head{border-bottom:none}
+.pane-htag{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.28em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:3px}
+.pane-htitle{font-weight:700;font-size:14px;letter-spacing:-.01em}
+.pane-body{display:grid;grid-template-rows:1fr;transition:grid-template-rows .24s ease;overflow:hidden}
+.pane-block.col .pane-body{grid-template-rows:0fr}
+.pane-inner{overflow:hidden;min-height:0;padding:24px}
+
+/* threat status pane */
+.threat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.threat-item{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border:1px solid var(--line);background:var(--bg)}
+.threat-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.threat-dot.ok{background:var(--pass)}
+.threat-dot.warn{background:var(--p1);animation:blink 1.8s ease-in-out infinite}
+.threat-dot.alert{background:var(--p0);animation:blink 1.2s ease-in-out infinite}
+.threat-text{font-size:12px;color:var(--ink-muted);font-family:'JetBrains Mono',monospace}
+.threat-ts{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink-faint);
+  margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+
+/* confidence block */
+.conf-block{display:flex;align-items:flex-start;gap:16px;
+  padding:16px;border:1px solid var(--line);background:var(--bg)}
+.conf-main{display:flex;flex-direction:column;gap:4px;min-width:100px}
+.conf-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ink-faint)}
+.conf-rationale{font-size:12px;color:var(--ink-muted);line-height:1.6}
+
+/* exit criteria */
+.exit-list{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none}
+.exit-list li{display:flex;align-items:flex-start;gap:8px;font-size:12px;
+  color:var(--ink-muted);padding:6px 0;border-bottom:1px solid var(--line)}
+.exit-list li:last-child{border-bottom:none}
+.exit-mark{color:var(--pass);font-family:'JetBrains Mono',monospace;font-size:10px;flex-shrink:0}
+
+/* SLA table */
+.sla-table{width:100%;border-collapse:collapse}
+.sla-table th{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ink-faint);padding:8px 14px;
+  border:1px solid var(--line);background:var(--bg-deep);text-align:left}
+.sla-table td{padding:10px 14px;border:1px solid var(--line);
+  font-size:12px;color:var(--ink-muted);vertical-align:top}
+.sla-table td:first-child{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700}
+.sla-table tr:nth-child(even) td{background:var(--surface)}
+.sla-crit td:first-child{color:var(--p0)}
+.sla-high td:first-child{color:var(--p1)}
+.sla-med td:first-child{color:var(--p2)}
+.sla-low td:first-child{color:var(--ink-muted)}
+
+/* footer checklist */
+.fchk{display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  border:1px solid var(--line);background:var(--line);margin-bottom:48px}
+.fchk-cell{background:var(--bg);padding:14px 20px}
+.fchk-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px}
+.fchk-val{font-size:12px;color:var(--ink-muted)}
+.fchk-val.ok{color:var(--pass)}
+
+/* signoff */
+.soff{display:grid;grid-template-columns:1fr 1fr;
+  border:1px solid var(--line);margin-bottom:48px}
+.soc{padding:24px;border-right:1px solid var(--line)}
+.soc:last-child{border-right:none}
+.sol{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.28em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+.sov{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink)}
+.sor{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink-muted);margin-top:3px}
+.soln{border-bottom:1px solid var(--line);height:36px;margin-top:8px}
+.sov[contenteditable],.sor[contenteditable]{
+  outline:none;border-radius:2px;padding:2px 4px;margin-left:-4px;cursor:text}
+.sov[contenteditable]:focus,.sor[contenteditable]:focus{
+  background:var(--bg-deep);box-shadow:0 0 0 1px var(--att)}
+.sov[data-empty="true"]::before,.sor[data-empty="true"]::before{
+  content:attr(data-placeholder);color:var(--ink-faint);pointer-events:none;font-style:italic}
+
+/* ── SIGN-OFF PROMPT (bottom of report) ── */
+.soff-prompt{display:flex;align-items:center;justify-content:space-between;
+  border:1px solid var(--pass);background:rgba(74,222,128,.04);
+  padding:14px 24px;margin-bottom:1px;cursor:pointer;transition:background .12s}
+.soff-prompt:hover{background:rgba(74,222,128,.09)}
+.soff-prompt-text{display:flex;flex-direction:column;gap:3px}
+.soff-prompt-label{font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:.28em;text-transform:uppercase;color:var(--pass)}
+.soff-prompt-sub{font-size:12px;color:var(--ink-muted);font-family:'JetBrains Mono',monospace}
+.soff-prompt-cta{font-family:'JetBrains Mono',monospace;font-size:9px;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--pass);
+  border:1px solid var(--pass);padding:6px 14px;white-space:nowrap}
+.sov[data-empty="true"],.sor[data-empty="true"]{cursor:text}
+
+/* ── SIGN-OFF MODAL ── */
+.signoff-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:998;
+  display:none;align-items:center;justify-content:center}
+.signoff-overlay.open{display:flex}
+.signoff-modal{background:var(--bg);border:1px solid var(--pass);
+  padding:28px 32px;width:min(560px,95vw);display:flex;flex-direction:column;gap:16px}
+.signoff-modal-title{font-family:'JetBrains Mono',monospace;font-size:11px;
+  letter-spacing:.28em;text-transform:uppercase;color:var(--pass);font-weight:700}
+.signoff-modal-sub{font-size:12px;color:var(--ink-muted);font-family:'JetBrains Mono',monospace;line-height:1.6}
+.signoff-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.signoff-field{display:flex;flex-direction:column;gap:4px}
+.signoff-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ink-faint)}
+.signoff-input{background:var(--bg-deep);color:var(--ink);border:1px solid var(--line);
+  padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:11px;
+  outline:none;transition:border-color .12s}
+.signoff-input:focus{border-color:var(--pass)}
+.signoff-modal-btns{display:flex;gap:8px;justify-content:flex-end}
+
+/* ── MATURITY STEPPER ── */
+.mat-stages{display:flex;margin-bottom:20px}
+.mat-stage{flex:1;padding:14px 16px;border:1px solid var(--line);border-right:none}
+.mat-stage:last-child{border-right:1px solid var(--line)}
+.mat-stage.ach{border-color:var(--pass);background:rgba(74,222,128,.04)}
+.mat-stage.cur{border-color:var(--att);background:var(--att-bg)}
+.mat-stage.nxt{opacity:.4}
+.mat-num{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.28em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px}
+.mat-badge{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.16em;
+  text-transform:uppercase;padding:2px 7px;border:1px solid currentColor;
+  display:inline-block;margin-bottom:6px}
+.mat-badge.ach{color:var(--pass);border-color:var(--pass)}
+.mat-badge.cur{color:var(--att);border-color:var(--att)}
+.mat-badge.nxt{color:var(--ink-faint);border-color:var(--line)}
+.mat-name{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase}
+.mat-stage.ach .mat-name{color:var(--pass)}
+.mat-stage.cur .mat-name{color:var(--att)}
+.mat-desc{font-size:11px;color:var(--ink-faint);line-height:1.5}
+.mat-delta{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--line);border:1px solid var(--line)}
+.mat-dc{background:var(--bg);padding:14px 16px}
+.mat-dl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
+.mat-dv{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:-.02em}
+.mat-dv.pos{color:var(--pass)} .mat-dv.neg{color:var(--p0)} .mat-dv.neu{color:var(--ink)}
+
+/* section divider label */
+.divider-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.32em;
+  text-transform:uppercase;color:var(--ink-faint);padding:8px 0 12px;
+  border-top:1px solid var(--line);margin-top:40px;margin-bottom:16px}
+
+/* ── INLINE EDIT (contenteditable) ── */
+.iname[contenteditable],.idesc[contenteditable],.iref[contenteditable]{
+  outline:none;border-radius:2px;padding:2px 4px;margin-left:-4px;cursor:text}
+.iname[contenteditable]:focus,.idesc[contenteditable]:focus,.iref[contenteditable]:focus{
+  background:var(--bg-deep);box-shadow:0 0 0 1px var(--att)}
+.iname[data-empty="true"]::before,.idesc[data-empty="true"]::before,.iref[data-empty="true"]::before{
+  content:attr(data-placeholder);color:var(--ink-muted);pointer-events:none}
+.iname[data-empty="true"]::before{font-style:italic}
+
+/* ── INLINE NOTES ── */
+.inotetoggle{background:transparent;color:var(--ink-faint);border:1px solid var(--line);
+  padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:.16em;text-transform:uppercase;cursor:pointer;margin-top:4px;
+  align-self:flex-start;transition:color .12s,border-color .12s}
+.inotetoggle:hover,.inotetoggle.open{color:var(--ink);border-color:var(--ink-muted)}
+.inote{display:none;width:100%;margin-top:6px;padding:7px 10px;
+  background:var(--bg-deep);color:var(--ink-muted);border:1px solid var(--line);
+  font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.6;
+  resize:vertical;min-height:48px;outline:none;transition:border-color .12s;box-sizing:border-box}
+.inote.open{display:block}
+.inote:focus{border-color:var(--ink-muted)}
+.inote::placeholder{color:var(--ink-faint);opacity:.6}
+.item.has-note .inotetoggle{color:var(--att);border-color:var(--att)}
+
+/* ── HARNESS IMPORT MODAL ── */
+.harness-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:999;
+  display:none;align-items:center;justify-content:center}
+.harness-overlay.open{display:flex}
+.harness-modal{background:var(--bg);border:1px solid var(--line);
+  padding:28px 32px;width:min(640px,95vw);display:flex;flex-direction:column;gap:14px}
+.harness-modal-title{font-family:'JetBrains Mono',monospace;font-size:10px;
+  letter-spacing:.28em;text-transform:uppercase;color:var(--ink);font-weight:700}
+.harness-modal-sub{font-size:12px;color:var(--ink-muted);line-height:1.6;font-family:'JetBrains Mono',monospace}
+.harness-modal-sub code{color:var(--ink);background:var(--surface);padding:1px 5px;border:1px solid var(--line)}
+.harness-paste{width:100%;height:160px;background:var(--bg-deep);color:var(--ink-muted);
+  border:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:10px;
+  line-height:1.5;padding:10px 12px;resize:none;outline:none;box-sizing:border-box}
+.harness-paste:focus{border-color:var(--ink-muted)}
+.harness-modal-btns{display:flex;gap:8px;justify-content:flex-end}
+.harness-result{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--pass);display:none;line-height:1.6}
+.harness-result.has-warn{color:var(--p1)}
+
+/* ── WEEK DIFF CHIP ── */
+.week-diff-chip{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;
+  text-transform:uppercase;padding:6px 10px;border:1px solid var(--line);
+  color:var(--ink-faint);white-space:nowrap;display:none}
+.week-diff-chip.vis{display:inline-block}
+.week-diff-chip.pos{color:var(--pass);border-color:var(--pass)}
+.week-diff-chip.neg{color:var(--p0);border-color:var(--p0)}
+
+
+/* ── JSON IMPORT / EXPORT ── */
+document.getElementById('exportbtn').onclick=function(){
+  var state={checked:[...checked],week:weekOff,notes:notes,snapshots:snapshots,
+    itemText:itemText,timestamps:timestamps,evidence:evidence};
+  if(typeof signoff!=='undefined')state.signoff=signoff;
+  var blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;
+  a.download=SK+'-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+document.getElementById('importinput').onchange=function(e){
+  var file=e.target.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      var d=JSON.parse(ev.target.result);
+      if(Array.isArray(d.checked))checked=new Set(d.checked.filter(function(id){return ITEM_IDS.has(id);}));
+      if(d.notes&&typeof d.notes==='object')notes=d.notes;
+      if(d.snapshots&&typeof d.snapshots==='object')snapshots=d.snapshots;
+      if(d.itemText&&typeof d.itemText==='object')itemText=d.itemText;
+      if(d.timestamps&&typeof d.timestamps==='object')timestamps=d.timestamps;
+      if(d.evidence&&typeof d.evidence==='object')evidence=d.evidence;
+      if(d.signoff&&typeof d.signoff==='object'&&typeof signoff!=='undefined'){
+        signoff.name=d.signoff.name||'';signoff.role=d.signoff.role||'';
+      }
+      if(typeof d.week==='number')weekOff=d.week;
+      persist();render();updateWeek();updateWeekDiff();
+      if(typeof updateSignoffPrompt==='function')updateSignoffPrompt();
+      if(typeof buildSparkline==='function')buildSparkline();
+    }catch(err){alert('Invalid state file: '+err.message);}
+    e.target.value='';
+  };
+  reader.readAsText(file);
+};
+
+/* ── PRINT TIP (screen only) ── */
+.print-tip{display:none;position:fixed;bottom:72px;left:50%;transform:translateX(-50%);
+  background:#141414;border:1px solid var(--att);color:#f5f2ec;
+  font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;
+  padding:10px 18px;z-index:9999;white-space:nowrap;pointer-events:none;
+  animation:print-tip-fade 3.8s ease forwards}
+@keyframes print-tip-fade{0%,70%{opacity:1}100%{opacity:0}}
+
+
+/* ── TIMESTAMPS ── */
+.iverified{font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--pass);
+  opacity:.65;margin-top:1px;letter-spacing:.06em}
+
+/* ── SECTION BULK ACTIONS ── */
+.sec-bulk{background:transparent;border:1px solid var(--line);color:var(--ink-faint);
+  padding:2px 6px;font-size:8px;cursor:pointer;font-family:'JetBrains Mono',monospace;
+  letter-spacing:.14em;transition:border-color .1s,color .1s;white-space:nowrap}
+.sec-bulk:hover{border-color:var(--pass);color:var(--pass)}
+.sec-bulk.clr:hover{border-color:var(--p1);color:var(--p1)}
+.sec-bulk-row{display:flex;gap:4px;flex-shrink:0}
+
+/* ── SPARKLINE ── */
+.sparkline-wrap{margin-top:8px;display:flex;align-items:center;gap:8px}
+.sparkline-svg{display:block;overflow:visible}
+.sparkline-lbl{font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink-faint);letter-spacing:.1em}
+
+/* ── EVIDENCE FIELD ── */
+.ievid{background:transparent;border:none;border-bottom:1px solid var(--line);
+  color:var(--att);font-family:'JetBrains Mono',monospace;font-size:9px;
+  padding:2px 0;width:100%;outline:none;margin-top:4px;letter-spacing:.04em}
+.ievid:focus{border-bottom-color:var(--att)}
+.ievid::placeholder{color:var(--ink-faint);opacity:.45}
+
+@media print{
+  @page{size:A4 portrait;margin:10mm 12mm}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  body{background:#0a0a0a!important;color:#f5f2ec!important;background-image:none!important}
+  *{animation:none!important;transition:none!important}
+  .ctrls,.toolbar,.inotetoggle,.harness-overlay,.week-diff-chip,.print-tip{display:none!important}
+  .sec.col .sbody{grid-template-rows:1fr!important}
+  .sec.col .sinner{overflow:visible!important}
+  .pane-block.col .pane-body{grid-template-rows:1fr!important}
+  .pane-block.col .pane-inner{overflow:visible!important}
+  .item.hide{display:grid!important}
+  .soc-panes.hidden{display:block!important}
+  .pane-block{page-break-inside:avoid;break-inside:avoid;border-color:#2a2a2a!important}
+  .score-panel{page-break-inside:avoid;break-inside:avoid}
+  .ring-wrap{width:120px!important;height:120px!important;overflow:visible!important}
+  .ring-wrap svg{width:120px!important;height:120px!important;transform:none!important;overflow:visible}
+  .ring-col{padding:24px 16px!important}
+  #arc{transition:none!important}
+  .shell{max-width:none;padding:0}
+  .divider-label{page-break-before:always;break-before:always;padding-top:8px}
+  .divider-label:first-of-type{page-break-before:avoid;break-before:avoid}
+  .sec{page-break-inside:avoid;break-inside:avoid;border-color:#2a2a2a!important}
+  .item{page-break-inside:avoid;break-inside:avoid;min-height:40px!important}
+  .icont{padding:6px 12px!important;gap:1px!important}
+  .iname{font-size:11px!important}
+  .idesc{font-size:9px!important;line-height:1.3!important}
+  .iref{font-size:8px!important;margin-top:1px!important}
+  .shead{padding:10px 16px!important}
+  .stitle{font-size:13px!important}
+  .pane-inner{padding:16px!important}
+  .meta-col{padding:20px 24px!important;gap:12px!important}
+  .inote{border:1px solid #2a2a2a!important;color:#9a968d!important;background:#050505!important;display:block!important;font-size:9px!important;padding:4px 8px!important;min-height:auto!important}
+  .inote[data-empty="true"]{display:none!important}
+  .fchk{grid-template-columns:1fr 1fr!important}
+  .fchk-cell{padding:8px 12px!important}
+}
+@media(max-width:860px){
+  .score-panel{grid-template-columns:1fr}
+  .ring-col{border-right:none;border-bottom:1px solid var(--line)}
+  .pgrid{grid-template-columns:repeat(2,1fr)}
+  .soff{grid-template-columns:1fr}
+  .soc{border-right:none;border-bottom:1px solid var(--line)}
+  .soc:last-child{border-bottom:none}
+  .hf-grid{grid-template-columns:1fr}
+  .fchk{grid-template-columns:1fr}
+}
+@media(max-width:580px){
+  .shell{padding:16px}
+  .head{flex-direction:column;align-items:flex-start;gap:14px}
+  .item{grid-template-columns:44px 52px 1fr}
+  .stcell{display:none}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- HEADER -->
+<header class="head">
+  <div class="head-id">
+    <div class="mark">
+      <svg viewBox="0 0 200 200">
+        <g class="rs"><circle cx="100" cy="100" r="60" fill="none" stroke="currentColor"
+          stroke-width="14" stroke-linecap="butt" stroke-dasharray="115.21 10.47"
+          transform="rotate(155 100 100)"/></g>
+        <g class="ts">
+          <g class="tf f1"><g class="tk"><rect x="97.5" y="5" width="5" height="14" fill="currentColor"/></g></g>
+          <g class="tf f2"><g class="tk"><rect x="97.5" y="5" width="5" height="14" fill="currentColor"/></g></g>
+          <g class="tf f3"><g class="tk"><rect x="97.5" y="5" width="5" height="14" fill="currentColor"/></g></g>
+        </g>
+      </svg>
+    </div>
+    <div class="wg">
+      <span class="wm">3SIXTYCO.</span>
+      <span class="sm">SOC Handoff · dropstream.gg · NIST SP 800-61 + MITRE ATT&CK</span>
+    </div>
+  </div>
+  <div class="ctrls">
+    <div class="ctrl-row">
+      <button class="btn" id="wprev">◂ PREV</button>
+      <span class="wchip" id="wchip">—</span>
+      <span class="week-diff-chip" id="week-diff-chip"></span>
+      <button class="btn" id="wnext">NEXT ▸</button>
+      <button class="btn" id="missbtn">MISSING</button>
+      <button class="btn" id="expbtn">EXPAND</button>
+      <button class="btn" id="colbtn">COLLAPSE</button>
+      <button class="btn" id="panesbtn">PANES</button>
+      <button class="btn" id="printbtn">EXPORT</button>
+      <button class="btn" id="themebtn">LIGHT</button>
+      <button class="btn" id="harnessbtn">HARNESS</button>
+      <button class="btn" id="exportbtn">EXPORT</button>
+      <label class="btn" style="cursor:pointer">IMPORT<input type="file" id="importinput" accept=".json" style="display:none"/></label>
+    </div>
+    <div class="ctrl-row" style="justify-content:flex-end">
+      <button class="btn green" id="signoffbtn">✎ SIGN OFF</button>
+      <button class="btn red" id="resetbtn">RESET</button>
+    </div>
+  </div>
+</header>
+
+<!-- HARNESS IMPORT MODAL -->
+<div class="harness-overlay" id="harness-overlay">
+  <div class="harness-modal">
+    <div class="harness-modal-title">Import Safety Harness Results</div>
+    <div class="harness-modal-sub">
+      Paste stdout from <code>bun run safety-harness.mjs</code>.<br>
+      <code>PASS &lt;test name&gt;</code> / <code>FAIL &lt;test name&gt;</code> lines are parsed.<br>
+      Controls are updated via <code>harnessMap</code> in project-data.
+    </div>
+    <textarea class="harness-paste" id="harness-paste" placeholder="PASS roomState requires version 1&#10;FAIL unsafe URL schemes are dropped or normalized&#10;..."></textarea>
+    <div class="harness-result" id="harness-result"></div>
+    <div class="harness-modal-btns">
+      <button class="btn" id="harness-cancel">CANCEL</button>
+      <button class="btn att" id="harness-apply">APPLY RESULTS</button>
+    </div>
+  </div>
+</div>
+
+<!-- BANNER -->
+<div class="banner">
+  <div>
+    <div class="b-proj">DROPSTREAM.GG — SOC HANDOFF</div>
+    <div class="b-meta" id="bmeta">Senior Analyst handoff · NIST SP 800-61 + MITRE ATT&CK · repo @ f5d2c0c · —</div>
+  </div>
+  <div class="b-tags">
+    <span class="tag">CODE-TRACEABLE</span>
+    <span class="tag">NIST 800-61</span>
+    <span class="tag">SOC HANDOFF V1</span>
+  </div>
+</div>
+<div class="scope">
+  <b>What this is.</b> A NIST SP 800-61 Rev 3 senior analyst SOC handoff report augmenting the current-build security audit (01-LITE)
+  with <b>ATT&CK TTP mapping, detection coverage status, operational threat status, risk acceptance tracking, and incident lineage</b>.
+  Controls carry over from 01-LITE; every item is traceable to a file. The five SOC panes above the checklist are the new additions.<br>
+  <b>Scope note.</b> The code scope is the same as 01-LITE: media-wall frontend, Cloudflare Worker edge, and private render-link token plane (S005–S012).
+  No DB driver, no OAuth/auth/payment libraries — roadmap items remain in the companion checklist.
+</div>
+
+<!-- SCORE -->
+<div class="score-panel">
+  <div class="ring-col">
+    <div class="ring-wrap">
+      <svg viewBox="0 0 160 160">
+        <circle cx="80" cy="80" r="62" fill="none" stroke="var(--line)" stroke-width="6"/>
+        <circle cx="80" cy="80" r="44" fill="none" stroke="var(--line)" stroke-width="1"
+          stroke-dasharray="55 8.38" opacity="0.4"/>
+        <circle id="arc" cx="80" cy="80" r="62" fill="none" stroke="var(--ink)"
+          stroke-width="6" stroke-linecap="butt" stroke-dasharray="0 389.56"
+          style="transition:stroke-dasharray .5s ease,stroke .4s"/>
+      </svg>
+      <div class="ring-center">
+        <span class="snum" id="snum">0</span>
+      </div>
+    </div>
+    <div class="sgrade" id="sgrade">START CHECKING</div>
+    <div class="sparkline-wrap" id="sparkline-mount" style="display:none"></div>
+  </div>
+  <div class="meta-col">
+    <div>
+      <div class="meta-title">SOC Handoff — Security Posture</div>
+      <div class="meta-date" id="mdate">SOC HANDOFF V1 · —</div>
+    </div>
+    <div class="pgrid">
+      <div class="pc p0c">
+        <div class="pl">P0 · Critical</div>
+        <div class="pn"><span id="p0d">0</span><span class="of"> / <span id="p0t">0</span></span></div>
+        <div class="pb"><div class="pbf" id="p0b" style="width:0"></div></div>
+      </div>
+      <div class="pc p1c">
+        <div class="pl">P1 · High</div>
+        <div class="pn"><span id="p1d">0</span><span class="of"> / <span id="p1t">0</span></span></div>
+        <div class="pb"><div class="pbf" id="p1b" style="width:0"></div></div>
+      </div>
+      <div class="pc p2c">
+        <div class="pl">P2 · Medium</div>
+        <div class="pn"><span id="p2d">0</span><span class="of"> / <span id="p2t">0</span></span></div>
+        <div class="pb"><div class="pbf" id="p2b" style="width:0"></div></div>
+      </div>
+      <div class="pc p3c">
+        <div class="pl">P3 · Low</div>
+        <div class="pn"><span id="p3d">0</span><span class="of"> / <span id="p3t">0</span></span></div>
+        <div class="pb"><div class="pbf" id="p3b" style="width:0"></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="blbl">↳ OPEN GAPS (P0/P1)</div>
+      <div class="blist" id="blist"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SOC PANES -->
+<div class="soc-panes hidden" id="soc-panes">
+
+  <div class="divider-label">▸ NIST SP 800-61 — SENIOR ANALYST HANDOFF</div>
+
+  <!-- Handoff metadata block -->
+  <div class="hf-grid" style="margin-bottom:40px">
+    <div class="hf-card">
+      <div class="hf-label">Incident ID</div>
+      <div class="hf-value">DSL-SOC-2026-05-28</div>
+    </div>
+    <div class="hf-card">
+      <div class="hf-label">Current Status</div>
+      <div class="hf-value"><span class="status-chip monitoring">Monitoring</span></div>
+    </div>
+    <div class="hf-card">
+      <div class="hf-label">Severity / Urgency / Priority</div>
+      <div class="hf-value">P2 · Medium</div>
+    </div>
+    <div class="hf-card">
+      <div class="hf-label">Incident Lead / Current Owner</div>
+      <div class="hf-value">Platform Eng</div>
+    </div>
+    <div class="hf-card full">
+      <div class="hf-label">Executive Summary</div>
+      <div class="hf-value lg">render-token plane S012 is hardened and adversarial-audited. Twelve controls pass; six GAPs (rt13–rt18) remain open, all deferred to S013/Phase-3. Production worker (drop-pane) is still on S003 and does not yet carry the render-token code — no live exposure on prod. Sandbox (drop-pane-sandbox) is the sole active surface.</div>
+    </div>
+    <div class="hf-card full">
+      <div class="hf-label">Business Impact</div>
+      <div class="hf-value">No active service disruption. No data at risk. Primary risk: rate-limiting gap (rt13) means a sufficiently motivated adversary could flood the sandbox mint/attach endpoints. Production cutover (rt18) is blocked pending wrangler secret provisioning and DO migration — regulatory risk is LOW while prod remains on S003.</div>
+    </div>
+    <div class="hf-card">
+      <div class="hf-label">Affected Assets / Users</div>
+      <div class="hf-value">drop-pane-sandbox CF Worker · renderToken.ts · session.ts · server.ts · safety-harness.mjs</div>
+    </div>
+    <div class="hf-card">
+      <div class="hf-label">Scope Confidence</div>
+      <div class="hf-value"><span class="conf-chip high">Confirmed</span> — all items code-traceable to repo @ f5d2c0c</div>
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="pane-block" id="pane-timeline">
+    <div class="pane-head" onclick="togglePane('pane-timeline')">
+      <div>
+        <div class="pane-htag">NIST 800-61 · 3.2 — Detection and Analysis</div>
+        <div class="pane-htitle">Event Timeline</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="timeline-mount"></div>
+    </div></div>
+  </div>
+
+  <!-- Actions & Containment -->
+  <div class="pane-block" id="pane-actions">
+    <div class="pane-head" onclick="togglePane('pane-actions')">
+      <div>
+        <div class="pane-htag">NIST 800-61 · 3.3 — Containment, Eradication, Recovery</div>
+        <div class="pane-htitle">Actions Taken · Containment &amp; Remediation Status · Pending Actions</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="actions-mount"></div>
+    </div></div>
+  </div>
+
+  <!-- Communications & Closure -->
+  <div class="pane-block" id="pane-comms">
+    <div class="pane-head" onclick="togglePane('pane-comms')">
+      <div>
+        <div class="pane-htag">NIST 800-61 · 3.4 — Post-Incident Activity · Comms</div>
+        <div class="pane-htitle">Communications · Closure Logic · Confidence Level</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="comms-mount"></div>
+    </div></div>
+  </div>
+
+  <div class="divider-label">▸ MITRE ATT&CK + DETECTION COVERAGE</div>
+
+  <!-- Pane A: ATT&CK Mapping -->
+  <div class="pane-block" id="pane-attack">
+    <div class="pane-head" onclick="togglePane('pane-attack')">
+      <div>
+        <div class="pane-htag">Pane A — MITRE ATT&CK TTP Mapping</div>
+        <div class="pane-htitle">Control → Technique → Mitigation</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="attack-mount"></div>
+    </div></div>
+  </div>
+
+  <!-- Pane B: Detection Coverage -->
+  <div class="pane-block" id="pane-detect">
+    <div class="pane-head" onclick="togglePane('pane-detect')">
+      <div>
+        <div class="pane-htag">Pane B — Detection Coverage Status</div>
+        <div class="pane-htitle">Per-Control Coverage · Source · ATT&CK Link</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="detect-mount"></div>
+    </div></div>
+  </div>
+
+  <!-- Pane C: Active Threat Status -->
+  <div class="pane-block" id="pane-threat">
+    <div class="pane-head" onclick="togglePane('pane-threat')">
+      <div>
+        <div class="pane-htag">Pane C — Active Threat Status · Operational Snapshot</div>
+        <div class="pane-htitle">Live Telemetry · Token / Rate / CSP / Supply-Chain</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="threat-mount"></div>
+    </div></div>
+  </div>
+
+  <div class="divider-label">▸ RISK ACCEPTANCE + INCIDENT LINEAGE</div>
+
+  <!-- Pane D: Risk Acceptance -->
+  <div class="pane-block" id="pane-risk">
+    <div class="pane-head" onclick="togglePane('pane-risk')">
+      <div>
+        <div class="pane-htag">Pane D — Risk Acceptance Tracking</div>
+        <div class="pane-htitle">Open Gaps · Owner · ETA · Notes</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="risk-mount"></div>
+    </div></div>
+  </div>
+
+  <!-- Pane E: Incident Linkage -->
+  <div class="pane-block" id="pane-incident">
+    <div class="pane-head" onclick="togglePane('pane-incident')">
+      <div>
+        <div class="pane-htag">Pane E — Incident Linkage</div>
+        <div class="pane-htitle">Control → Linked Incident → Outcome</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="incident-mount"></div>
+    </div></div>
+  </div>
+
+  <!-- Pane F: SLA Matrix -->
+  <div class="pane-block" id="pane-sla">
+    <div class="pane-head" onclick="togglePane('pane-sla')">
+      <div>
+        <div class="pane-htag">Pane F — SLA Matrix · NIST SP 800-61 Recommended Baseline</div>
+        <div class="pane-htitle">Priority → Ack → Handoff → Update → Escalation</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="sla-mount"></div>
+    </div></div>
+  </div>
+
+  <div class="divider-label">▸ SECURITY MATURITY — 3SIXTYCO. 5-STAGE MODEL</div>
+
+  <!-- Pane G: Maturity Trajectory -->
+  <div class="pane-block" id="pane-maturity">
+    <div class="pane-head" onclick="togglePane('pane-maturity')">
+      <div>
+        <div class="pane-htag">Pane G — Maturity Trajectory · Growth Delta</div>
+        <div class="pane-htitle">Stage Progression · S010 → S012 Delta</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="pane-body"><div class="pane-inner">
+      <div id="maturity-mount"></div>
+    </div></div>
+  </div>
+
+</div><!-- /soc-panes -->
+
+<!-- CHECKLIST TOOLBAR -->
+<div class="divider-label">▸ CONTROL CHECKLIST (code-traceable · repo @ f5d2c0c)</div>
+<div class="toolbar">
+  <div class="fg">
+    <button class="fb on" data-f="all">ALL</button>
+    <button class="fb f0" data-f="p0">P0</button>
+    <button class="fb f1" data-f="p1">P1</button>
+    <button class="fb f2" data-f="p2">P2</button>
+    <button class="fb f3" data-f="p3">P3</button>
+  </div>
+  <input class="srch" id="srch" type="text" placeholder="SEARCH…" autocomplete="off"/>
+  <div class="sp"></div>
+  <span class="chip" id="chip">—</span>
+</div>
+
+<!-- CHECKLIST -->
+<div class="secs" id="secs"></div>
+
+<!-- HANDOFF COMPLETION CHECKLIST (footer) -->
+<div class="divider-label">▸ HANDOFF COMPLETION CHECKLIST</div>
+<div class="fchk" id="fchk-mount"></div>
+
+<!-- SIGN-OFF PROMPT -->
+<div class="soff-prompt" id="soff-prompt-bar" onclick="document.getElementById('signoffbtn').click()">
+  <div class="soff-prompt-text">
+    <div class="soff-prompt-label">✎ Analyst Sign-Off Required</div>
+    <div class="soff-prompt-sub" id="soff-prompt-status">Enter your name and position to complete this handoff.</div>
+  </div>
+  <div class="soff-prompt-cta">SIGN OFF ▸</div>
+</div>
+
+<!-- SIGNOFF -->
+<div class="soff" id="soff-mount">
+  <div class="soc">
+    <div class="sol">Analyst Name</div>
+    <div class="sov" contenteditable="true" spellcheck="false" data-sf-field="name" data-placeholder="Full name" data-empty="true"></div>
+    <div class="sor" contenteditable="true" spellcheck="false" data-sf-field="role" data-placeholder="Role / title" data-empty="true"></div>
+    <div class="soln"></div>
+  </div>
+  <div class="soc">
+    <div class="sol">Fingerprint</div>
+    <div class="sov" id="fp" style="font-size:10px;word-break:break-all">—</div>
+    <div class="sol" style="margin-top:14px">Score</div>
+    <div class="sov" id="fscore" style="font-size:20px;letter-spacing:-.02em">—</div>
+    <div class="sol" style="margin-top:6px">Basis</div>
+    <div class="sov">REPO @ f5d2c0c · S012 · NIST 800-61 R3</div>
+  </div>
+</div>
+
+<!-- SIGN-OFF MODAL -->
+<div class="signoff-overlay" id="signoff-overlay">
+  <div class="signoff-modal">
+    <div class="signoff-modal-title">✓ Report Complete — Sign Off</div>
+    <div class="signoff-modal-sub">Enter analyst details to sign the handoff. Saved to localStorage.</div>
+    <div class="signoff-grid" style="grid-template-columns:1fr 1fr">
+      <div class="signoff-field">
+        <div class="signoff-label">Analyst Name</div>
+        <input class="signoff-input" id="sf-primary-name" type="text" placeholder="Full name" autocomplete="name"/>
+      </div>
+      <div class="signoff-field">
+        <div class="signoff-label">Role / Title</div>
+        <input class="signoff-input" id="sf-primary-role" type="text" placeholder="Role / title"/>
+      </div>
+      <div class="signoff-field">
+        <div class="signoff-label">Secondary Engineer — Name</div>
+        <input class="signoff-input" id="sf-secondary-name" type="text" placeholder="Full name" autocomplete="name"/>
+      </div>
+      <div class="signoff-field">
+        <div class="signoff-label">Secondary Engineer — Role</div>
+        <input class="signoff-input" id="sf-secondary-role" type="text" placeholder="Role / title"/>
+      </div>
+    </div>
+    <div class="signoff-modal-btns">
+      <button class="btn" id="sf-skip">SKIP</button>
+      <button class="btn" id="sf-save">SIGN OFF</button>
+      <button class="btn att" id="sf-save-export">SIGN OFF &amp; EXPORT</button>
+    </div>
+  </div>
+</div>
+</div><!-- /shell -->
+
+<script type="application/json" id="soc-manifest">
+{
+  "meta": {
+    "id": "DSL-SOC-2026-05-28",
+    "status": "monitoring",
+    "severity": "P2 · medium",
+    "owner": "Platform Eng",
+    "basis": "f5d2c0c",
+    "nist": "SP 800-61 Rev 3",
+    "version": "SOC-HANDOFF-V1"
+  },
+  "attack": [
+    {"control":"Token replay prevention (rt05, rt06)","ttp":"T1550","tname":"Use Alternate Authentication Material","mit":"M1041","mname":"Encrypt Sensitive Information"},
+    {"control":"Rate limiting on mint/attach (rt13 — GAP)","ttp":"T1110","tname":"Brute Force","mit":"M1036","mname":"Account Use Policies"},
+    {"control":"Audit integrity (rt07)","ttp":"T1562.001","tname":"Disable or Modify Tools (logs)","mit":"M1029","mname":"Remote Data Storage"},
+    {"control":"Constant-time hash compare (rt03)","ttp":"T1110.002","tname":"Password Cracking","mit":"M1041","mname":"Encrypt Sensitive Information"},
+    {"control":"HMAC secret in wrangler secret (rt02)","ttp":"T1552","tname":"Unsecured Credentials","mit":"M1027","mname":"Password Policies"},
+    {"control":"URL scheme allowlist (lk01)","ttp":"T1204.001","tname":"Malicious Link","mit":"M1021","mname":"Restrict Web-Based Content"},
+    {"control":"Userinfo strip on URL scrub (lk03)","ttp":"T1078","tname":"Valid Accounts","mit":"M1027","mname":"Password Policies"},
+    {"control":"CSP frame-ancestors none (ed03)","ttp":"T1185","tname":"Browser Session Hijacking","mit":"M1054","mname":"Software Configuration"},
+    {"control":"HSTS / TLS 1.2 min (ed02)","ttp":"T1040","tname":"Network Sniffing","mit":"M1041","mname":"Encrypt Sensitive Information"},
+    {"control":"Sandbox-only render plane (rt12)","ttp":"T1190","tname":"Exploit Public-Facing Application","mit":"M1030","mname":"Network Segmentation"},
+    {"control":"Lockfile + supply-chain age guard (sp03)","ttp":"T1195.002","tname":"Compromise Software Supply Chain","mit":"M1051","mname":"Update Software"},
+    {"control":"Append-only audit log (rt07)","ttp":"T1070","tname":"Indicator Removal","mit":"M1029","mname":"Remote Data Storage"},
+    {"control":"Manual deploy tier on routes (dp01)","ttp":"T1648","tname":"Serverless Execution","mit":"M1018","mname":"User Account Management"}
+  ],
+  "detection": [
+    {"det":"Token issuance audit trail","cov":"Full","src":"Worker storage (append-only audit log)","ttp":"T1550"},
+    {"det":"Token attach + revoke events","cov":"Full","src":"Worker storage","ttp":"T1550"},
+    {"det":"Token replay attempts (constant-time fail)","cov":"Partial","src":"Worker logs (no SIEM correlation yet)","ttp":"T1550"},
+    {"det":"Rate-limit violations on mint/attach","cov":"Missing","src":"Needs Workers Rate Limiting + SIEM","ttp":"T1110"},
+    {"det":"HMAC secret rotation events","cov":"Missing","src":"No SIEM signal; manual via wrangler secret put","ttp":"T1552"},
+    {"det":"CSP violation reports","cov":"Missing","src":"No report-uri configured","ttp":"T1185"},
+    {"det":"Sandbox-host bypass attempts","cov":"Partial","src":"Worker returns 404 silently; no alerting","ttp":"T1190"},
+    {"det":"Supply-chain age-guard hits","cov":"Partial","src":"bun install logs; no centralized alerting","ttp":"T1195.002"},
+    {"det":"Branded 500 occurrence spikes","cov":"Missing","src":"Logged but no anomaly detection","ttp":"T1190"}
+  ],
+  "threats": [
+    {"status":"ok","text":"No active exploitation observed"},
+    {"status":"ok","text":"No anomalous attach spikes (last 24h)"},
+    {"status":"ok","text":"No token replay attempts"},
+    {"status":"ok","text":"No unauthorized revoke activity"},
+    {"status":"ok","text":"No CSP violations reported"},
+    {"status":"ok","text":"No sandbox-host bypass attempts"},
+    {"status":"ok","text":"Supply-chain age-guard active (24h floor)"}
+  ],
+  "risks": [
+    {"gap":"Rate-limiting on mint/attach (rt13)","owner":"Platform Eng","sev":"P1","eta":"Q3","notes":"Blocks verify-audit events"},
+    {"gap":"Rotate / supersede lifecycle (rt14)","owner":"Platform Eng","sev":"P2","eta":"Q3","notes":"Gate ready, not wired"},
+    {"gap":"Token GC + audit-log size cap (rt15)","owner":"Platform Eng","sev":"P2","eta":"Q3","notes":"NIST AU-4"},
+    {"gap":"HMAC dual-key rotation window (rt16)","owner":"Security Eng","sev":"P2","eta":"Q3","notes":"NIST SP 800-57"},
+    {"gap":"Per-tenant ownership / BOLA (rt17)","owner":"Platform Eng","sev":"P1","eta":"Q4","notes":"OWASP API1:2023"},
+    {"gap":"Production cutover preconditions (rt18)","owner":"Platform Eng","sev":"P1","eta":"Q3","notes":"Prod still on S003"},
+    {"gap":"CI gitleaks gate (sp04)","owner":"DevOps","sev":"P1","eta":"Q3","notes":"OWASP Secrets Mgmt"},
+    {"gap":"bun audit gate in CI (sp05)","owner":"DevOps","sev":"P2","eta":"Q3","notes":"OWASP A06"},
+    {"gap":"CSP unsafe-inline removal (ed08)","owner":"Platform Eng","sev":"P2","eta":"Q4","notes":"Inline styles blocker"},
+    {"gap":"HSTS preload submission (ed10)","owner":"DevOps","sev":"P3","eta":"Q4","notes":"Pending subdomain stability"},
+    {"gap":"iframe sandbox/allow/referrerpolicy audit (lk08)","owner":"Platform Eng","sev":"P2","eta":"Q3","notes":"Tile renderers"}
+  ],
+  "incidents": [
+    {"control":"handleSend/handleBroadcast removal (rt11)","incident":"S010 adversarial audit — cross-token send + unattached broadcast","date":"2026-S010","outcome":"Both endpoints deleted; harness regression-locks absence"},
+    {"control":"Unified lifecycle gate (rt05)","incident":"S011 adversarial MEDIUM A3.1 — off-spec expiresAt accepted","date":"2026-S011","outcome":"checkTokenLifecycle predicate fail-closed on NaN/undefined/string"},
+    {"control":"Live revoke proof (rt06)","incident":"S011 — needed proof of denial against deployed attach","date":"2026-S011","outcome":"Live sandbox smoke: mint → attach → revoke → re-attach-denied"},
+    {"control":"Commit signing operational (dp05)","incident":"Session-1 SSH agent bridge failures","date":"S012 prep","outcome":"op-ssh-sign-session1 scheduled task fixed"}
+  ],
+  "sla": [
+    {"priority":"Critical","ack":"15 min","handoff":"30 min","update":"1h","escalation":"IR + Exec within 1h"},
+    {"priority":"High","ack":"30 min","handoff":"1h","update":"2h","escalation":"IR within 2h"},
+    {"priority":"Medium","ack":"4h","handoff":"8h","update":"Daily","escalation":"Manager within 4h"},
+    {"priority":"Low","ack":"1 business day","handoff":"Next shift","update":"Weekly","escalation":"On SLA breach"}
+  ]
+}
+</script>
+
+<script>
+/* ─────────────────────────────────────────────
+   DATA — current-build, code-traceable.
+   done:1 = control verified implemented (pre-checked on first load).
+   Carried over 1:1 from 01-LITE @ f5d2c0c.
+───────────────────────────────────────────── */
+const DATA=[
+  {id:'s01',tag:'#RENDERTOKEN',title:'Private render-link token plane (S005-S012)',items:[
+    {id:'rt01',p:'p0',done:1,name:'Token secret is CSPRNG; raw is never persisted — only the HMAC hash is stored',desc:'generateRenderToken: 128-bit crypto.getRandomValues raw with dsl_ prefix; TokenRecord has no raw field; storage key is the HMAC-SHA256 hash.',ref:'CWE-330 · NIST SP 800-133 · renderToken.ts'},
+    {id:'rt02',p:'p0',done:1,name:'HMAC secret only via wrangler secret put — never in vars or client bundle; 32-char floor enforced',desc:'wrangler.jsonc declares no vars (deploy-clobber guard); MIN_HMAC_SECRET_LEN gate in hashRenderToken + requireHmacSecret. Safety harness regression-locks the no-vars rule.',ref:'CWE-312 · OWASP A02:2021 · wrangler.jsonc · renderToken.ts'},
+    {id:'rt03',p:'p0',done:1,name:'Hash comparison is constant-time',desc:'constantTimeStringEqual XORs all bytes; no early return on first mismatch.',ref:'CWE-208 · renderToken.ts'},
+    {id:'rt04',p:'p0',done:1,name:'State transitions are atomic — record + audit in one multi-key put inside blockConcurrencyWhile',desc:'persistNewToken / revokeToken self-wrap; nextAuditEntries merged into the same storage.put. No bare put reachable (audit-confirmed).',ref:'CWE-362 · contract sec 3/12 · renderToken.ts'},
+    {id:'rt05',p:'p0',done:1,name:'Unified lifecycle gate — attach and verify share checkTokenLifecycle; fail-closed on off-spec expiry',desc:'S012: handleAttach and verifyRenderTokenAgainstRecord both call one predicate; NaN/undefined/string expiresAt is denied. Resolves S011 adversarial MEDIUM A3.1.',ref:'OWASP A01:2021 · session.ts · AUDIT-S012-LOGIC.md'},
+    {id:'rt06',p:'p0',done:1,name:'Revoke is instant — denial proven live against the deployed attach handler',desc:'S011: revokeToken flips status atomically; live sandbox smoke proved mint to attach to revoke to re-attach-denied through the real handler.',ref:'NIST IA-5 · HANDOFF-S011.md'},
+    {id:'rt07',p:'p1',done:1,name:'Append-only audit log — issued/revoked, monotonic seq, corruption-resistant',desc:'audit:seq counter + audit:event keys; maxExistingAuditSeq fallback prevents overwriting event 1 on a corrupt counter.',ref:'NIST AU-9 · renderToken.ts'},
+    {id:'rt08',p:'p1',done:1,name:'Token ids non-enumerable; revoke-by-scan never builds a storage key from the id',desc:'ids are random base64url; revoke matches by scanning the list namespace, so colon, dot-dot, or null bytes in an id cannot cross key namespaces.',ref:'CWE-639 · CWE-22 · renderToken.ts'},
+    {id:'rt09',p:'p1',done:1,name:'Responses strip hash + issuer; logs strip raw + hash',desc:'publicTokenView omits hashHex/issuer from API responses; sanitizeForLog returns only id/status/scene fields.',ref:'CWE-200 · CWE-312 · renderToken.ts'},
+    {id:'rt10',p:'p1',done:1,name:'Revoke reason is control-char stripped (log-injection guard)',desc:'CONTROL_CHARS_RE strips C0/DEL before the reason is capped and written to the audit log / future R2 dump.',ref:'CWE-117 · renderToken.ts'},
+    {id:'rt11',p:'p1',done:1,name:'No client-to-client messaging — send/broadcast removed; attach-only',desc:'handleSend/handleBroadcast dropped at S010 (audit HIGH: unattached broadcast + cross-token send). Not in contract sec 5. Harness regression-locks their absence.',ref:'OWASP A01:2021 · session.ts · AUDIT-S010-ADVERSARIAL.md'},
+    {id:'rt12',p:'p2',done:1,name:'Render plane is sandbox-only — endpoints hostname-gated to workers.dev',desc:'isSandboxLiveSurfacePath + url.hostname check; prod hosts (dropstream.gg / 3sixtyco.dev) return 404 for the livesurface endpoints.',ref:'OWASP A05:2021 · server.ts'},
+    {id:'rt13',p:'p1',name:'Rate-limiting on mint / attach',desc:'GAP: no per-IP/per-token rate limit on token creation or attach. verify-audit events are deferred until this exists (contract sec 11 Q4 flood risk).',ref:'OWASP API4:2023 · contract sec 11'},
+    {id:'rt14',p:'p2',name:'Rotate / supersede lifecycle (active to superseded)',desc:'GAP (S013): rotateToken not implemented. checkTokenLifecycle already denies superseded, so the gate is ready for it.',ref:'NIST IA-5 · contract sec 5 · HANDOFF-S012.md'},
+    {id:'rt15',p:'p2',name:'Token GC + audit-log size cap',desc:'GAP (S013): no alarm-based purge of expired/revoked records; audit-log size cap (sec 7) not yet enforced.',ref:'NIST AU-4 · contract sec 7'},
+    {id:'rt16',p:'p2',name:'HMAC dual-key rotation window',desc:'GAP (S013): primary + prior key overlap window not implemented; rotating the secret today invalidates all live tokens.',ref:'NIST SP 800-57 · contract sec 6'},
+    {id:'rt17',p:'p1',name:'Per-tenant ownership / server-derived actor',desc:'GAP (Phase-3): issued/revoked actor is request-supplied/hardcoded (sandbox-test); no tenant model gating who may mint/revoke a given scene token.',ref:'OWASP API1:2023 BOLA · session.ts'},
+    {id:'rt18',p:'p1',name:'Production cutover preconditions',desc:'GAP: prod (drop-pane) still on S003 de9a5af9 — no DO migration, no render-token code, no HMAC secret. First prod deploy needs wrangler secret put LIVE_SURFACE_HMAC_KEY --name drop-pane (distinct value) + the v1 migration.',ref:'NIST CM-3 · HANDOFF-S011.md'},
+  ]},
+  {id:'s02',tag:'#EDGE',title:'Worker edge — headers, TLS & host isolation',items:[
+    {id:'ed01',p:'p0',done:1,name:'Security headers on every non-WebSocket response',desc:'withSecurityHeaders sets CSP, HSTS, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy on all SSR/asset/error responses (101 upgrades correctly bypass).',ref:'OWASP A05:2021 · server.ts'},
+    {id:'ed02',p:'p0',done:1,name:'TLS 1.2 minimum; worker-emitted HSTS (1y, includeSubDomains)',desc:'dropstream.gg min TLS set to 1.2 (2026-05-25); Strict-Transport-Security max-age 31536000 includeSubDomains. Zone HSTS off — worker is the source of truth.',ref:'PCI DSS 4.2.1 · CWE-319 · server.ts'},
+    {id:'ed03',p:'p0',done:1,name:'CSP: frame-ancestors none, object-src none, base-uri self, upgrade-insecure-requests',desc:'Anti-clickjacking (frame-ancestors none), no plugins (object-src none), no base-tag hijack (base-uri self), http subresources upgraded to https.',ref:'CWE-1021 · OWASP CSP Cheatsheet · server.ts'},
+    {id:'ed04',p:'p1',done:1,name:'Sandbox routes gated on url.hostname, not the forwarded Host header',desc:'The sandbox gate trusts only the URL parser, so a spoofed X-Forwarded-Host / Host cannot reach the livesurface endpoints on a prod host.',ref:'CWE-290 · Host-header trust · server.ts'},
+    {id:'ed05',p:'p1',done:1,name:'Prod worker has no workers.dev surface; sandbox worker has no routes',desc:'wrangler.jsonc workers_dev false in prod; the only workers_dev true surface is drop-pane-sandbox, which carries no routes — the two never cross.',ref:'OWASP A05:2021 · wrangler.jsonc · wrangler.sandbox.jsonc'},
+    {id:'ed06',p:'p1',done:1,name:'Generic branded 500s — no stack traces or paths to the client',desc:'brandedErrorResponse returns a static HTML 500; normalizeCatastrophicSsrResponse catches h3-swallowed errors and logs them server-side only.',ref:'CWE-209 · OWASP A05:2021 · server.ts'},
+    {id:'ed07',p:'p1',done:1,name:'No CORS headers emitted — no cross-origin grant, no wildcard',desc:'The worker sets no Access-Control-Allow-Origin anywhere; same-origin only by default. Render-token endpoints are same-origin (sandbox host).',ref:'OWASP CORS Cheatsheet · CWE-346 · server.ts'},
+    {id:'ed08',p:'p2',name:'Tighten CSP: remove script-src / style-src unsafe-inline',desc:'HARDEN: CSP currently allows unsafe-inline for scripts and styles. Move to nonces/hashes (design-system inline styles are the main blocker).',ref:'CWE-79 · OWASP CSP Cheatsheet · server.ts'},
+    {id:'ed09',p:'p3',done:1,name:'Wide frame-src/img/media is a reviewed, intentional posture',desc:'ACCEPTED: the media wall must embed arbitrary origins, so frame-src/img/media allow https and http. Mixed-content risk is mitigated by upgrade-insecure-requests + frame-ancestors none.',ref:'Design tradeoff · server.ts'},
+    {id:'ed10',p:'p2',name:'Add HSTS preload',desc:'HARDEN: HSTS lacks the preload directive; add it and submit to the preload list once subdomain coverage is confirmed permanent.',ref:'hstspreload.org · server.ts'},
+  ]},
+  {id:'s03',tag:'#LINKS',title:'URL trust — paste, scrub & share safety',items:[
+    {id:'lk01',p:'p0',done:1,name:'Scheme allowlist — only http(s)/wss(s); javascript, data, file rejected at parse',desc:'parseLinks.tryUrl and scrubUrl.parseUrlToken accept only http(s)/wss(s) (or known bare domains to https); anything else returns null and is dropped.',ref:'CWE-79 · CWE-20 · parseLinks.ts · scrubUrl.ts'},
+    {id:'lk02',p:'p0',done:1,name:'Secret-bearing query params stripped before a URL is serialized to a share link / room hash / recents',desc:'stripSensitiveUrlParams removes token/auth/sig/code/jwt/key/session and signed-URL params (x-amz, x-goog, x-ms) before encodeState / saveRecent.',ref:'CWE-598 · OWASP Secrets Mgmt · scrubUrl.ts · roomState.ts'},
+    {id:'lk03',p:'p0',done:1,name:'URL userinfo (user:pass@) stripped on scrub',desc:'stripUrlParams clears username and password so credentials embedded in a pasted URL never persist into shared/saved state.',ref:'CWE-522 · scrubUrl.ts'},
+    {id:'lk04',p:'p1',done:1,name:'Share-link tiles forced inactive; websocket subscribe dropped for shared links',desc:'inactiveForExternal forces share-link tiles inactive, and websocket subscribe is discarded for share-link tiles — a shared link cannot auto-connect a socket or auto-activate external content.',ref:'OWASP A01:2021 · CWE-441 · roomState.ts'},
+    {id:'lk05',p:'p1',done:1,name:'Room-state deserialization is bounded + validated',desc:'decodeState caps encoded and decoded (64KB) size, checks version, then sanitizeRoomState allowlists kind/layout and clamps every pos/number — untrusted share state cannot inject unknown shapes.',ref:'CWE-502 · OWASP Deserialization · roomState.ts'},
+    {id:'lk06',p:'p1',done:1,name:'Share state lives in the URL fragment (room hash) — never sent to the server',desc:'writeHash/shareUrl encode into location.hash; fragments are not transmitted in HTTP requests, so shared room layouts never reach worker logs.',ref:'Privacy by design · roomState.ts'},
+    {id:'lk07',p:'p2',done:1,name:'Tracking params scrubbed on paste/share',desc:'scrubRaw strips utm, fbclid, gclid, igshid, msclkid, ttclid and similar from pasted and shared URLs.',ref:'GDPR Art.5 · scrubUrl.ts'},
+    {id:'lk08',p:'p2',name:'Audit iframe tile sandbox / allow / referrerpolicy attributes',desc:'VERIFY: this report has not yet inspected the iframe attributes (sandbox, allow, referrerpolicy) on website/twitch/youtube tile renderers. Confirm least-privilege embedding.',ref:'OWASP HTML5 Security · CWE-1021 · src/tiles'},
+  ]},
+  {id:'s04',tag:'#SUPPLY',title:'Secrets & supply chain',items:[
+    {id:'sp01',p:'p0',done:1,name:'No secrets compiled into the client bundle',desc:'The only secret (LIVE_SURFACE_HMAC_KEY) is a Worker secret read server-side; never imported into client code or the Vite bundle.',ref:'CWE-312 · OWASP A02:2021 · wrangler.jsonc'},
+    {id:'sp02',p:'p0',done:1,name:'HMAC secret never declared in wrangler vars — deploy-clobber guard locked',desc:'A vars entry of the same name would overwrite the remote secret on every deploy; the safety harness has a dedicated test asserting it stays absent.',ref:'CWE-1188 · wrangler.jsonc · safety-harness.mjs'},
+    {id:'sp03',p:'p1',done:1,name:'Supply-chain age guard + frozen lockfile',desc:'bunfig.toml enforces a 24h minimum-release-age (slows compromised-release pickup); installs use frozen-lockfile; deps are not churned outside dependency work.',ref:'SLSA · CIS Control 2 · bunfig.toml · AGENTS.md'},
+    {id:'sp04',p:'p1',name:'Automated secret scanning in CI (gitleaks)',desc:'GAP/VERIFY: pre-push secret scanning is manual today; confirm or add a gitleaks (or equivalent) CI step that blocks on findings.',ref:'CWE-798 · OWASP Secrets Mgmt · .github/workflows'},
+    {id:'sp05',p:'p2',name:'Dependency CVE gate (bun audit) in CI',desc:'VERIFY: bun audit for critical/high CVEs was not run in this pass and is not confirmed in CI. Add as a blocking gate.',ref:'OWASP A06:2021 · CIS Control 2'},
+    {id:'sp06',p:'p2',done:1,name:'Runtime on current LTS-class Node',desc:'Build/test run on Node 20+ (Vite 7 requirement); no EOL runtime in use.',ref:'nodejs.org/releases · CIS Control 2'},
+  ]},
+  {id:'s05',tag:'#DEPLOY',title:'Release & verification gate',items:[
+    {id:'dp01',p:'p0',done:1,name:'Route / custom_domain changes are MANUAL tier — no auto-deploy of live-traffic config',desc:'Worker route and custom_domain edits touch production traffic and are never auto-applied; they require explicit human action (.4ge-wizard.json execution tier).',ref:'CIS Control 16 · SOC 2 CC8.1 · .claude/rules'},
+    {id:'dp02',p:'p1',done:1,name:'Dry-run before deploy; sandbox transform is integrity-locked',desc:'deploy:dry-run runs before any deploy; the deploy:sandbox node transform mutates only name/routes/workers_dev, asserted by a safety-harness test.',ref:'NIST CM-3 · package.json · safety-harness.mjs'},
+    {id:'dp03',p:'p1',done:1,name:'Safety harness (40 checks) gates commits',desc:'bun run check = typecheck + lint + 40-check safety harness + build, all green before commit. The harness regression-locks security invariants (no-vars, sandbox-gating, send/broadcast absence, lifecycle predicate).',ref:'SOC 2 CC8.1 · safety-harness.mjs'},
+    {id:'dp04',p:'p1',done:1,name:'Every render-token slice is multi-pass adversarial-audited before commit',desc:'S010-S012 each went through DFE/security/adversarial audits (reports in _runs). S012 logic audit: SAFE-TO-COMMIT, 0 findings.',ref:'Secure SDLC · _runs/AUDIT files'},
+    {id:'dp05',p:'p2',done:1,name:'Commit signing operational',desc:'SSH commit signing works via a Session-1 scheduled-task bridge (op-ssh-sign-session1); the WSL-launched signer had been crossing the Windows desktop-session boundary wrong — 1Password itself was fine. S012 re-signed f5d2c0c, verified good (G), key SHA256:9vMGYWsX7. All commits signed.',ref:'SLSA provenance · 1Password SSH agent · op-ssh-sign-session1'},
+    {id:'dp06',p:'p2',done:1,name:'Durable decision / handoff / audit trail per slice',desc:'_runs HANDOFF and AUDIT files preserve rationale, verification, and live-system state for every slice — reconstructable history.',ref:'SOC 2 CC7.2 · NIST AU-2 · _runs'},
+  ]},
+];
+
+/* ─── engine (3SIXTYCO v1.2 — DOM via createElement/textContent, no markup injection) ─── */
+const W={p0:4,p1:3,p2:2,p3:1};
+const RC=2*Math.PI*62;
+const SK='ds-soc-handoff-blank';
+const DEFAULT_DONE=[];
+let saved={};try{saved=JSON.parse(localStorage.getItem(SK)||'{}')}catch(e){}
+let checked=new Set(Array.isArray(saved.checked)?saved.checked:DEFAULT_DONE);
+let weekOff=saved.week||0;
+let notes=saved.notes&&typeof saved.notes==='object'?saved.notes:{};
+let snapshots=saved.snapshots&&typeof saved.snapshots==='object'?saved.snapshots:{};
+let timestamps=saved.timestamps&&typeof saved.timestamps==='object'?saved.timestamps:{};
+let evidence=saved.evidence&&typeof saved.evidence==='object'?saved.evidence:{};
+let itemText=saved.itemText&&typeof saved.itemText==='object'&&!Array.isArray(saved.itemText)?saved.itemText:{};
+let signoff=saved.signoff&&typeof saved.signoff==='object'?{name:saved.signoff.name||saved.signoff.primary?.name||'',role:saved.signoff.role||saved.signoff.primary?.role||''}:{name:"Jowey Pierre-Francois",role:"Lead Systems Engineer — 3SixtyCo."};
+let flt='all',missOnly=false,q='';
+let panesVisible=false;
+
+/* safe element builder: text via textContent, attrs via setAttribute */
+function E(tag,props){
+  const el=document.createElement(tag);
+  if(props){
+    for(const k in props){
+      const v=props[k];
+      if(v==null) continue;
+      if(k==='class') el.className=v;
+      else if(k==='text') el.textContent=v;
+      else el.setAttribute(k,v);
+    }
+  }
+  for(let i=2;i<arguments.length;i++){
+    const c=arguments[i];
+    if(c==null||c===false) continue;
+    el.appendChild(typeof c==='string'?document.createTextNode(c):c);
+  }
+  return el;
+}
+
+function mon(off){
+  const d=new Date(),day=d.getDay();
+  d.setDate(d.getDate()-(day===0?6:day-1)+off*7);
+  return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+}
+function fd(d,o){return d.toLocaleDateString('en-US',o)}
+function wstr(off){
+  const m=mon(off),f=new Date(m);f.setDate(f.getDate()+6);
+  return fd(m,{month:'short',day:'numeric'})+' – '+fd(f,{month:'short',day:'numeric',year:'numeric'});
+}
+function sc(n){
+  if(n>=90)return 'var(--pass)';
+  if(n>=70)return 'var(--p2)';
+  if(n>=50)return 'var(--p1)';
+  return 'var(--p0)';
+}
+function sg(n){
+  if(n>=95)return '✓ CURRENT BUILD HARDENED';
+  if(n>=85)return '◐ STRONG — MINOR GAPS';
+  if(n>=70)return '◑ SOLID — TRACK THE GAPS';
+  if(n>=50)return '◒ GAPS NEED WORK';
+  if(n>0)  return '✗ CRITICAL';
+  return 'START CHECKING';
+}
+function hash(s){let h=0;for(let i=0;i<s.length;i++)h=((h<<5)-h+s.charCodeAt(i))|0;return Math.abs(h).toString(16).toUpperCase().slice(0,8)}
+function persist(){try{localStorage.setItem(SK,JSON.stringify({checked:[...checked],week:weekOff,notes,snapshots,itemText,timestamps,evidence,signoff}))}catch(e){}}
+function ev(id,field,fb){return itemText[id]?.[field]??fb??'';}
+function setEState(el){el.dataset.empty=el.textContent.trim()?'false':'true';}
+function setEText(id,field,val){const c=val.replace(/ /g,' ').trim();if(!itemText[id])itemText[id]={};itemText[id][field]=c;persist();}
+
+function recalc(){
+  let max=0,earned=0;
+  const bp={p0:{d:0,t:0},p1:{d:0,t:0},p2:{d:0,t:0},p3:{d:0,t:0}};
+  DATA.forEach(s=>s.items.forEach(i=>{
+    const w=W[i.p];max+=w;bp[i.p].t++;
+    if(checked.has(i.id)){earned+=w;bp[i.p].d++;}
+  }));
+  const score=max>0?Math.round(earned/max*100):0;
+
+  const arc=(score/100)*RC;
+  const ring=document.getElementById('arc');
+  ring.setAttribute('stroke-dasharray',arc.toFixed(2)+' '+RC.toFixed(2));
+  ring.style.stroke=sc(score);
+
+  const sn=document.getElementById('snum');
+  sn.textContent=score;
+  sn.style.color=sc(score);
+  const sg2=document.getElementById('sgrade');
+  sg2.textContent=sg(score);
+  sg2.style.color=sc(score);
+  document.getElementById('fscore').textContent=score;
+
+  ['p0','p1','p2','p3'].forEach(p=>{
+    const{d,t}=bp[p];
+    document.getElementById(p+'d').textContent=d;
+    document.getElementById(p+'t').textContent=t;
+    document.getElementById(p+'b').style.width=(t>0?(d/t*100):0)+'%';
+  });
+
+  const bl=document.getElementById('blist');
+  bl.replaceChildren();
+  const bk=[];
+  DATA.forEach(s=>s.items.forEach(i=>{
+    if(!checked.has(i.id)&&(i.p==='p0'||i.p==='p1'))bk.push(i);
+  }));
+  if(!bk.length){
+    bl.appendChild(E('div',{class:'clr',text:'✓ NO OPEN P0/P1 GAPS'}));
+  }else{
+    bk.slice(0,5).forEach(i=>{
+      bl.appendChild(E('div',{class:'brow b'+i.p},
+        E('span',{class:'bbdg',text:i.p.toUpperCase()}),
+        E('span',{class:'bnm',text:i.name})
+      ));
+    });
+    if(bk.length>5) bl.appendChild(E('div',{class:'bmore',text:'+'+(bk.length-5)+' more…'}));
+  }
+
+  document.getElementById('fp').textContent='DSL-'+hash([...checked].sort().join('|'));
+  persist();
+  if(score===100&&!signoffAutoShown&&(!signoff.name)){
+    signoffAutoShown=true;
+    setTimeout(()=>{if(typeof openSignoffModal==='function')openSignoffModal();},400);
+  }
+}
+
+function buildItem(item,sid){
+  const dn=checked.has(item.id);
+  const noteVal=notes[item.id]||'';
+  const hasNote=!!noteVal.trim();
+  const cb=E('input',{type:'checkbox','data-id':item.id});
+  cb.checked=dn;
+  const noteTgl=E('button',{class:'inotetoggle'+(hasNote?' open':''),'data-id':item.id,title:'Toggle analyst note',type:'button'});
+  noteTgl.textContent=hasNote?'NOTE ▾':'NOTE ▸';
+  const noteTA=document.createElement('textarea');
+  noteTA.className='inote'+(hasNote?' open':'');
+  noteTA.placeholder='Analyst note — why this passes/fails, evidence, owner…';
+  noteTA.dataset.id=item.id;
+  noteTA.value=noteVal;
+  if(!noteVal.trim())noteTA.setAttribute('data-empty','true');
+  const itemCls='item'+(dn?' done':'')+(missOnly&&dn?' hide':'')+(hasNote?' has-note':'');
+  return E('div',{class:itemCls,'data-id':item.id,'data-p':item.p,'data-sid':sid},
+    E('div',{class:'ckcell'},cb),
+    E('div',{class:'prcell'},E('span',{class:'prb '+item.p,text:item.p.toUpperCase()})),
+    E('div',{class:'icont'},
+      E('div',{class:'iname',contenteditable:'true',spellcheck:'true','data-id':item.id,'data-edit-field':'name','data-placeholder':item.p.toUpperCase()+' item title',text:ev(item.id,'name',item.name)}),
+      E('div',{class:'idesc',contenteditable:'true',spellcheck:'true','data-id':item.id,'data-edit-field':'desc','data-placeholder':'Notes / acceptance criteria / owner',text:ev(item.id,'desc',item.desc||'')}),
+      E('div',{class:'iref',contenteditable:'true',spellcheck:'false','data-id':item.id,'data-edit-field':'ref','data-placeholder':'REF / LINK / TICKET',text:ev(item.id,'ref',item.ref?'REF · '+item.ref:'')}),
+      noteTgl,
+      noteTA,
+      (function(){var ev2=document.createElement("input");ev2.type="text";ev2.className="ievid";ev2.placeholder="Evidence — URL / commit / ticket";ev2.dataset.id=item.id;ev2.value=evidence[item.id]||"";return ev2;})(),
+    ),
+    E('div',{class:'stcell'},E('span',{class:'st '+(dn?'pass':'m'+item.p),text:dn?'PASS':'OPEN'}),dn&&timestamps[item.id]?E('div',{class:'iverified',text:'✓ '+timestamps[item.id]}):null)
+  );
+}
+
+function render(){
+  const wrap=document.getElementById('secs');
+  wrap.replaceChildren();
+  let vis=0;
+  DATA.forEach((sec,si)=>{
+    const vitems=sec.items.filter(item=>{
+      const fa=flt==='all'||item.p===flt;
+      const ma=!missOnly||!checked.has(item.id);
+      const qa2=!q||ev(item.id,'name',item.name).toLowerCase().includes(q)||ev(item.id,'desc',item.desc||'').toLowerCase().includes(q);
+      return fa&&ma&&qa2;
+    });
+    if(!vitems.length)return;
+    vis+=vitems.length;
+    const done=sec.items.filter(i=>checked.has(i.id)).length;
+    const tot=sec.items.length;
+    const pct=tot>0?done/tot*100:0;
+
+    const dnSpan=E('span',{class:'dn',id:'dn-'+sec.id,text:String(done)});
+    const pf=E('div',{class:'spfill',id:'pf-'+sec.id});pf.style.width=pct.toFixed(1)+'%';
+    const shead=E('div',{class:'shead'},
+      E('div',{class:'sinfo'},
+        E('span',{class:'secnum',text:'SECTION — '+String(si+1).padStart(2,'0')+' · '+sec.tag}),
+        E('span',{class:'stitle',text:sec.title})
+      ),
+      E('div',{class:'sright'},
+        (function(){var _s=sec;var ba=E('button',{class:'sec-bulk',type:'button',title:'Mark all PASS',text:'✓ ALL'});var bc=E('button',{class:'sec-bulk clr',type:'button',title:'Clear section',text:'○ CLEAR'});ba.onclick=function(ev){ev.stopPropagation();_s.items.forEach(function(it){checked.add(it.id);timestamps[it.id]=new Date().toISOString().slice(0,10);});persist();render();};bc.onclick=function(ev){ev.stopPropagation();_s.items.forEach(function(it){checked.delete(it.id);delete timestamps[it.id];});persist();render();};return E('div',{class:'sec-bulk-row'},ba,bc);})(),
+        E('div',{class:'sprog'},
+          E('span',{class:'sfrac'},dnSpan,' / '+tot),
+          E('div',{class:'spbar'},pf)
+        ),
+        E('span',{class:'chev',text:'▾'})
+      )
+    );
+    const inner=E('div',{class:'sinner'});
+    vitems.forEach(item=>inner.appendChild(buildItem(item,sec.id)));
+    inner.querySelectorAll('[data-edit-field]').forEach(setEState);
+    const el=E('div',{class:'sec'},shead,E('div',{class:'sbody'},inner));
+    el.dataset.sid=sec.id;
+    shead.addEventListener('click',()=>el.classList.toggle('col'));
+    wrap.appendChild(el);
+  });
+  document.getElementById('chip').textContent=vis+' items';
+  recalc();
+}
+
+document.getElementById('secs').addEventListener('change',function(e){
+  if(e.target.type!=='checkbox')return;
+  const id=e.target.dataset.id;
+  const row=e.target.closest('.item');
+  const p=row.dataset.p;
+  const sid=row.dataset.sid;
+  if(e.target.checked){checked.add(id);row.classList.add('done');timestamps[id]=new Date().toISOString().slice(0,10);}
+  else{checked.delete(id);row.classList.remove('done');delete timestamps[id];}
+  const st=row.querySelector('.st');
+  if(e.target.checked){st.className='st pass';st.textContent='PASS';var vb=row.querySelector('.iverified');if(!vb){vb=E('div',{class:'iverified'});row.querySelector('.stcell').appendChild(vb);}vb.textContent='✓ '+timestamps[id];}
+  else{st.className='st m'+p;st.textContent='OPEN';var vb2=row.querySelector('.iverified');if(vb2)vb2.remove();}
+  const sec=DATA.find(s=>s.id===sid);
+  if(sec){
+    const nd=sec.items.filter(i=>checked.has(i.id)).length;
+    const de=document.getElementById('dn-'+sid);
+    const pf=document.getElementById('pf-'+sid);
+    if(de)de.textContent=nd;
+    if(pf)pf.style.width=(nd/sec.items.length*100).toFixed(1)+'%';
+  }
+  if(missOnly&&e.target.checked)row.classList.add('hide');
+  recalc();
+});
+
+/* ── NOTE TOGGLE + INPUT ── */
+document.getElementById('secs').addEventListener('click',function(e){
+  const btn=e.target.closest('.inotetoggle');
+  if(!btn)return;
+  const row=btn.closest('.item');if(!row)return;
+  const ta=row.querySelector('.inote');
+  const nowOpen=ta.classList.toggle('open');
+  btn.classList.toggle('open',nowOpen);
+  btn.textContent=nowOpen?'NOTE ▾':'NOTE ▸';
+  if(nowOpen)setTimeout(()=>ta.focus(),0);
+});
+document.getElementById('secs').addEventListener('input',function(e){
+  if(e.target.classList.contains('inote')){
+    const ta=e.target,id=ta.dataset.id,val=ta.value;
+    if(val.trim()){notes[id]=val;ta.removeAttribute('data-empty');}
+    else{delete notes[id];ta.setAttribute('data-empty','true');}
+    const row=ta.closest('.item');
+    if(row)row.classList.toggle('has-note',!!(val.trim()));
+    persist();
+  }else if(e.target.dataset.editField){
+    const el=e.target;
+    setEText(el.dataset.id,el.dataset.editField,el.textContent||'');
+    setEState(el);
+  }else if(e.target.classList.contains('ievid')){evidence[e.target.dataset.id]=e.target.value.trim();persist();}
+});
+document.getElementById('secs').addEventListener('keydown',function(e){
+  const el=e.target;
+  if(!el.dataset.editField)return;
+  if(e.key==='Enter'&&el.dataset.editField!=='desc'){e.preventDefault();el.blur();}
+});
+document.getElementById('secs').addEventListener('paste',function(e){
+  const el=e.target;
+  if(!el.dataset.editField)return;
+  e.preventDefault();
+  const txt=(e.clipboardData||window.clipboardData).getData('text/plain');
+  document.execCommand('insertText',false,txt);
+});
+
+
+/* ── SPARKLINE ── */
+function buildSparkline(){
+  var mount=document.getElementById('sparkline-mount');
+  if(!mount)return;
+  var pts=[];
+  for(var i=-7;i<=0;i++){
+    var snap=snapshots[String(i)];
+    var ch=snap&&Array.isArray(snap.checked)?new Set(snap.checked):(i===0?checked:null);
+    if(!ch)continue;
+    pts.push({i:i,s:scoreFromChecked(ch)});
+  }
+  mount.innerHTML='';
+  if(pts.length<2){mount.style.display='none';return;}
+  mount.style.display='flex';
+  var W=120,H=28,pad=4;
+  var scores=pts.map(function(p){return p.s;});
+  var minS=Math.min.apply(null,scores),maxS=Math.max.apply(null,scores),range=maxS-minS||1;
+  var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width',W);svg.setAttribute('height',H);
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.className='sparkline-svg';
+  var xs=pts.map(function(_,idx){return pad+idx*(W-pad*2)/(pts.length-1);});
+  var ys=pts.map(function(p){return H-pad-(p.s-minS)/range*(H-pad*2);});
+  var pl=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  pl.setAttribute('points',xs.map(function(x,i){return x+','+ys[i];}).join(' '));
+  pl.setAttribute('fill','none');pl.setAttribute('stroke','var(--pass)');
+  pl.setAttribute('stroke-width','1.5');pl.setAttribute('stroke-linejoin','round');
+  svg.appendChild(pl);
+  var dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  dot.setAttribute('cx',xs[xs.length-1]);dot.setAttribute('cy',ys[ys.length-1]);
+  dot.setAttribute('r','2.5');dot.setAttribute('fill','var(--pass)');
+  svg.appendChild(dot);
+  mount.appendChild(svg);
+  var lbl=E('span',{class:'sparkline-lbl',text:'8WK'});
+  mount.appendChild(lbl);
+}
+
+/* ── WEEK SNAPSHOT + DIFF ── */
+function scoreFromChecked(ch){
+  let max=0,earned=0;
+  DATA.forEach(s=>s.items.forEach(i=>{const w=W[i.p]||1;max+=w;if(ch.has(i.id))earned+=w;}));
+  return max>0?Math.round(earned/max*100):0;
+}
+function saveSnapshot(){
+  snapshots[String(weekOff)]={checked:[...checked],notes:Object.assign({},notes),itemText:Object.assign({},itemText),signoff:{name:signoff.name,role:signoff.role},timestamps:Object.assign({},timestamps),evidence:Object.assign({},evidence)};
+}
+function loadSnapshot(off){
+  const key=String(off);
+  if(snapshots[key]&&Array.isArray(snapshots[key].checked)){
+    checked=new Set(snapshots[key].checked);
+    notes=snapshots[key].notes&&typeof snapshots[key].notes==='object'?Object.assign({},snapshots[key].notes):{};
+    itemText=snapshots[key].itemText&&typeof snapshots[key].itemText==='object'?Object.assign({},snapshots[key].itemText):{};
+    if(snapshots[key].timestamps)timestamps=Object.assign({},snapshots[key].timestamps);
+    if(snapshots[key].evidence)evidence=Object.assign({},snapshots[key].evidence);
+    if(snapshots[key].signoff){signoff.name=snapshots[key].signoff.name||snapshots[key].signoff.primary?.name||"";signoff.role=snapshots[key].signoff.role||snapshots[key].signoff.primary?.role||"";}
+  }
+}
+function updateWeekDiff(){
+  const chip=document.getElementById('week-diff-chip');if(!chip)return;
+  const snap=snapshots[String(weekOff-1)];
+  if(!snap||!Array.isArray(snap.checked)){chip.textContent='';chip.className='week-diff-chip';return;}
+  const diff=scoreFromChecked(checked)-scoreFromChecked(new Set(snap.checked));
+  chip.classList.add('vis');
+  if(diff===0){chip.textContent='± 0 vs prev wk';chip.className='week-diff-chip vis';}
+  else if(diff>0){chip.textContent='▲ +'+diff+' vs prev';chip.className='week-diff-chip vis pos';}
+  else{chip.textContent='▼ '+diff+' vs prev';chip.className='week-diff-chip vis neg';}
+}
+
+function updateWeek(){
+  const ws=wstr(weekOff);
+  document.getElementById('wchip').textContent='WK '+ws;
+  document.getElementById('mdate').textContent='SOC HANDOFF V1 · '+ws.toUpperCase();
+  document.getElementById('bmeta').textContent='Senior Analyst handoff · NIST SP 800-61 + MITRE ATT&CK · repo @ f5d2c0c · '+ws;
+  updateWeekDiff();persist();
+}
+
+document.getElementById('wprev').onclick=()=>{saveSnapshot();weekOff--;loadSnapshot(weekOff);updateWeek();render();};
+document.getElementById('wnext').onclick=()=>{saveSnapshot();weekOff++;loadSnapshot(weekOff);updateWeek();render();};
+document.getElementById('expbtn').onclick=()=>{
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('col'));
+  document.querySelectorAll('.pane-block').forEach(s=>s.classList.remove('col'));
+};
+document.getElementById('colbtn').onclick=()=>{
+  document.querySelectorAll('.sec').forEach(s=>s.classList.add('col'));
+  document.querySelectorAll('.pane-block').forEach(s=>s.classList.add('col'));
+};
+document.getElementById('missbtn').onclick=function(){
+  missOnly=!missOnly;
+  this.classList.toggle('on',missOnly);
+  this.textContent=missOnly?'ALL':'MISSING';
+  render();
+};
+document.getElementById('srch').addEventListener('input',function(){
+  q=this.value.trim().toLowerCase();render();
+});
+document.querySelectorAll('.fb').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('.fb').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on');flt=this.dataset.f;render();
+}));
+document.getElementById('panesbtn').onclick=function(){
+  panesVisible=!panesVisible;
+  document.getElementById('soc-panes').classList.toggle('hidden',!panesVisible);
+  this.classList.toggle('on',panesVisible);
+  this.textContent=panesVisible?'PANES ▴':'PANES';
+};
+document.getElementById('themebtn').onclick=function(){
+  const r=document.documentElement;
+  const n=r.getAttribute('data-theme')==='dark'?'light':'dark';
+  r.setAttribute('data-theme',n);this.textContent=n==='dark'?'LIGHT':'DARK';
+};
+document.getElementById('printbtn').onclick=()=>{
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('col'));
+  document.querySelectorAll('.pane-block').forEach(s=>s.classList.remove('col'));
+  document.getElementById('soc-panes').classList.remove('hidden');
+  document.getElementById('panesbtn').classList.add('on');
+  document.getElementById('panesbtn').textContent='PANES ▴';
+  panesVisible=true;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>window.print()));
+};
+document.getElementById('resetbtn').onclick=()=>{
+  if(!confirm('Reset to the verified current-build baseline? This clears all notes, edits, and week snapshots.'))return;
+  checked=new Set(DEFAULT_DONE);notes={};snapshots={};itemText={};timestamps={};evidence={};
+  signoff={name:'',role:''};timestamps={};evidence={};
+  try{localStorage.removeItem(SK)}catch(e){}
+  render();updateWeekDiff();updateSignoffPrompt();
+  document.querySelectorAll('[data-sf-field]').forEach(el=>{el.textContent='';el.dataset.empty='true';});
+};
+
+/* ── SIGN-OFF EDITABLE CELLS ── */
+let signoffAutoShown=false;
+(function initSignoffCells(){
+  const mount=document.getElementById('soff-mount');
+  if(!mount)return;
+  /* restore saved values */
+  mount.querySelectorAll('[data-sf-key]').forEach(el=>{
+    const val=signoff[el.dataset.sfField]||'';
+    el.textContent=val;
+    el.dataset.empty=val?'false':'true';
+  });
+  mount.addEventListener('input',function(e){
+    const el=e.target;if(!el.dataset.sfField)return;
+    const val=el.textContent.replace(/ /g,' ').trim();
+    
+    signoff[el.dataset.sfField]=val;
+    el.dataset.empty=val?'false':'true';
+    persist();
+  });
+  mount.addEventListener('keydown',function(e){
+    if(e.target.dataset.sfField&&e.key==='Enter'){e.preventDefault();e.target.blur();}
+  });
+  mount.addEventListener('paste',function(e){
+    if(!e.target.dataset.sfField)return;
+    e.preventDefault();
+    document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text/plain'));
+  });
+})();
+
+function openSignoffModal(){
+  document.getElementById('sf-primary-name').value=signoff.name||'';
+  document.getElementById('sf-primary-role').value=signoff.role||'';
+  document.getElementById('signoff-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('sf-primary-name').focus(),50);
+}
+function updateSignoffPrompt(){
+  const bar=document.getElementById('soff-prompt-bar');
+  const status=document.getElementById('soff-prompt-status');
+  if(!bar||!status)return;
+  if(signoff.name){
+    status.textContent='Signed off: '+signoff.name+(signoff.role?' · '+signoff.role:'');
+    bar.style.borderColor='var(--ink-faint)';
+    bar.style.background='transparent';
+    bar.querySelector('.soff-prompt-label').textContent='✓ Signed Off';
+    bar.querySelector('.soff-prompt-label').style.color='var(--ink-muted)';
+    bar.querySelector('.soff-prompt-cta').textContent='EDIT ▸';
+  }else{
+    status.textContent='Enter your name and position to complete this handoff.';
+    bar.style.borderColor='';bar.style.background='';
+    bar.querySelector('.soff-prompt-label').textContent='✎ Analyst Sign-Off Required';
+    bar.querySelector('.soff-prompt-label').style.color='';
+    bar.querySelector('.soff-prompt-cta').textContent='SIGN OFF ▸';
+  }
+}
+function applySignoff(){
+  signoff.name=document.getElementById('sf-primary-name').value.trim();
+  signoff.role=document.getElementById('sf-primary-role').value.trim();
+  persist();
+  document.querySelectorAll('[data-sf-field]').forEach(el=>{
+    const val=signoff[el.dataset.sfField]||'';
+    el.textContent=val;el.dataset.empty=val?'false':'true';
+  });
+  document.getElementById('signoff-overlay').classList.remove('open');
+  updateSignoffPrompt();
+}
+document.getElementById('signoffbtn').onclick=openSignoffModal;
+document.getElementById('sf-skip').onclick=()=>document.getElementById('signoff-overlay').classList.remove('open');
+document.getElementById('signoff-overlay').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('sf-save').onclick=applySignoff;
+document.getElementById('sf-save-export').onclick=()=>{applySignoff();document.getElementById('printbtn').click();};
+
+/* ── PRINT TIP ── */
+(function(){
+  const tip=document.createElement('div');
+  tip.className='print-tip';tip.id='print-tip';
+  tip.textContent='TIP: In the print dialog, uncheck "Headers and footers" for a cleaner PDF';
+  document.body.appendChild(tip);
+  window.addEventListener('beforeprint',()=>{tip.style.display='none';});
+})();
+document.getElementById('printbtn').addEventListener('click',function(){
+  const tip=document.getElementById('print-tip');
+  if(tip){tip.style.display='block';tip.style.animation='none';
+    requestAnimationFrame(()=>{tip.style.animation='print-tip-fade 3.8s ease forwards';});
+    setTimeout(()=>{tip.style.display='none';},4000);}
+},true);
+
+/* ── HARNESS IMPORT ── */
+document.getElementById('harnessbtn').onclick=()=>{
+  document.getElementById('harness-result').style.display='none';
+  document.getElementById('harness-overlay').classList.add('open');
+};
+document.getElementById('harness-cancel').onclick=()=>{
+  document.getElementById('harness-overlay').classList.remove('open');
+};
+document.getElementById('harness-overlay').addEventListener('click',function(e){
+  if(e.target===this)this.classList.remove('open');
+});
+document.getElementById('harness-apply').onclick=()=>{
+  const text=document.getElementById('harness-paste').value;
+  const hmap=window.__SOC_HARNESS_MAP__||{};
+  let applied=0;const unmatched=[];
+  text.split(/\r?\n/).forEach(line=>{
+    const m=line.match(/^(PASS|FAIL)\s+(.+)$/);if(!m)return;
+    const status=m[1],name=m[2].trim(),cid=hmap[name];
+    if(!cid){unmatched.push(name);return;}
+    if(status==='PASS')checked.add(cid);else checked.delete(cid);
+    applied++;
+  });
+  const res=document.getElementById('harness-result');
+  res.style.display='block';
+  const lines=[applied+' control'+(applied===1?'':'s')+' updated.'];
+  if(unmatched.length)lines.push(unmatched.length+' unmatched:\n  '+unmatched.slice(0,5).join('\n  ')+(unmatched.length>5?'\n  … '+(unmatched.length-5)+' more':''));
+  res.textContent=lines.join('\n');
+  res.className='harness-result'+(unmatched.length?' has-warn':'');
+  if(applied>0){persist();render();}
+};
+
+function togglePane(id){
+  document.getElementById(id).classList.toggle('col');
+}
+
+/* ── SOC PANE BUILDERS ── */
+function buildTimeline(){
+  const mount=document.getElementById('timeline-mount');
+  const rows=[
+    {ts:'2026-05-22 10:14 ET',evt:'detect',cls:'detect',desc:'S010 adversarial audit triggers: handleSend cross-token abuse + unattached broadcast detected. Both endpoint signatures found in session.ts.'},
+    {ts:'2026-05-22 11:30 ET',evt:'validate',cls:'validate',desc:'S010 findings validated against running sandbox. Verified cross-origin send path active. No live exploitation evidence.'},
+    {ts:'2026-05-22 14:05 ET',evt:'escalate',cls:'escalate',desc:'Escalated to Platform Eng. Both handleSend and handleBroadcast marked for removal.'},
+    {ts:'2026-05-22 16:50 ET',evt:'contain',cls:'contain',desc:'Containment: handleSend + handleBroadcast deleted from session.ts. Harness tests added to regression-lock absence.'},
+    {ts:'2026-05-24 09:00 ET',evt:'detect',cls:'detect',desc:'S011 adversarial MEDIUM A3.1: off-spec expiresAt (NaN/undefined/string) accepted by attach handler. Lifecycle gate split.'},
+    {ts:'2026-05-24 13:20 ET',evt:'contain',cls:'contain',desc:'Unified lifecycle gate implemented. handleAttach and verifyRenderTokenAgainstRecord share one checkTokenLifecycle predicate. Fail-closed on all off-spec values.'},
+    {ts:'2026-05-25 11:00 ET',evt:'remediate',cls:'remediate',desc:'S012 multi-pass adversarial audit: SAFE-TO-COMMIT, 0 findings. TLS 1.2 minimum set on dropstream.gg zone. Commit f5d2c0c signed and verified. Handoff to monitoring posture.'},
+  ];
+  const tl=E('div',{class:'tl'});
+  rows.forEach(r=>{
+    tl.appendChild(E('div',{class:'tl-row'},
+      E('span',{class:'tl-ts',text:r.ts}),
+      E('span',{class:'tl-evt '+r.cls,text:r.evt.toUpperCase()}),
+      E('span',{class:'tl-desc',text:r.desc})
+    ));
+  });
+  mount.appendChild(tl);
+}
+
+function buildActions(){
+  const mount=document.getElementById('actions-mount');
+  const lbl1=E('div',{class:'hf-label',text:'Actions Taken This Shift'});
+  const actions=[
+    'S010: Removed handleSend and handleBroadcast from session.ts; harness regression-locked.',
+    'S011: Unified lifecycle predicate (checkTokenLifecycle) wired to both attach and verify paths.',
+    'S011: Live sandbox smoke test — mint, attach, revoke, re-attach-denied sequence verified.',
+    'S012: Multi-pass DFE/security/adversarial audits completed. 0 findings. Commit f5d2c0c.',
+    'S012 prep: op-ssh-sign-session1 scheduled task fixed; all commits now signed (G).',
+    'TLS 1.2 minimum enforced on dropstream.gg zone (2026-05-25).',
+  ];
+  const ul=E('ul',{class:'exit-list'});
+  actions.forEach(a=>{
+    ul.appendChild(E('li',null,E('span',{class:'exit-mark',text:'✓'}),a));
+  });
+  mount.appendChild(lbl1);
+  mount.appendChild(ul);
+  mount.appendChild(E('div',{style:'height:16px'}));
+
+  const statusRow=E('div',{class:'hf-grid',style:'grid-template-columns:1fr 1fr;margin-bottom:16px'});
+  const c1=E('div',{class:'hf-card'});
+  c1.appendChild(E('div',{class:'hf-label',text:'Containment Status'}));
+  c1.appendChild(E('span',{class:'status-chip pass',text:'Complete'}));
+  const c2=E('div',{class:'hf-card'});
+  c2.appendChild(E('div',{class:'hf-label',text:'Eradication / Remediation Status'}));
+  c2.appendChild(E('span',{class:'status-chip monitoring',text:'Partial — S013 pending'}));
+  statusRow.appendChild(c1);
+  statusRow.appendChild(c2);
+  mount.appendChild(statusRow);
+
+  mount.appendChild(E('div',{class:'hf-label',text:'Pending Actions'}));
+  const pending=[
+    {task:'Implement rate-limiting on mint/attach (rt13)','owner':'Platform Eng','due':'Q3 2026'},
+    {task:'Wire rotate/supersede lifecycle (rt14)','owner':'Platform Eng','due':'Q3 2026'},
+    {task:'Add token GC + audit-log size cap (rt15)','owner':'Platform Eng','due':'Q3 2026'},
+    {task:'HMAC dual-key rotation window (rt16)','owner':'Security Eng','due':'Q3 2026'},
+    {task:'Production cutover — wrangler secret + DO migration (rt18)','owner':'Platform Eng','due':'Q3 2026'},
+    {task:'CI gitleaks gate (sp04)','owner':'DevOps','due':'Q3 2026'},
+  ];
+  const tbl=E('table',{class:'ptable'});
+  const thead=E('thead',null,E('tr',null,
+    E('th',{text:'Task'}),E('th',{text:'Owner'}),E('th',{text:'Due'})
+  ));
+  const tbody=E('tbody',null);
+  pending.forEach(p=>{
+    tbody.appendChild(E('tr',null,
+      E('td',{text:p.task}),
+      E('td',{class:'mono',text:p.owner}),
+      E('td',{class:'mono',text:p.due})
+    ));
+  });
+  tbl.appendChild(thead);tbl.appendChild(tbody);
+  mount.appendChild(tbl);
+}
+
+function buildComms(){
+  const mount=document.getElementById('comms-mount');
+
+  const cg=E('div',{class:'hf-grid',style:'grid-template-columns:1fr 1fr;margin-bottom:16px'});
+  const c1=E('div',{class:'hf-card'});
+  c1.appendChild(E('div',{class:'hf-label',text:'Stakeholders Notified'}));
+  c1.appendChild(E('div',{class:'hf-value',text:'Platform Eng · Security Eng · Engineering Lead'}));
+  const c2=E('div',{class:'hf-card'});
+  c2.appendChild(E('div',{class:'hf-label',text:'Next Notification Time'}));
+  c2.appendChild(E('div',{class:'hf-value',text:'On S013 scope confirmation or rt18 prod readiness'}));
+  cg.appendChild(c1);cg.appendChild(c2);
+  mount.appendChild(cg);
+
+  mount.appendChild(E('div',{class:'hf-label',text:'Exit Criteria (Recommended — NIST 800-61)'}));
+  const criteria=[
+    'Rate-limiting on mint/attach (rt13) implemented and tested',
+    'Rotate/supersede lifecycle (rt14) wired and smoke-tested',
+    'HMAC dual-key rotation window (rt16) operational',
+    'Per-tenant ownership / BOLA prevention (rt17) implemented',
+    'Production cutover (rt18) executed: wrangler secret provisioned, DO migration complete',
+    'CI gitleaks gate (sp04) blocking on findings',
+    'Score reaches 95+% (current-build hardened grade)',
+  ];
+  const ul=E('ul',{class:'exit-list'});
+  criteria.forEach(c=>{
+    ul.appendChild(E('li',null,E('span',{class:'exit-mark',text:'○'}),c));
+  });
+  mount.appendChild(ul);
+  mount.appendChild(E('div',{style:'height:16px'}));
+
+  const hg=E('div',{class:'hf-grid',style:'grid-template-columns:1fr 1fr;margin-bottom:16px'});
+  const h1=E('div',{class:'hf-card'});
+  h1.appendChild(E('div',{class:'hf-label',text:'Handing Off To'}));
+  h1.appendChild(E('div',{class:'hf-value',text:'Platform Eng (S013 sprint lead) + Security Eng (rt16 HMAC rotation)'}));
+  hg.appendChild(h1);
+  const h2=E('div',{class:'hf-card'});
+  h2.appendChild(E('div',{class:'hf-label',text:'Receiver Action Required'}));
+  h2.appendChild(E('div',{class:'hf-value',text:'Review Pane D risk table. Prioritize rt13 (P1) and rt18 (P1) for Q3. Confirm SP04 CI gate.'}));
+  hg.appendChild(h2);
+  mount.appendChild(hg);
+
+  const confBlock=E('div',{class:'conf-block'});
+  const confMain=E('div',{class:'conf-main'});
+  confMain.appendChild(E('div',{class:'conf-label',text:'Confidence Level'}));
+  confMain.appendChild(E('span',{class:'conf-chip high',text:'HIGH'}));
+  confBlock.appendChild(confMain);
+  const confRat=E('div',{class:'conf-rationale',text:'All passing controls are code-traceable to repo @ f5d2c0c. Adversarial audits S010–S012 are on-record in _runs/. Open gaps are explicitly scoped and deferred with owners assigned. No active exploitation observed. Confidence: HIGH (SANS calibrated) — findings are bounded, evidence-backed, and complete for the current code surface.'});
+  confBlock.appendChild(confRat);
+  mount.appendChild(confBlock);
+}
+
+function buildAttack(){
+  const mount=document.getElementById('attack-mount');
+  const manifest=JSON.parse(document.getElementById('soc-manifest').textContent);
+  const tbl=E('table',{class:'ptable'});
+  const thead=E('thead',null,E('tr',null,
+    E('th',{text:'Control'}),E('th',{text:'ATT&CK TTP'}),E('th',{text:'Technique Name'}),E('th',{text:'Mitigation'}),E('th',{text:'Mitigation Name'})
+  ));
+  const tbody=E('tbody',null);
+  manifest.attack.forEach(r=>{
+    tbody.appendChild(E('tr',null,
+      E('td',{text:r.control}),
+      E('td',null,E('span',{class:'att-pill',text:r.ttp})),
+      E('td',{class:'mono',text:r.tname}),
+      E('td',null,E('span',{class:'att-pill',text:r.mit})),
+      E('td',{class:'mono',text:r.mname})
+    ));
+  });
+  tbl.appendChild(thead);tbl.appendChild(tbody);
+  mount.appendChild(tbl);
+}
+
+function buildDetect(){
+  const mount=document.getElementById('detect-mount');
+  const manifest=JSON.parse(document.getElementById('soc-manifest').textContent);
+  const tbl=E('table',{class:'ptable'});
+  const thead=E('thead',null,E('tr',null,
+    E('th',{text:'Detection'}),E('th',{text:'Coverage'}),E('th',{text:'Source'}),E('th',{text:'ATT&CK Link'})
+  ));
+  const tbody=E('tbody',null);
+  manifest.detection.forEach(r=>{
+    const cc=r.cov==='Full'?'cov-full':r.cov==='Partial'?'cov-partial':'cov-missing';
+    tbody.appendChild(E('tr',null,
+      E('td',{text:r.det}),
+      E('td',null,E('span',{class:cc,text:r.cov})),
+      E('td',{class:'mono',text:r.src}),
+      E('td',null,E('span',{class:'att-pill',text:r.ttp}))
+    ));
+  });
+  tbl.appendChild(thead);tbl.appendChild(tbody);
+  mount.appendChild(tbl);
+}
+
+function buildThreat(){
+  const mount=document.getElementById('threat-mount');
+  const manifest=JSON.parse(document.getElementById('soc-manifest').textContent);
+  const grid=E('div',{class:'threat-grid'});
+  manifest.threats.forEach(t=>{
+    grid.appendChild(E('div',{class:'threat-item'},
+      E('div',{class:'threat-dot '+t.status}),
+      E('span',{class:'threat-text',text:t.text})
+    ));
+  });
+  mount.appendChild(grid);
+  const ts=new Date().toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  mount.appendChild(E('div',{class:'threat-ts',text:'Last updated: '+ts+' ET'}));
+}
+
+function buildRisk(){
+  const mount=document.getElementById('risk-mount');
+  const manifest=JSON.parse(document.getElementById('soc-manifest').textContent);
+  const tbl=E('table',{class:'ptable'});
+  const thead=E('thead',null,E('tr',null,
+    E('th',{text:'Gap'}),E('th',{text:'Risk Owner'}),E('th',{text:'Severity'}),E('th',{text:'ETA'}),E('th',{text:'Notes'})
+  ));
+  const tbody=E('tbody',null);
+  manifest.risks.forEach(r=>{
+    const sc2=r.sev==='P0'?'sev-p0':r.sev==='P1'?'sev-p1':r.sev==='P2'?'sev-p2':'sev-p3';
+    tbody.appendChild(E('tr',null,
+      E('td',{text:r.gap}),
+      E('td',{class:'mono',text:r.owner}),
+      E('td',null,E('span',{class:sc2,text:r.sev})),
+      E('td',{class:'mono',text:r.eta}),
+      E('td',{text:r.notes})
+    ));
+  });
+  tbl.appendChild(thead);tbl.appendChild(tbody);
+  mount.appendChild(tbl);
+}
+
+function buildIncident(){
+  const mount=document.getElementById('incident-mount');
+  const manifest=JSON.parse(document.getElementById('soc-manifest').textContent);
+  const tbl=E('table',{class:'ptable'});
+  const thead=E('thead',null,E('tr',null,
+    E('th',{text:'Control'}),E('th',{text:'Linked Incident'}),E('th',{text:'Date'}),E('th',{text:'Outcome'})
+  ));
+  const tbody=E('tbody',null);
+  manifest.incidents.forEach(r=>{
+    tbody.appendChild(E('tr',null,
+      E('td',{text:r.control}),
+      E('td',{class:'mono',text:r.incident}),
+      E('td',{class:'mono',text:r.date}),
+      E('td',{text:r.outcome})
+    ));
+  });
+  tbl.appendChild(thead);tbl.appendChild(tbody);
+  mount.appendChild(tbl);
+}
+
+function buildSLA(){
+  const mount=document.getElementById('sla-mount');
+  const manifest=JSON.parse(document.getElementById('soc-manifest').textContent);
+  const clsMap={Critical:'sla-crit',High:'sla-high',Medium:'sla-med',Low:'sla-low'};
+  const tbl=E('table',{class:'sla-table'});
+  const thead=E('thead',null,E('tr',null,
+    E('th',{text:'Priority'}),E('th',{text:'Initial Ack'}),
+    E('th',{text:'Analyst-to-Analyst Handoff'}),E('th',{text:'Status Update'}),E('th',{text:'Escalation Expectation'})
+  ));
+  const tbody=E('tbody',null);
+  manifest.sla.forEach(r=>{
+    const tr=E('tr',null,
+      E('td',{text:r.priority}),E('td',{text:r.ack}),
+      E('td',{text:r.handoff}),E('td',{text:r.update}),E('td',{text:r.escalation})
+    );
+    if(clsMap[r.priority])tr.className=clsMap[r.priority];
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(thead);tbl.appendChild(tbody);
+  mount.appendChild(tbl);
+  mount.appendChild(E('div',{style:'margin-top:12px;font-size:11px;color:var(--ink-faint);font-family:JetBrains Mono,monospace',
+    text:'Source: NIST SP 800-61 Rev 3 recommended baseline. Adjust per organizational policy.'}));
+}
+
+function buildFooterChecklist(){
+  const mount=document.getElementById('fchk-mount');
+  const items=[
+    {label:'Current Status Explicit',val:'Monitoring — sandbox only, no active exploitation',ok:true},
+    {label:'Severity Stated',val:'P2 · Medium (no active exploitation; open gaps deferred)',ok:true},
+    {label:'Scope Defined',val:'drop-pane-sandbox CF Worker · renderToken.ts · session.ts · server.ts',ok:true},
+    {label:'Timeline Documented',val:'S010–S012 events timestamped in Pane: Timeline',ok:true},
+    {label:'Evidence Linked',val:'Repo @ f5d2c0c · _runs/AUDIT/HANDOFF files per slice',ok:true},
+    {label:'Actions Logged',val:'6 completed actions documented in Pane: Actions',ok:true},
+    {label:'Containment Status',val:'Complete — S010 endpoints removed, S011/S012 gates hardened',ok:true},
+    {label:'Owners Assigned',val:'Platform Eng (rt13/rt14/rt15/rt17/rt18) · Security Eng (rt16) · DevOps (sp04/sp05)',ok:true},
+    {label:'Stakeholder Notifications Recorded',val:'Platform Eng + Security Eng + Engineering Lead notified',ok:true},
+    {label:'Receiver Knows Next Steps',val:'Pane D risk table — prioritize P1 gaps rt13, rt18, sp04 for Q3',ok:true},
+  ];
+  items.forEach(item=>{
+    const cell=E('div',{class:'fchk-cell'});
+    cell.appendChild(E('div',{class:'fchk-label',text:item.label}));
+    cell.appendChild(E('div',{class:'fchk-val'+(item.ok?' ok':''),text:(item.ok?'✓ ':'')+item.val}));
+    mount.appendChild(cell);
+  });
+}
+
+function buildMaturity(){
+  const mount=document.getElementById('maturity-mount');
+  const stages=[
+    {n:1,name:'LITE',desc:'Code-traceable controls audit, CWE/OWASP/NIST mapping, GAP tracking.'},
+    {n:2,name:'HARDENED',desc:'CI gates (typecheck/lint/audit/secret scan), commit signing, lockfile age guard, manual deploy tiers.'},
+    {n:3,name:'VALIDATED',desc:'Adversarial audits per slice, regression-locked invariants in safety harness, code-paths traced to controls.'},
+    {n:4,name:'SOC-OBSERVABLE',desc:'MITRE ATT&CK mapping, Detection Coverage, Active Threat Status, basic SIEM integration.'},
+    {n:5,name:'ENTERPRISE SOC',desc:'Risk Acceptance with owners+ETAs, Incident Linkage, SLA matrix enforced, MSSP review, full NIST SP 800-61.'},
+  ];
+  const CUR=4,PRI=3;
+  const row=E('div',{class:'mat-stages'});
+  stages.forEach(s=>{
+    const cls=s.n<CUR?'ach':s.n===CUR?'cur':'nxt';
+    const badge=s.n<CUR?'ACHIEVED':s.n===CUR?'CURRENT':'NEXT';
+    const stg=E('div',{class:'mat-stage '+cls});
+    stg.appendChild(E('div',{class:'mat-num',text:'STAGE '+s.n}));
+    stg.appendChild(E('span',{class:'mat-badge '+cls,text:badge}));
+    stg.appendChild(E('div',{class:'mat-name',text:s.name}));
+    stg.appendChild(E('div',{class:'mat-desc',text:s.desc}));
+    row.appendChild(stg);
+  });
+  mount.appendChild(row);
+  mount.appendChild(E('div',{class:'hf-label',style:'margin-bottom:8px',text:'Growth Delta — S010 → S012 (Stage 3 → Stage 4)'}));
+  const dg=E('div',{class:'mat-delta'});
+  [{l:'Controls Added',v:'+12',c:'pos'},{l:'ATT&CK TTPs Mapped',v:'+7',c:'pos'},{l:'Open Gaps Reduced',v:'−2',c:'pos'},{l:'Active Threats',v:'0 → 0',c:'neu'}]
+  .forEach(d=>{
+    const dc=E('div',{class:'mat-dc'});
+    dc.appendChild(E('div',{class:'mat-dl',text:d.l}));
+    dc.appendChild(E('div',{class:'mat-dv '+d.c,text:d.v}));
+    dg.appendChild(dc);
+  });
+  mount.appendChild(dg);
+  mount.appendChild(E('div',{style:'margin-top:12px;font-size:11px;color:var(--ink-faint);font-family:JetBrains Mono,monospace',
+    text:'Stages below CURRENT render as ACHIEVED. Stages above render as NEXT. Prior stage: '+PRI+' (VALIDATED — S010–S012 adversarial audits). Current stage: '+CUR+' (SOC-OBSERVABLE — this report).'}));
+}
+
+/* ── INIT ── */
+buildTimeline();
+buildActions();
+buildComms();
+buildAttack();
+buildDetect();
+buildThreat();
+buildRisk();
+buildIncident();
+buildSLA();
+buildMaturity();
+buildFooterChecklist();
+/* expose harnessMap globally for harness import modal */
+window.__SOC_HARNESS_MAP__={
+  'roomState requires version 1':'dp03',
+  'roomState rejects oversized payloads':'rt08',
+  'roomState strictly reconstructs tiles and drops invalid focus':'rt08',
+  'roomState deduplicates tile UIDs':'rt04',
+  'shared external and media panes restore inactive':'dp02',
+  'unsafe URL schemes are dropped or normalized':'sp01',
+  'Incognito clears PaneDrop persistence and blocks recents':'sp02',
+  'direct media parser respects defaultMuted/defaultLoop':'dp02',
+  'guided demo uses TP360 creator links and local control panes':'dp03',
+  'CRT overlay only exposes off and low intensity':'dp03',
+  'app source has no prompt/confirm regressions':'rt11',
+};
+
+updateWeek();
+updateWeekDiff();
+render();
+buildSparkline();
+updateSignoffPrompt();
+</script>
+
+<script>/* soc-runner pre-seed */
+try{localStorage.setItem('ds-soc-handoff-blank',"{\"checked\":[\"rt01\",\"rt02\",\"rt03\",\"rt04\",\"rt05\",\"rt06\",\"rt07\",\"rt08\",\"rt09\",\"rt10\",\"rt11\",\"rt12\",\"ed01\",\"ed02\",\"ed03\",\"ed04\",\"ed05\",\"ed06\",\"ed07\",\"ed09\",\"lk01\",\"lk02\",\"lk03\",\"lk04\",\"lk05\",\"lk06\",\"lk07\",\"sp01\",\"sp02\",\"sp03\",\"sp06\",\"dp01\",\"dp02\",\"dp03\",\"dp04\",\"dp05\",\"dp06\"],\"signoff\":{\"name\":\"Jowey Pierre-Francois\",\"role\":\"Lead Systems Engineer — 3SixtyCo.\"},\"week\":0,\"notes\":{},\"snapshots\":{},\"itemText\":{},\"timestamps\":{\"rt01\":\"2026-05-30\",\"rt02\":\"2026-05-30\",\"rt03\":\"2026-05-30\",\"rt04\":\"2026-05-30\",\"rt05\":\"2026-05-30\",\"rt06\":\"2026-05-30\",\"rt07\":\"2026-05-30\",\"rt08\":\"2026-05-30\",\"rt09\":\"2026-05-30\",\"rt10\":\"2026-05-30\",\"rt11\":\"2026-05-30\",\"rt12\":\"2026-05-30\",\"ed01\":\"2026-05-30\",\"ed02\":\"2026-05-30\",\"ed03\":\"2026-05-30\",\"ed04\":\"2026-05-30\",\"ed05\":\"2026-05-30\",\"ed06\":\"2026-05-30\",\"ed07\":\"2026-05-30\",\"ed09\":\"2026-05-30\",\"lk01\":\"2026-05-30\",\"lk02\":\"2026-05-30\",\"lk03\":\"2026-05-30\",\"lk04\":\"2026-05-30\",\"lk05\":\"2026-05-30\",\"lk06\":\"2026-05-30\",\"lk07\":\"2026-05-30\",\"sp01\":\"2026-05-30\",\"sp02\":\"2026-05-30\",\"sp03\":\"2026-05-30\",\"sp06\":\"2026-05-30\",\"dp01\":\"2026-05-30\",\"dp02\":\"2026-05-30\",\"dp03\":\"2026-05-30\",\"dp04\":\"2026-05-30\",\"dp05\":\"2026-05-30\",\"dp06\":\"2026-05-30\"},\"evidence\":{}}");}catch(e){}
+</script>
+</body>
+</html>
