@@ -9711,7 +9711,10 @@ def delete_file():
 
 @app.route("/api/files/list", methods=["GET"])
 def list_files():
-    """List files in a directory"""
+    """List files in a directory — admin role required (P0-2)."""
+    guard = _require_admin_role()
+    if guard is not None:
+        return guard
     try:
         directory = request.args.get("directory", ".")
         result = file_manager.list_files(directory)
