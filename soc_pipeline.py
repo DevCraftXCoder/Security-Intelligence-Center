@@ -42,12 +42,17 @@ _SOC_SCORE_RE = re.compile(r"<!--soc-score:(\d+)-->")
 
 
 def _extract_score(html_path: str) -> int | None:
-    """Read <!--soc-score:NN--> from line 1 of the output HTML."""
+    """Read <!--soc-score:NN--> from the first 20 lines of the output HTML."""
     try:
         with open(html_path, encoding="utf-8") as f:
-            first_line = f.readline()
-        m = _SOC_SCORE_RE.search(first_line)
-        return int(m.group(1)) if m else None
+            for _ in range(20):
+                line = f.readline()
+                if not line:
+                    break
+                m = _SOC_SCORE_RE.search(line)
+                if m:
+                    return int(m.group(1))
+        return None
     except OSError:
         return None
 
