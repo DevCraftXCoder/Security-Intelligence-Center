@@ -372,7 +372,7 @@ def compute_maturity(project_data: dict, prior_snapshots: list[dict]) -> dict:
     # Derive current severity counts for activeThreats
     crit_high_current = 0
     for s in controls:
-        if s.get("tag") in ("CRITICAL", "HIGH"):
+        if s.get("tag") in ("P0-CRITICAL", "P1-HIGH"):
             crit_high_current += len(s.get("items", []))
 
     # Compute current stage

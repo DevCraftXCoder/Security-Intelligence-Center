@@ -180,7 +180,9 @@ def calculate_sla_deadline(
 
     if status is not None:
         days_allowed = SLA_MATRIX[status][tier]
-        priority = _STATUS_PRIORITY[status]
+        exploit_priority = _STATUS_PRIORITY[status]
+        severity_priority = _severity_to_priority(finding)
+        priority = min(exploit_priority, severity_priority)
         status_out = status
         label_status = _STATUS_LABEL[status]
     else:
