@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,20 @@ def _output_dir(base: str | None, slug: str) -> Path:
     if base:
         return Path(base)
     return _HERE / "_runs" / "qa"
+
+
+_SOC_SCORE_RE = re.compile(r"<!--soc-score:(\d+)-->")
+
+
+def _extract_score(html_path: str) -> int | None:
+    """Read <!--soc-score:NN--> from line 1 of the output HTML."""
+    try:
+        with open(html_path, encoding="utf-8") as f:
+            first_line = f.readline()
+        m = _SOC_SCORE_RE.search(first_line)
+        return int(m.group(1)) if m else None
+    except OSError:
+        return None
 
 
 def stage1_net(
@@ -263,21 +278,52 @@ def stage2_refine(
     }
 
 
-def _post_discord(webhook_url: str, embeds: list[dict]) -> bool:
-    """Post a Discord webhook message with embed(s). Returns True on success."""
-    payload = json.dumps({"embeds": embeds}).encode()
-    req = Request(
-        webhook_url,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=15) as resp:
-            return 200 <= resp.status < 300
-    except (URLError, OSError) as exc:
-        print(f"[soc_pipeline] Discord POST failed: {exc}", file=sys.stderr)
-        return False
+def _post_discord(
+    webhook_url: str, embeds: list[dict], file_path: str | None = None
+) -> bool:
+    """Post a Discord webhook message with embed(s) and optional file attachment.
+
+    File uploads use curl (urllib multipart triggers Discord 403); JSON-only
+    posts use urllib directly.
+    """
+    if file_path and Path(file_path).exists():
+        import subprocess
+
+        payload_json = json.dumps({"embeds": embeds})
+        try:
+            result = subprocess.run(
+                [
+                    "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                    "-F", f"file=@{file_path}",
+                    "-F", f"payload_json={payload_json}",
+                    webhook_url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            code = int(result.stdout.strip()) if result.stdout.strip().isdigit() else 0
+            if 200 <= code < 300:
+                return True
+            print(f"[soc_pipeline] Discord POST returned {code}", file=sys.stderr)
+            return False
+        except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
+            print(f"[soc_pipeline] Discord POST (curl) failed: {exc}", file=sys.stderr)
+            return False
+    else:
+        payload = json.dumps({"embeds": embeds}).encode()
+        req = Request(
+            webhook_url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(req, timeout=15) as resp:
+                return 200 <= resp.status < 300
+        except (URLError, OSError) as exc:
+            print(f"[soc_pipeline] Discord POST failed: {exc}", file=sys.stderr)
+            return False
 
 
 def _notify_discord(
@@ -287,47 +333,72 @@ def _notify_discord(
     output_path: str,
     result: dict,
 ) -> None:
-    """Send a Discord embed summarising the pipeline stage result."""
+    """Send a Discord embed summarising the pipeline stage result, with the
+    report HTML attached and the score extracted from <!--soc-score:NN-->."""
     import os
+
+    score = _extract_score(output_path)
+    score_str = f"{score}/100" if score is not None else "N/A"
 
     if stage == "wide-net":
         net_count = len(result.get("net", []))
         components = result.get("profile", {}).get("components", [])
+        if score is not None and score >= 95:
+            verdict = "PASS"
+            color = 0x4ADE80
+        elif score is not None and score >= 70:
+            verdict = "REVIEW"
+            color = 0xB89100
+        else:
+            verdict = "NET"
+            color = 0xB89100
         embed = {
-            "title": f"SOC Wide-Net: {slug.upper()}",
+            "title": f"SOC Wide-Net -- {slug.upper()}",
             "description": (
+                f"**Score: {score_str} - {verdict}**\n"
                 f"**{net_count}** threat classes identified from architecture profile.\n"
                 f"Components: {', '.join(components) or 'none'}\n\n"
                 f"Run `--refine` to produce the Refined Verdict."
             ),
-            "color": 0xB89100,
+            "color": color,
             "fields": [
-                {"name": "Stage", "value": "1 — Wide Net", "inline": True},
+                {"name": "Stage", "value": "1 - Wide Net", "inline": True},
+                {"name": "Score", "value": score_str, "inline": True},
                 {"name": "Sections", "value": str(net_count), "inline": True},
             ],
-            "footer": {"text": f"Output: {os.path.basename(output_path)}"},
+            "footer": {"text": f"3SIXTYCO. SOC Pipeline - {os.path.basename(output_path)}"},
         }
     else:
         proven = result.get("proven_count", 0)
         untested = result.get("untested_count", 0)
-        color = 0xFF3B3B if proven > 0 else 0x4ADE80
+        if score is not None and score >= 95:
+            verdict = "PASS"
+            color = 0x4ADE80
+        elif score is not None and score >= 70:
+            verdict = "REVIEW"
+            color = 0xB89100
+        else:
+            verdict = "FAIL" if (score is not None and score < 70) else "REVIEW"
+            color = 0xFF3B3B if proven > 0 else 0x4ADE80
         embed = {
-            "title": f"SOC Refined Verdict: {slug.upper()}",
+            "title": f"SOC Refined Verdict -- {slug.upper()} ({score_str}, {verdict})",
             "description": (
+                f"**Score: {score_str} - {verdict}**\n"
                 f"**{proven}** proven threat classes, **{untested}** untested.\n"
             ),
             "color": color,
             "fields": [
-                {"name": "Stage", "value": "2 — Refined Verdict", "inline": True},
+                {"name": "Stage", "value": "2 - Refined Verdict", "inline": True},
+                {"name": "Score", "value": score_str, "inline": True},
                 {"name": "Proven", "value": str(proven), "inline": True},
                 {"name": "Untested", "value": str(untested), "inline": True},
             ],
-            "footer": {"text": f"Output: {os.path.basename(output_path)}"},
+            "footer": {"text": f"3SIXTYCO. SOC Pipeline - {os.path.basename(output_path)}"},
         }
 
-    ok = _post_discord(webhook_url, [embed])
+    ok = _post_discord(webhook_url, [embed], file_path=output_path)
     if ok:
-        print(f"[soc_pipeline] Discord notification sent for {stage}", file=sys.stderr)
+        print(f"[soc_pipeline] Discord notification sent for {stage} (score={score_str})", file=sys.stderr)
     else:
         print(f"[soc_pipeline] Discord notification FAILED for {stage}", file=sys.stderr)
 
