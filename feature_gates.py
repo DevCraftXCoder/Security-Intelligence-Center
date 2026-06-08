@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import functools
 import logging
+import sqlite3
+import time
 from typing import Any
 
 from flask import jsonify
@@ -101,15 +103,23 @@ def _resolve_tier(email: str) -> str:
     except ImportError:
         logger.debug("billing module not available — defaulting tier to community")
         return "community"
-    try:
-        tier = get_user_tier(email)
-        if tier not in _VALID_TIERS:
-            logger.warning("get_user_tier returned unknown tier %r for %s", tier, email)
+    for _attempt in range(3):
+        try:
+            tier = get_user_tier(email)
+            if tier not in _VALID_TIERS:
+                logger.warning("get_user_tier returned unknown tier %r for %s", tier, email)
+                return "community"
+            return tier
+        except sqlite3.OperationalError as _e:
+            if "database is locked" in str(_e) and _attempt < 2:
+                time.sleep(0.05 * (2 ** _attempt))
+                continue
+            logger.exception("get_user_tier SQLite lock error — defaulting to community")
             return "community"
-        return tier
-    except Exception:
-        logger.exception("get_user_tier raised — defaulting to community")
-        return "community"
+        except Exception:
+            logger.exception("get_user_tier raised — defaulting to community")
+            return "community"
+    return "community"
 
 
 def current_user_tier() -> str:

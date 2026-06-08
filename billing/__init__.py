@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import logging
 import os
+import sqlite3
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -44,15 +46,28 @@ try:
 
         Safe to call without an active Flask request context.
         Defaults to 'community' when the DB is empty or unavailable.
+        Retries up to 3 times on SQLite WAL lock errors before giving up.
         """
-        try:
-            return _get_tier(email.strip().lower())
-        except Exception:
-            logger.debug(
-                "get_user_tier: DB lookup failed for %s; returning community",
-                email[:6] + "***" if len(email) > 6 else "***",
-            )
-            return "community"
+        _safe = email[:6] + "***" if len(email) > 6 else "***"
+        for _attempt in range(3):
+            try:
+                return _get_tier(email.strip().lower())
+            except sqlite3.OperationalError as _e:
+                if "database is locked" in str(_e) and _attempt < 2:
+                    time.sleep(0.05 * (2 ** _attempt))
+                    continue
+                logger.debug(
+                    "get_user_tier: SQLite error for %s after %d attempt(s); returning community: %s",
+                    _safe, _attempt + 1, _e,
+                )
+                return "community"
+            except Exception:
+                logger.debug(
+                    "get_user_tier: DB lookup failed for %s; returning community",
+                    _safe,
+                )
+                return "community"
+        return "community"
 
     __all__ = ["billing_bp", "init_db", "get_user_tier"]
 

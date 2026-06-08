@@ -402,10 +402,13 @@ def request_link():
         except Exception as _e:
             logger.warning("failed to send magic link email via Resend: %s", _e)
     else:
-        logger.warning(
-            "magic link not emailed — RESEND_API_KEY or SIC_ALERT_FROM not set. Link: %s",
-            link,
+        logger.error(
+            "RESEND_API_KEY or SIC_ALERT_FROM not configured — auth email cannot be sent"
         )
+        return jsonify({
+            "ok": False,
+            "error": "Email delivery not configured. Contact the administrator.",
+        }), 503
 
     dev_mode = os.environ.get("SIC_DEV_MODE", "").lower() in ("1", "true", "yes")
     resp_body: dict = {"ok": True, "expires_at": expires}
