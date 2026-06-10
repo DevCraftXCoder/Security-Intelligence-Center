@@ -100,7 +100,7 @@ def _resolve_tier(email: str) -> str:
     """Look up billing tier for *email*, defaulting to 'community'."""
     try:
         from billing import get_user_tier  # noqa: PLC0415
-    except ImportError:
+    except (ImportError, RuntimeError):
         logger.debug("billing module not available — defaulting tier to community")
         return "community"
     for _attempt in range(3):
