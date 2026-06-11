@@ -360,6 +360,9 @@ def detect_project_type(path: str) -> list[str]:
         _err(f"detect_project_type: path not a directory: {path}")
         return scanners
 
+    # Python-native scanner always runs — no external tool dependency.
+    _add("python-scan")
+
     try:
         if (root / "wrangler.toml").is_file():
             _add("checkov", "secrets")

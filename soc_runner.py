@@ -27,6 +27,7 @@ from typing import Any, Optional
 
 import project_config
 import scan_merge
+import scan_python
 
 # Per-scanner subprocess timeout, in seconds.
 SCANNER_TIMEOUT_S: int = 120
@@ -234,6 +235,14 @@ class SOCRunner:
         produced: list[str] = []
         fs_commands = self._scanner_commands("")  # placeholder; rebuilt per-scanner
 
+        # Always run the Python-native scanner first (no external tools required).
+        try:
+            py_out = scan_python.run_all(self.project_path, tmp_dir)
+            if py_out and Path(py_out).is_file():
+                produced.append(py_out)
+        except Exception as exc:
+            _err(f"python-scan: unexpected error ({exc}) — skipping")
+
         for scanner in scanners:
             if scanner == "nuclei":
                 urls = self._url_targets()
@@ -258,6 +267,10 @@ class SOCRunner:
                 result = self._run_one("trivy-image", cmd, out_file)
                 if result:
                     produced.append(result)
+                continue
+
+            if scanner == "python-scan":
+                # Already ran above — skip duplicate.
                 continue
 
             if scanner not in fs_commands:
