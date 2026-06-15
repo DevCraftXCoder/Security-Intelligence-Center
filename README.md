@@ -93,6 +93,29 @@ Add to your MCP client config:
 
 ---
 
+## Prerequisites
+
+Before running SIC, ensure the following external tools are on your `PATH`. Run
+`install\check-prerequisites.ps1` to check which are present and get one-line
+install commands for any that are missing.
+
+| Tool | Used for |
+|------|---------|
+| `nmap` | Network/port scanning |
+| `nuclei` | Vulnerability scanning templates |
+| `nikto` | Web server scanning |
+| `gobuster` | Directory/DNS brute-forcing |
+| `ffuf` | Web fuzzing |
+| `sqlmap` | SQL injection testing |
+| `subfinder` | Subdomain enumeration |
+| `amass` | Asset discovery |
+| `httpx` | HTTP probing |
+
+See [`install/check-prerequisites.ps1`](install/check-prerequisites.ps1) for the full
+tool list and install guidance.
+
+---
+
 ## First-Run Setup (Required)
 
 1. **Copy `.env.example` to `.env`**  
@@ -100,12 +123,25 @@ Add to your MCP client config:
    cp .env.example .env
    ```
 
-2. **Set required variables in `.env`:**
+2. **Activate your SIC token.**  
+   After purchasing a subscription you will receive a magic-link email. Click it to
+   activate your account. The activation sets `SIC_TOKEN` — the **only** credential
+   you need for scanning.
+
+3. **Set your token in `.env`:**
 
    | Variable | Description |
    |----------|-------------|
-   | `SIC_SECRET_KEY` | Random secret string (min 32 chars) |
-   | `SIC_ADMIN_EMAILS` | Your email (comma-separated for multiple) |
+   | `SIC_TOKEN` | Activation token from your magic-link email |
+   | `SIC_ADMIN_EMAILS` | Your email (comma-separated for multiple admins) |
+   | `SIC_BASE_URL` | Public URL where you reach the dashboard (default: `http://localhost:9888`) |
+
+   > **Note:** Stripe and Resend credentials (`STRIPE_SECRET_KEY`, `RESEND_API_KEY`,
+   > etc.) are operator-side secrets managed by the SIC cloud service. You do **not**
+   > need these for scanning — they are never required in a customer install.
+
+<!-- archived: operator-secret requirement removed
+   Old table that exposed operator billing secrets to customers:
    | `STRIPE_SECRET_KEY` | From Stripe Dashboard → API Keys |
    | `STRIPE_WEBHOOK_SECRET` | From Stripe Dashboard → Webhooks |
    | `STRIPE_PRICE_TEAM` | Stripe Price ID for Team plan |
@@ -113,22 +149,26 @@ Add to your MCP client config:
    | `BILLING_API_KEY` | Random secret for billing M2M auth |
    | `RESEND_API_KEY` | For magic link email delivery |
    | `SIC_ALERT_FROM` | Verified sender email (e.g. sic@yourdomain.com) |
-   | `SIC_BASE_URL` | Public URL where customers reach the dashboard (required for email login links) |
+-->
 
-3. **Run the audit to verify setup:**
+4. **Check prerequisites:**
+   ```powershell
+   .\install\check-prerequisites.ps1
+   ```
+
+5. **Run the audit to verify setup:**
    ```bash
    python sic-audit.py
    ```
 
-4. **Start SIC:**
+6. **Start SIC:**
    ```bash
    python start_server.py    # SIC main server (port 9888)
-   python billing_server.py  # Billing server (port 9015)
    # Or with PM2:
    pm2 start ecosystem.config.cjs
    ```
 
-5. **Open your browser:** [http://localhost:9888](http://localhost:9888)
+7. **Open your browser:** [http://localhost:9888](http://localhost:9888)
 
 ---
 

@@ -9987,6 +9987,7 @@ def create_vulnerability_card():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/visual/summary-report", methods=["POST"])
+@require_tier("team")
 def create_summary_report():
     """Create a beautiful summary report using ModernVisualEngine"""
     try:
@@ -10136,6 +10137,7 @@ def optimize_tool_parameters():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/intelligence/create-attack-chain", methods=["POST"])
+@require_tier("team")
 def create_attack_chain():
     """Create an intelligent attack chain based on target profile"""
     try:
@@ -10615,6 +10617,7 @@ def detect_technologies():
 # ============================================================================
 
 @app.route("/api/bugbounty/reconnaissance-workflow", methods=["POST"])
+@require_tier("team")
 def create_reconnaissance_workflow():
     """Create comprehensive reconnaissance workflow for bug bounty hunting"""
     try:
@@ -10653,6 +10656,7 @@ def create_reconnaissance_workflow():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/bugbounty/vulnerability-hunting-workflow", methods=["POST"])
+@require_tier("team")
 def create_vulnerability_hunting_workflow():
     """Create vulnerability hunting workflow prioritized by impact"""
     try:
@@ -10689,6 +10693,7 @@ def create_vulnerability_hunting_workflow():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/bugbounty/business-logic-workflow", methods=["POST"])
+@require_tier("team")
 def create_business_logic_workflow():
     """Create business logic testing workflow"""
     try:
@@ -10720,6 +10725,7 @@ def create_business_logic_workflow():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/bugbounty/osint-workflow", methods=["POST"])
+@require_tier("team")
 def create_osint_workflow():
     """Create OSINT gathering workflow"""
     try:
@@ -10750,6 +10756,7 @@ def create_osint_workflow():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/bugbounty/file-upload-testing", methods=["POST"])
+@require_tier("team")
 def create_file_upload_testing():
     """Create file upload vulnerability testing workflow"""
     try:
@@ -10781,6 +10788,7 @@ def create_file_upload_testing():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/bugbounty/comprehensive-assessment", methods=["POST"])
+@require_tier("team")
 def create_comprehensive_bugbounty_assessment():
     """Create comprehensive bug bounty assessment combining all workflows"""
     try:
@@ -16079,6 +16087,7 @@ def cve_monitor():
         }), 500
 
 @app.route("/api/vuln-intel/exploit-generate", methods=["POST"])
+@require_tier("team")
 def exploit_generate():
     """Generate exploits from vulnerability data using AI"""
     try:
@@ -16364,6 +16373,7 @@ def threat_intelligence_feeds():
         }), 500
 
 @app.route("/api/vuln-intel/zero-day-research", methods=["POST"])
+@require_tier("studio")
 def zero_day_research():
     """Automated zero-day vulnerability research using AI analysis"""
     try:
@@ -16503,6 +16513,7 @@ def zero_day_research():
         }), 500
 
 @app.route("/api/ai/advanced-payload-generation", methods=["POST"])
+@require_tier("team")
 def advanced_payload_generation():
     """Generate advanced payloads with AI-powered evasion techniques"""
     try:
@@ -17223,6 +17234,7 @@ def ctf_binary_analyzer():
 # ============================================================================
 
 @app.route("/api/process/execute-async", methods=["POST"])
+@require_tier("team")
 def execute_command_async():
     """Execute command asynchronously using enhanced process management"""
     try:
@@ -17403,6 +17415,7 @@ def terminate_process_gracefully(pid):
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/process/auto-scaling", methods=["POST"])
+@require_tier("studio")
 def configure_auto_scaling():
     """Configure auto-scaling settings"""
     try:
