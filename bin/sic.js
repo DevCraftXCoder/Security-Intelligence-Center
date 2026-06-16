@@ -53,7 +53,12 @@ function findPython() {
 
 // ── print banner ───────────────────────────────────────────────────────────────
 function printBanner() {
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  let pkg;
+  try {
+    pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  } catch (e) {
+    fail(`Could not read package.json: ${e.message}\nRe-run: npm install`);
+  }
   const logo = `
   ${red}${bold}  ███████╗██╗ ██████╗${reset}
   ${red}${bold}  ██╔════╝██║██╔════╝${reset}
@@ -147,7 +152,13 @@ function detectProjectType(dir) {
 }
 
 // ── main ────────────────────────────────────────────────────────────────────────
-const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+let pkg;
+try {
+  pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+} catch (e) {
+  process.stderr.write(`[sic] Cannot read package.json: ${e.message}\nRe-run: npm install\n`);
+  process.exit(1);
+}
 
 printBanner();
 

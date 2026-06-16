@@ -702,6 +702,7 @@ def _handle_checkout_completed(event, email: str | None) -> None:
     if subscription_id:
         try:
             import stripe as _stripe  # noqa: PLC0415
+            _stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
             sub = _stripe.Subscription.retrieve(subscription_id)
             current_period_end = sub.get("current_period_end")
         except Exception as _e:  # noqa: BLE001
@@ -1048,7 +1049,7 @@ def public_checkout():
     # When the key is unset in production, the endpoint must refuse traffic rather
     # than silently accept all requests (previous behaviour when env var was empty).
     if not _BILLING_API_KEY:
-        if os.environ.get("SIC_ENV", "development") == "production":
+        if os.environ.get("SIC_ENV", "production") != "development":
             return jsonify(
                 {"error": "BILLING_API_KEY not configured — set it in .env"}
             ), 503
@@ -1135,7 +1136,7 @@ def portal_by_email():
         500  {"error": "internal_error"}
     """
     if not _BILLING_API_KEY:
-        if os.environ.get("SIC_ENV", "development") == "production":
+        if os.environ.get("SIC_ENV", "production") != "development":
             return jsonify({"error": "BILLING_API_KEY not configured"}), 503
         print("[billing WARNING] BILLING_API_KEY not set — M2M auth disabled (dev)")
     else:
@@ -1198,6 +1199,7 @@ def public_checkout_success():
 _TRIAL_RATE: dict[str, list[float]] = {}  # IP → [timestamps] (in-memory, resets on restart)
 _TRIAL_MAX = 3       # requests
 _TRIAL_WINDOW = 3600  # seconds
+_TRIAL_RATE_LAST_GC: float = 0.0  # epoch seconds of last GC sweep
 
 
 @billing_bp.post("/public-trial")
@@ -1214,7 +1216,7 @@ def public_trial():
 
     # M2M auth — same pattern as public_checkout / portal_by_email
     if not _BILLING_API_KEY:
-        if os.environ.get("SIC_ENV", "development") == "production":
+        if os.environ.get("SIC_ENV", "production") != "development":
             return jsonify({"error": "BILLING_API_KEY not configured"}), 503
         print("[billing WARNING] BILLING_API_KEY not set — M2M auth disabled (dev)")
     else:
@@ -1229,12 +1231,20 @@ def public_trial():
     )
 
     # Simple sliding-window rate limit (in-memory — resets on server restart)
+    global _TRIAL_RATE_LAST_GC
     now = _time.time()
     bucket = _TRIAL_RATE.setdefault(ip, [])
     _TRIAL_RATE[ip] = [t for t in bucket if now - t < _TRIAL_WINDOW]
     if len(_TRIAL_RATE[ip]) >= _TRIAL_MAX:
         return jsonify({"error": "rate_limited", "detail": "Too many trial requests. Try again later."}), 429
     _TRIAL_RATE[ip].append(now)
+
+    # Periodic GC: remove IPs whose window has fully expired to prevent unbounded growth.
+    if now - _TRIAL_RATE_LAST_GC > _TRIAL_WINDOW:
+        stale_ips = [k for k, v in _TRIAL_RATE.items() if not v or now - max(v) > _TRIAL_WINDOW]
+        for k in stale_ips:
+            _TRIAL_RATE.pop(k, None)
+        _TRIAL_RATE_LAST_GC = now
 
     body = request.get_json(silent=True) or {}
     email_raw = (body.get("email") or "").strip().lower()

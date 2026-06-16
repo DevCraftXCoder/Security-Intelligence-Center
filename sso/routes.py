@@ -24,6 +24,7 @@ from flask import (
     jsonify,
     redirect,
     request,
+    session,
 )
 
 from .db import disable_config, get_config, list_configs, upsert_config
@@ -106,7 +107,7 @@ def _set_state_cookie(response, workspace_id: str, state: str, nonce: str) -> No
         max_age=_STATE_TTL,
         httponly=True,
         samesite="Lax",
-        secure=request.is_secure,
+        secure=True,
         path="/",
     )
 
@@ -201,7 +202,7 @@ def _set_session_cookie(response, email: str) -> None:
         max_age=_SESSION_TTL_SEC,
         httponly=True,
         samesite="Lax",
-        secure=request.is_secure,
+        secure=True,
         path="/",
     )
 
@@ -236,7 +237,7 @@ def sso_login():
             return jsonify({"error": "saml_handler_unavailable"}), 500
 
         try:
-            redirect_url, _request_id = build_authn_request(idp_config, sp_cfg)
+            redirect_url, saml_request_id = build_authn_request(idp_config, sp_cfg)
         except RuntimeError as exc:
             return (
                 jsonify({"error": "saml_unavailable", "hint": str(exc)}),
@@ -246,6 +247,8 @@ def sso_login():
             logger.exception("Error building SAML AuthnRequest workspace=%s", workspace_id)
             return jsonify({"error": "saml_error", "detail": str(exc)}), 500
 
+        # Store request_id for InResponseTo replay binding in the callback.
+        session[f"saml_request_id_{workspace_id}"] = saml_request_id
         return redirect(redirect_url)
 
     elif protocol == "oidc":
@@ -300,8 +303,22 @@ def saml_callback(workspace_id: str):
 
     sp_cfg = _sp_config(workspace_id)
 
+    # Retrieve and consume the stored request_id for InResponseTo binding.
+    # Pop removes it immediately — one-time use prevents session fixation.
+    saml_request_id: str | None = session.pop(f"saml_request_id_{workspace_id}", None)
+    if saml_request_id is None:
+        logger.warning(
+            "SAML callback: no stored request_id for workspace=%s "
+            "(possible unsolicited response or session cleared)",
+            workspace_id,
+        )
+
     try:
-        email = process_response(saml_response, idp_config, sp_cfg, relay_state=relay_state)
+        email = process_response(
+            saml_response, idp_config, sp_cfg,
+            relay_state=relay_state,
+            request_id=saml_request_id,
+        )
     except RuntimeError as exc:
         return jsonify({"error": "saml_unavailable", "hint": str(exc)}), 501
     except ValueError as exc:

@@ -156,6 +156,10 @@ _checkout_rl: dict[str, _collections.deque] = {}
 _checkout_rl_lock = _threading.Lock()
 
 
+_CHECKOUT_RL_GC_INTERVAL = 3600   # sweep stale IP entries every hour
+_checkout_rl_last_gc: float = 0.0
+
+
 def _checkout_rate_check(ip: str) -> bool:
     """Return True if within limit, False if exceeded."""
     now = _time.time()
@@ -170,6 +174,15 @@ def _checkout_rate_check(ip: str) -> bool:
         if len(dq) >= _CHECKOUT_RL_MAX:
             return False
         dq.append(now)
+
+        # Periodic GC: remove IP buckets whose deque is empty (all entries expired).
+        global _checkout_rl_last_gc
+        if now - _checkout_rl_last_gc > _CHECKOUT_RL_GC_INTERVAL:
+            stale = [k for k, v in _checkout_rl.items() if not v]
+            for k in stale:
+                del _checkout_rl[k]
+            _checkout_rl_last_gc = now
+
         return True
 
 

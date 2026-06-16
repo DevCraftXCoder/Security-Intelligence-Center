@@ -173,8 +173,20 @@ def process_response(
     idp_config: dict[str, Any],
     sp_config: dict[str, Any],
     relay_state: str | None = None,
+    request_id: str | None = None,
 ) -> str:
     """Consume and validate a SAMLResponse. Returns the asserted email.
+
+    Args:
+        saml_response_b64: Base64-encoded SAMLResponse from the IdP POST.
+        idp_config: Workspace IdP configuration dict.
+        sp_config: SP configuration dict (base_url, workspace_id, etc.).
+        relay_state: Optional RelayState from the POST body. Must be a safe
+            relative path if provided.
+        request_id: Optional AuthnRequest ID from the originating login request.
+            When provided, python3-saml enforces InResponseTo binding, preventing
+            unsolicited-response and replay attacks.  Pass None only when the
+            originating request_id is unavailable (degrades to permissive mode).
 
     Raises ValueError on any validation failure (signature, timing, audience,
     domain, etc.).
@@ -201,7 +213,10 @@ def process_response(
     )
 
     auth = _OneLogin_Saml2_Auth(req, settings_data)  # type: ignore[operator]
-    auth.process_response()
+    # Pass request_id for InResponseTo binding (python3-saml >= 1.16.0).
+    # When request_id is None the library skips InResponseTo enforcement —
+    # this preserves backwards compatibility but is less secure.
+    auth.process_response(request_id=request_id)
     errors = auth.get_errors()
     if errors:
         reason = auth.get_last_error_reason() or str(errors)

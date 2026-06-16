@@ -40,6 +40,8 @@ def init_db() -> None:
         return
     _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(str(_DB_PATH)) as con:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA busy_timeout=5000")
         con.execute(_CREATE_SQL)
         con.commit()
     _db_init_done = True

@@ -107,9 +107,14 @@ def _get_ws_secret() -> bytes:
         _ws_secret_cache = _KEY_PATH.read_bytes()
         return _ws_secret_cache
 
-    # Fallback — should rarely be hit because auth.py creates the key first
-    _ws_secret_cache = b"sic-default-key"
-    return _ws_secret_cache
+    # No key material available — fail hard rather than use a predictable fallback.
+    # auth.py must run before workspaces.py (it creates ~/.sic/auth.key).
+    # If this is hit in production, SIC_AUTH_SECRET is unset and auth.py has not
+    # initialised — a startup ordering bug.  Abort with a clear message.
+    raise RuntimeError(
+        "Workspace HMAC key is unavailable: set SIC_AUTH_SECRET or ensure "
+        "auth.py has initialised ~/.sic/auth.key before importing workspaces."
+    )
 
 
 def _sign_workspace_cookie(workspace_id: str) -> str:
