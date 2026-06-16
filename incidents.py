@@ -135,7 +135,11 @@ def _require_auth() -> str:
 
 @incidents_bp.get("/incidents")
 def list_incidents_route():
-    """GET /api/incidents — list incidents, optional ?severity=P0&status=open."""
+    """GET /api/incidents — list incidents, optional ?severity=P0&status=open.
+
+    Results are scoped to the active workspace (from signed sic_workspace cookie),
+    or to personal incidents (workspace_id IS NULL) when no workspace is selected.
+    """
     incidents_init_db()
     severity = request.args.get("severity")
     status = request.args.get("status")
@@ -145,6 +149,22 @@ def list_incidents_route():
 
     where: list[str] = ["deleted_at IS NULL"]
     params: list = []
+
+    # Workspace scoping: read active workspace from signed cookie.
+    active_workspace_id: str | None = None
+    try:
+        from workspaces import _WORKSPACE_COOKIE_NAME, _verify_workspace_cookie  # noqa: PLC0415
+        cookie_val = request.cookies.get(_WORKSPACE_COOKIE_NAME)
+        if cookie_val:
+            active_workspace_id = _verify_workspace_cookie(cookie_val)
+    except (ImportError, Exception):
+        pass  # workspaces module not loaded — treat as personal
+
+    if active_workspace_id:
+        where.append("workspace_id = ?")
+        params.append(active_workspace_id)
+    else:
+        where.append("(workspace_id IS NULL OR workspace_id = '')")
 
     if severity:
         if severity not in valid_severities:

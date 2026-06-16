@@ -211,7 +211,7 @@ def _call_anthropic_direct(api_key: str, title: str, description: str, category:
         user_content += f"Reported severity: {severity}\n"
 
     message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model="claude-haiku-4-5-20251022",
         max_tokens=512,
         system=_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],

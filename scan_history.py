@@ -181,12 +181,15 @@ def list_scans(
     status: str | None,
     limit: int,
     oldest_allowed: str | None = None,
+    workspace_id: str | None = None,
 ) -> tuple[list[dict], str | None]:
     """Cursor-paginated scan list.
 
     Cursor is a started_at ISO string (exclusive lower bound for DESC order).
     oldest_allowed, when provided, is an ISO string acting as an inclusive lower
     bound — scans older than this value are excluded (retention gate).
+    workspace_id, when provided, filters to scans belonging to that workspace;
+    pass None to return only personal (workspace_id IS NULL) scans.
     Returns (rows, next_cursor).
     """
     _init_db()
@@ -205,6 +208,12 @@ def list_scans(
     if status:
         where.append("status = ?")
         params.append(status)
+    # Workspace scoping: filter to the active workspace, or personal scans when unset.
+    if workspace_id:
+        where.append("workspace_id = ?")
+        params.append(workspace_id)
+    else:
+        where.append("(workspace_id IS NULL OR workspace_id = '')")
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
     sql = (
         f"SELECT id, scan_type, target, started_at, finished_at, duration_s, status, findings_count"
@@ -244,7 +253,7 @@ def _require_auth():
 
 @scan_history_bp.get("/scans")
 def list_scans_route():
-    """GET /api/scans — paginated scan history (retention-gated by tier)."""
+    """GET /api/scans — paginated scan history (retention-gated by tier, workspace-scoped)."""
     _require_auth()
     cursor = request.args.get("cursor")
     scan_type = request.args.get("type")
@@ -253,6 +262,16 @@ def list_scans_route():
         limit = int(request.args.get("limit", 20))
     except (TypeError, ValueError):
         limit = 20
+
+    # Workspace scoping: read active workspace from signed cookie.
+    active_workspace_id: str | None = None
+    try:
+        from workspaces import _WORKSPACE_COOKIE_NAME, _verify_workspace_cookie  # noqa: PLC0415
+        cookie_val = request.cookies.get(_WORKSPACE_COOKIE_NAME)
+        if cookie_val:
+            active_workspace_id = _verify_workspace_cookie(cookie_val)
+    except (ImportError, Exception):
+        pass  # workspaces module not loaded — treat as personal
 
     # Tier-based retention gate: clamp cursor to the oldest allowed scan date.
     try:
@@ -269,7 +288,11 @@ def list_scans_route():
         if cursor and cursor < retention_cutoff:
             cursor = None
 
-    rows, next_cursor = list_scans(cursor, scan_type, status, limit, oldest_allowed=retention_cutoff)
+    rows, next_cursor = list_scans(
+        cursor, scan_type, status, limit,
+        oldest_allowed=retention_cutoff,
+        workspace_id=active_workspace_id,
+    )
     return jsonify({"scans": rows, "next_cursor": next_cursor})
 
 

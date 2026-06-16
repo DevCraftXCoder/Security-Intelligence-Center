@@ -157,10 +157,10 @@ def _already_alerted(finding_id: str) -> bool:
     """Return True if this finding_id has already been alerted within 30 days.
 
     Uses SQLite at ~/.sic/state.db.  Cleans up expired rows on each call.
+    Does NOT insert the dedup row — call _mark_alerted() after dispatching threads.
     """
     db = _db_path()
     now_iso = datetime.now(tz=timezone.utc).isoformat()
-    expires_iso = (datetime.now(tz=timezone.utc) + timedelta(days=30)).isoformat()
 
     try:
         with sqlite3.connect(str(db)) as conn:
@@ -172,22 +172,37 @@ def _already_alerted(finding_id: str) -> bool:
             conn.execute(
                 "DELETE FROM alerted_findings WHERE expires_at < ?", (now_iso,)
             )
+            conn.commit()
             # Check if row already exists
             row = conn.execute(
                 "SELECT id FROM alerted_findings WHERE id = ?", (finding_id,)
             ).fetchone()
-            if row:
-                return True
-            # First time — record it
-            conn.execute(
-                "INSERT INTO alerted_findings (id, first_alerted_at, expires_at) VALUES (?, ?, ?)",
-                (finding_id, now_iso, expires_iso),
-            )
-            conn.commit()
-            return False
+            return row is not None
     except Exception:
         logger.debug("_already_alerted DB error for id %s", finding_id, exc_info=True)
         return False
+
+
+def _mark_alerted(finding_id: str) -> None:
+    """Insert the dedup row for finding_id after alert threads have been dispatched.
+
+    Called only when at least one channel thread was successfully started.
+    Best-effort — never raises.
+    """
+    db = _db_path()
+    now_iso = datetime.now(tz=timezone.utc).isoformat()
+    expires_iso = (datetime.now(tz=timezone.utc) + timedelta(days=30)).isoformat()
+
+    try:
+        with sqlite3.connect(str(db)) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO alerted_findings (id, first_alerted_at, expires_at) "
+                "VALUES (?, ?, ?)",
+                (finding_id, now_iso, expires_iso),
+            )
+            conn.commit()
+    except Exception:
+        logger.debug("_mark_alerted DB error for id %s", finding_id, exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -491,25 +506,36 @@ def send_scan_alert(event: str, details: dict[str, Any] | None = None) -> None:
         # No other channels (Discord/Slack) for magic-link events — return early
         return
 
-    # Deduplication for alert-worthy events
+    # Deduplication for alert-worthy events — check BEFORE dispatching, mark AFTER.
+    fid: str | None = None
     if event in _EMAIL_EVENTS:
         fid = _make_finding_id(event, payload)
         if _already_alerted(fid):
             logger.debug("Suppressed duplicate alert for finding %s", fid)
             return
 
+    dispatched = False
     try:
         if _get_discord_url():
             t = threading.Thread(target=_fire_webhook, args=(event, dict(payload)), daemon=True)
             t.start()
+            dispatched = True
         if _get_slack_url():
             t = threading.Thread(target=_fire_slack, args=(event, dict(payload)), daemon=True)
             t.start()
+            dispatched = True
         if _get_generic_webhook_url():
             t = threading.Thread(target=_fire_webhook_generic, args=(event, dict(payload)), daemon=True)
             t.start()
+            dispatched = True
         if _get_alert_email():
             t = threading.Thread(target=_fire_email, args=(event, dict(payload)), daemon=True)
             t.start()
+            dispatched = True
     except Exception:
         logger.debug("Failed to dispatch alert threads for event '%s'", event, exc_info=True)
+
+    # Record dedup row AFTER at least one thread was started — prevents permanent
+    # suppression when a process crash occurs between INSERT and thread dispatch.
+    if fid and dispatched:
+        _mark_alerted(fid)

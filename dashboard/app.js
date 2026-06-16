@@ -884,7 +884,7 @@ async function requestAiFix() {
       method: "POST",
       body: payload,
     });
-    const oneLiner = res["1_line_fix"] || res.one_line_fix || "";
+    const oneLiner = res.one_line_fix || "";
     const confPct = res.confidence != null ? Math.round(res.confidence * (res.confidence <= 1 ? 100 : 1)) : null;
     const fpRisk = res.false_positive_risk;
     const remediation = res.remediation || "";
