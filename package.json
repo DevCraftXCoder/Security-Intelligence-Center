@@ -20,8 +20,8 @@
     "scan:secrets:strict": "secretlint --maskSecrets=false \"**/*\""
   },
   "devDependencies": {
-    "secretlint": "10.2.1",
-    "@secretlint/secretlint-rule-preset-recommend": "10.2.1"
+    "secretlint": "13.0.2",
+    "@secretlint/secretlint-rule-preset-recommend": "13.0.2"
   },
   "files": [
     "bin/",
