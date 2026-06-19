@@ -1,6 +1,6 @@
 {
   "name": "sic-security",
-  "version": "6.0.2",
+  "version": "6.0.3",
   "description": "SIC — AI-Powered Security Intelligence Center: MCP framework with 85 pentesting tools for authorized security testing, CTF, and defensive research",
   "keywords": [
     "security",
