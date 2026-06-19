@@ -69,7 +69,7 @@ def _request_link_rate_check(ip: str) -> bool:
 
 _DB_PATH = Path.home() / ".sic" / "state.db"
 _KEY_PATH = Path.home() / ".sic" / "auth.key"
-_LINK_TTL_SEC = 600           # 10 minutes
+_LINK_TTL_SEC = 86400         # 24 hours (new-user onboarding needs time to install)
 _SESSION_TTL_SEC = 30 * 86400  # 30 days
 _SESSION_REFRESH_SEC = 7 * 86400  # rolling refresh threshold
 _COOKIE_NAME = "sic_session"
@@ -136,8 +136,26 @@ def _init_db() -> None:
             )
             """
         )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires ON auth_tokens(expires_at)"
+        )
         con.commit()
     _db_init_done = True
+    _cleanup_expired_tokens()
+
+
+def _cleanup_expired_tokens() -> None:
+    """Delete used and expired magic-link tokens older than 7 days."""
+    try:
+        cutoff = _iso(int(time.time()) - 7 * 86400)
+        with sqlite3.connect(str(_DB_PATH)) as con:
+            con.execute(
+                "DELETE FROM auth_tokens WHERE expires_at < ? OR used_at IS NOT NULL",
+                (cutoff,),
+            )
+            con.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[auth] token cleanup skipped: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +398,7 @@ def request_link():
                     'padding:40px;max-width:480px;margin:auto;border-radius:8px;">'
                     '<h2 style="color:#e94560;margin-top:0;">Security Intelligence Center</h2>'
                     '<p style="color:#ccc;">Click the button below to sign in. '
-                    "This link expires in 10 minutes.</p>"
+                    "This link expires in 24 hours.</p>"
                     f'<a href="{link}" style="display:inline-block;background:#e94560;color:#fff;'
                     'padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;'
                     'margin:16px 0;">Sign in to SIC</a>'
