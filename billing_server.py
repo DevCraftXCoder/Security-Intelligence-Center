@@ -260,4 +260,5 @@ with app.app_context():
 if __name__ == "__main__":
     port = int(os.environ.get("SIC_BILLING_PORT", "9015"))
     host = os.environ.get("SIC_HOST", "127.0.0.1")
-    app.run(host=host, port=port, debug=False, use_reloader=False)
+    from waitress import serve
+    serve(app, host=host, port=port, threads=4)
