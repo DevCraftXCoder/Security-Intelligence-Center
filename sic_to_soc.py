@@ -22,11 +22,14 @@ import json
 import os
 import re
 import sys
-import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
 
-import project_config
+try:
+    import project_config as _project_config_mod
+    project_config = _project_config_mod
+except ImportError:
+    project_config = None
 from scan_merge import _collect  # single authoritative finding collector
 
 # Resolve the SOC handoff template relative to this module (portable across machines).
@@ -319,7 +322,7 @@ def compute_posture(all_items, net_sections, scanned, score_override=None):
     # Count open items per priority
     counts = {p: {"open": 0, "total": 0} for p in weights}
     for item in all_items:
-        p = item.get("priority") or item.get("p") or "p2"
+        p = (item.get("priority") or "").strip() or (item.get("p") or "").strip() or "p2"
         if p not in counts:
             p = "p2"
         counts[p]["total"] += 1
@@ -341,10 +344,12 @@ def compute_posture(all_items, net_sections, scanned, score_override=None):
     verdict = verdict_for(score, scanned=True)
 
     open_p0 = counts["p0"]["open"]
+    overdue_count = sum(1 for item in all_items if item.get("overdue"))
+    overdue_str = f", {overdue_count} SLA overdue" if overdue_count else ""
     rationale = (
-        f"Score {score}/100 — {open_p0} open P0 item(s)"
+        f"Score {score}/100 — {open_p0} open P0 item(s){overdue_str}"
         if open_p0
-        else f"Score {score}/100 — no open P0 items"
+        else f"Score {score}/100 — no open P0 items{overdue_str}"
     )
 
     return {
@@ -454,7 +459,7 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
                        skip_enrichment=False, skip_db=False, config=None, net=None,
                        scanners_run=None):
     # --- Suppression enforcement (.sic.yaml rules) ---
-    if config:
+    if config and project_config:
         kept = [f for f in findings if not project_config.is_suppressed(f, config)]
         suppressed_n = len(findings) - len(kept)
         if suppressed_n:
@@ -532,22 +537,7 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
             sla_map = {}
             if sla_mod:
                 for f in findings:
-                    import hashlib
-                    enrichment_f = f.get("enrichment") or {}
-                    name_f = (f.get("name") or f.get("vulnerabilityName") or
-                              f.get("Title") or f.get("template-id") or
-                              f.get("checkID") or "Unnamed finding")
-                    cve_f = enrichment_f.get("cve_id") or None
-                    import re as _re
-                    if not cve_f:
-                        for field in ("name", "template-id", "checkID", "Title"):
-                            m = _re.search(r"CVE-\d{4}-\d+", str(f.get(field) or ""), _re.IGNORECASE)
-                            if m:
-                                cve_f = m.group(0).upper()
-                                break
-                    check_f = f.get("checkID") or f.get("check_id")
-                    key = f"{slug}|{cve_f or check_f or ''}|{name_f[:40]}"
-                    fp = hashlib.sha256(key.encode()).hexdigest()[:32]
+                    fp = _finding_fingerprint(f, slug)
                     sla_info = sla_mod.calculate_sla_deadline(f, asset_tier=asset_tier)
                     sla_map[fp] = sla_info
             db_mod.upsert_findings_batch(slug, findings, asset_tier=asset_tier, sla_map=sla_map)
@@ -626,7 +616,7 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
 
     project_data = {
         "project": {
-            "name":     project.upper(),
+            "name":     project,
             "slug":     slug,
             "repo":     scan_name,
             "commit":   now_iso[:10],
@@ -785,6 +775,7 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
         "resolved":    resolved_count,
         "unchanged":   unchanged_count,
         "has_prior":   has_prior,
+        "first_scan":  not has_prior,
         "current_fps": current_fps,
     }
     # Also stamp the current fingerprints onto the current snapshot so the next
@@ -868,6 +859,13 @@ def main():
                         help="Skip DB persistence (findings_db.py upsert)")
     parser.add_argument("--open", action="store_true",
                         help="Open the generated report in the default browser")
+    parser.add_argument("--analyst", default="",
+                        help="Analyst name for SOC report incidentLead field")
+    parser.add_argument("--analyst-role", default="",
+                        help="Analyst role for SOC report")
+    parser.add_argument("--history-dir", default=None,
+                        help="Directory containing prior SOC reports for week-over-week history "
+                             "(default: parent of --output parent, i.e. _runs/)")
     args = parser.parse_args()
 
     # --- Resolve project config -------------------------------------------
@@ -876,13 +874,13 @@ def main():
     # + asset_tier + suppressions, so --slug / --asset-tier need not be passed.
     config = None
     project_path = args.project_path
-    if not project_path and args.project:
+    if not project_path and args.project and project_config is not None:
         candidate_slug = re.sub(r"[^a-z0-9]+", "-", args.project.lower()).strip("-")
         registered = project_config.get_project(candidate_slug)
         if registered and registered.get("path"):
             project_path = registered["path"]
 
-    if project_path:
+    if project_path and project_config is not None:
         config = project_config.load_config(project_path)
         if config.get("_source") != "file":
             # No .sic.yaml — try to auto-populate the registry from git remote.
@@ -910,7 +908,7 @@ def main():
     findings = load_findings(args.scan)
     print(f"[sic_to_soc] {len(findings)} findings parsed")
 
-    runs_dir = str(Path(args.output).parent.parent)  # _runs/qa/../ = _runs/
+    runs_dir = args.history_dir or str(Path(args.output).parent.parent)  # _runs/qa/../ = _runs/
     project_data = build_project_data(
         findings, project, slug, args.scan, now,
         runs_dir=runs_dir, output_path=args.output, score_override=args.score,
@@ -919,6 +917,11 @@ def main():
         skip_db=args.no_db,
         config=config,
     )
+    if args.analyst:
+        project_data["caseMetadata"]["incidentLead"] = args.analyst
+        project_data["closure"]["handingOffTo"] = args.analyst
+    if args.analyst_role:
+        project_data["caseMetadata"]["analystRole"] = args.analyst_role
     total_controls = sum(len(s["items"]) for s in project_data["controls"])
     crit = project_data["caseMetadata"]["severity"]
     print(f"[sic_to_soc] Severity: {crit}  Controls: {total_controls} across {len(project_data['controls'])} section(s)")
@@ -943,6 +946,7 @@ def main():
     if args.open:
         print("[sic_to_soc] Opening in browser...", file=sys.stderr)
         try:
+            import webbrowser
             webbrowser.open(f"file:///{output_fwd}")
         except Exception as e:
             print(f"[sic_to_soc] Could not open browser (non-fatal): {e}", file=sys.stderr)

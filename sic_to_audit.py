@@ -17,9 +17,13 @@ Usage:
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.request
+from collections import Counter
 from pathlib import Path
+
+from scan_merge import _collect
 
 # ---------------------------------------------------------------------------
 # Control mapping table
@@ -49,21 +53,35 @@ TAG_TO_CONTROL = {
     "command-injection":     "sp-04",
     "deserialization":       "sp-04",
     # s -- Core Security Controls (p1)
+    # s-01 Input validation
+    "validation":            "s-01",
+    "parameter-tampering":   "s-01",
     "session":               "s-02",
     "cookie":                "s-02",
     "api":                   "s-03",
     "bola":                  "s-03",
     "injection":             "s-03",
+    "sqli":                  "s-03",
+    # s-04 Error handling / info disclosure
+    "information-disclosure": "s-04",
+    "error-message":          "s-04",
     "secret":                "s-05",
     "secrets":               "s-05",
     "exposure":              "s-05",
     "token-exposure":        "s-05",
     "hardcoded":             "s-05",
     "leaked":                "s-05",
+    # s-06 Dependency vulnerabilities (distinct from CVE/app-03)
+    "npm-audit":             "s-06",
+    "pip-audit":             "s-06",
     # sm -- Security Hardening (p2)
+    # sm-01 Security Headers
+    "security-header":       "sm-01",
+    "x-content-type":        "sm-01",
+    "x-frame-options":       "sm-01",
+    "header-injection":      "sm-01",
     "xss":                   "sm-02",
     "csrf":                  "sm-02",
-    "sqli":                  "sm-02",
     "ssrf":                  "sm-03",
     "jwt":                   "sm-04",
     "alg-none":              "sm-04",
@@ -84,6 +102,9 @@ TAG_TO_CONTROL = {
     "file-upload":           "app-06",
     "upload":                "app-06",
     # ap -- Operational Security (p3)
+    # ap-01 Monitoring / SIEM
+    "monitoring":            "ap-01",
+    "siem":                  "ap-01",
     "cicd":                  "ap-03",
     "github-actions":        "ap-03",
     "ci":                    "ap-03",
@@ -97,6 +118,9 @@ TAG_TO_CONTROL = {
     "token-reuse":           "a-05",
     "refresh-token":         "a-05",
     "waf":                   "a-01",
+    # a-02 Encryption at rest
+    "encryption":            "a-02",
+    "at-rest":               "a-02",
     # bp -- Security Hygiene (p3)
     "dns":                   "bp-01",
     "dnssec":                "bp-01",
@@ -104,6 +128,9 @@ TAG_TO_CONTROL = {
     "sast":                  "bp-02",
     "misconfig":             "bp-02",
     "geo":                   "bp-03",
+    # bp-05 Vulnerability disclosure / bug bounty
+    "bug-bounty":            "bp-05",
+    "disclosure":            "bp-05",
     "audit-log":             "bp-06",
     "retention":             "bp-06",
 }
@@ -181,7 +208,8 @@ def map_finding(finding):
                     or finding.get("Title")
                     or tag
                 )
-                return cid, str(note)[:200]
+                note = f"[{_sev(finding).upper()}] {str(note)[:200]}"
+                return cid, note
 
     sev = _sev(finding)
     cid = SEVERITY_FALLBACK.get(sev, "bp-02")
@@ -191,7 +219,8 @@ def map_finding(finding):
         or finding.get("Title")
         or f"{sev} finding"
     )
-    return cid, str(note)[:200]
+    note = f"[{sev.upper()}] {str(note)[:200]}"
+    return cid, note
 
 
 # ---------------------------------------------------------------------------
@@ -215,85 +244,6 @@ def load_findings(path):
         except json.JSONDecodeError:
             pos += 1
     return findings
-
-
-def _collect(obj):
-    """Recursively collect dicts that look like individual findings.
-
-    Handles three schemas beyond the generic nuclei/smart-scan format:
-    - trivy: Results[].Vulnerabilities[] with VulnerabilityID/Severity/Title/Description
-    - checkov: results.failed_checks[] with check_id/severity/resource/check_result
-    """
-    if isinstance(obj, list):
-        out = []
-        for item in obj:
-            out.extend(_collect(item))
-        return out
-    if isinstance(obj, dict):
-        # trivy: top-level Results array containing Vulnerabilities sub-arrays
-        if "Results" in obj and isinstance(obj["Results"], list):
-            out = []
-            for result in obj["Results"]:
-                vulns = result.get("Vulnerabilities") or []
-                for v in vulns:
-                    # Normalise to the shared finding schema
-                    out.append({
-                        "name":            v.get("VulnerabilityID") or v.get("Title") or "Unknown CVE",
-                        "vulnerabilityName": v.get("Title") or v.get("VulnerabilityID") or "",
-                        "severity":        (v.get("Severity") or "unknown").lower(),
-                        "description":     v.get("Description") or "",
-                        "template-id":     v.get("VulnerabilityID") or "",
-                        "tags":            ["cve", "vulnerability"],
-                        "references":      v.get("References") or [],
-                        "_source":         "trivy",
-                    })
-            # Results is authoritative: a vuln-free trivy scan returns [] here
-            # rather than falling through and being mis-read as a single finding.
-            return out
-
-        # checkov: results.failed_checks[] (may appear as top-level results key)
-        failed = (
-            (obj.get("results") or {}).get("failed_checks")
-            if isinstance(obj.get("results"), dict)
-            else None
-        )
-        if isinstance(failed, list) and failed:
-            out = []
-            for fc in failed:
-                sev = str(fc.get("severity") or "unknown").lower()
-                if sev not in ("critical", "high", "medium", "low", "info"):
-                    sev = "unknown"
-                out.append({
-                    "name":        fc.get("check_id") or "CKV_UNKNOWN",
-                    "Title":       fc.get("check_id") or "Checkov finding",
-                    "severity":    sev,
-                    "description": (
-                        f"Resource: {fc.get('resource') or 'unknown'}. "
-                        f"File: {(fc.get('repo_file_path') or fc.get('file_path') or '')}. "
-                        f"Lines: {fc.get('file_line_range') or ''}."
-                    ),
-                    "checkID":     fc.get("check_id") or "",
-                    "tags":        ["misconfig", "iac"],
-                    "_source":     "checkov",
-                })
-            if out:
-                return out
-
-        # Generic nuclei / smart-scan findings
-        finding_keys = {"severity", "Severity", "vulnerabilityName", "name",
-                        "template-id", "templateID", "Title", "checkID"}
-        if finding_keys & obj.keys():
-            sub = obj.get("findings") or obj.get("results") or obj.get("Vulnerabilities")
-            if isinstance(sub, list):
-                return _collect(sub)
-            return [obj]
-        # recurse into nested list AND dict values — findings can be dict-nested
-        out = []
-        for v in obj.values():
-            if isinstance(v, (list, dict)):
-                out.extend(_collect(v))
-        return out
-    return []
 
 
 # ---------------------------------------------------------------------------
@@ -346,41 +296,20 @@ _CONTROL_DESCRIPTIONS = {
 }
 
 
-def _llm_map_findings(findings, gateway_key=None, openrouter_key=None):
+def _llm_map_batch(batch, offset, url, auth, model, label):
     """
-    Call an LLM to get control mappings for findings the static table can't classify well.
-    Returns {finding_index: (control_id, confidence)}.
-
-    Priority:
-      1. LLM Gateway (LLM_GATEWAY_KEY) — internal, rate-limited, logged
-      2. OpenRouter direct (OPENROUTER_API_KEY) — fallback when running inside SIC env
+    Call the LLM for a single batch of findings.
+    Returns {global_index: (control_id, confidence)}.
+    offset is the starting index of this batch in the full findings list.
     """
-    if not findings:
-        return {}
-
-    # Resolve which backend to use
-    if gateway_key:
-        url   = "https://llm.frxncois.workers.dev/v1/chat/completions"
-        auth  = gateway_key
-        model = "anthropic/claude-haiku-4.5"
-        label = "LLM Gateway"
-    elif openrouter_key:
-        url   = "https://openrouter.ai/api/v1/chat/completions"
-        auth  = openrouter_key
-        model = "anthropic/claude-haiku-4.5"
-        label = "OpenRouter"
-    else:
-        return {}
-
-    # Build compact finding representations for the prompt
     finding_list = []
-    for idx, f in enumerate(findings):
+    for local_idx, f in enumerate(batch):
         name = f.get("name") or f.get("vulnerabilityName") or f.get("Title") or "Unknown"
         desc = (f.get("description") or f.get("details") or "")[:150]
         tags = ", ".join(_tags(f)[:5])
         sev  = _sev(f)
         finding_list.append(
-            f"{idx}: name={name!r} severity={sev} tags=[{tags}] desc={desc!r}"
+            f"{local_idx}: name={name!r} severity={sev} tags=[{tags}] desc={desc!r}"
         )
 
     control_list = "\n".join(
@@ -413,21 +342,56 @@ def _llm_map_findings(findings, gateway_key=None, openrouter_key=None):
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read())
-        text = body["choices"][0]["message"]["content"].strip()
-        text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        result = json.loads(text)
-        print(f"[sic_to_audit] LLM mapping via {label} — {len(result)} response(s)", file=sys.stderr)
-        return {
-            int(k): (v["control"], float(v.get("confidence", 0.5)))
-            for k, v in result.items()
-            if v.get("control") in _CONTROL_DESCRIPTIONS
-        }
-    except Exception as e:
-        print(f"[sic_to_audit] LLM mapping skipped ({label}): {e}", file=sys.stderr)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        body = json.loads(resp.read())
+    text = body["choices"][0]["message"]["content"].strip()
+    text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    result = json.loads(text)
+    print(f"[sic_to_audit] LLM batch (offset={offset}, size={len(batch)}) via {label} — {len(result)} response(s)", file=sys.stderr)
+    return {
+        offset + int(k): (v["control"], float(v.get("confidence", 0.5)))
+        for k, v in result.items()
+        if v.get("control") in _CONTROL_DESCRIPTIONS
+    }
+
+
+def _llm_map_findings(findings, gateway_key=None, openrouter_key=None):
+    """
+    Call an LLM to get control mappings for findings the static table can't classify well.
+    Returns {finding_index: (control_id, confidence)}.
+    Splits findings into batches of 20 to avoid token limit issues.
+
+    Priority:
+      1. LLM Gateway (LLM_GATEWAY_KEY) — internal, rate-limited, logged
+      2. OpenRouter direct (OPENROUTER_API_KEY) — fallback when running inside SIC env
+    """
+    if not findings:
         return {}
+
+    # Resolve which backend to use
+    if gateway_key:
+        url   = "https://llm.frxncois.workers.dev/v1/chat/completions"
+        auth  = gateway_key
+        model = "anthropic/claude-haiku-4.5"
+        label = "LLM Gateway"
+    elif openrouter_key:
+        url   = "https://openrouter.ai/api/v1/chat/completions"
+        auth  = openrouter_key
+        model = "anthropic/claude-haiku-4.5"
+        label = "OpenRouter"
+    else:
+        return {}
+
+    BATCH_SIZE = 20
+    merged = {}
+    for batch_start in range(0, len(findings), BATCH_SIZE):
+        batch = findings[batch_start:batch_start + BATCH_SIZE]
+        try:
+            batch_result = _llm_map_batch(batch, batch_start, url, auth, model, label)
+            merged.update(batch_result)
+        except Exception as e:
+            print(f"[sic_to_audit] LLM batch (offset={batch_start}) skipped ({label}): {e}", file=sys.stderr)
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +404,7 @@ def build_fill_data(findings, gateway_key=None, openrouter_key=None):
     Controls with no findings -> pass: null (manual review required).
     LLM mapping overrides heuristic on confidence >= 0.75 hits.
     Uses LLM Gateway if gateway_key set, else OpenRouter if openrouter_key set.
+    Pass gateway_key=None and openrouter_key=None to disable LLM (heuristic-only).
     """
     # Static heuristic pass first
     heuristic_map = {}
@@ -500,10 +465,12 @@ def inject_fill(html, fill_data, project):
     """
     Two-pass injection:
     1. Replace the HTML comment's fill example stub with the real compact JSON
-       (makes it the FIRST occurrence in the file → QA regex parses it first).
+       (makes it the FIRST occurrence in the file -> QA regex parses it first).
     2. Insert an executable window.AUDIT.fill() call in the main script body
        after render() so the report actually reflects the scan results.
     """
+    import re as _re
+
     # Compact one-liner — no indent so it fits the comment line neatly
     fill_compact = json.dumps(fill_data, separators=(",", ":"))
     safe_project = project.replace("\\", "\\\\").replace('"', '\\"')
@@ -512,14 +479,14 @@ def inject_fill(html, fill_data, project):
     # Pass 1: replace comment stub (if still present in template)
     html = html.replace(_COMMENT_FILL_STUB, fill_call, 1)
 
-    # Pass 2: inject executable call after render()
+    # Pass 2: inject executable call after render() — handles LF and CRLF
     exec_inject = (
         f'\n/* sic_to_audit.py auto-fill: {safe_project} */\n'
         f'{fill_call};\n'
     )
-    target = "render();\n</script>"
-    if target in html:
-        return html.replace(target, "render();" + exec_inject + "</script>", 1)
+    html, n = _re.subn(r'render\(\);\r?\n</script>', 'render();' + exec_inject + '</script>', html, count=1)
+    if n:
+        return html
 
     # Fallback: separate script block
     block = f"<script>\n{exec_inject}</script>\n"
@@ -544,16 +511,27 @@ def main():
                         help="Project display name")
     parser.add_argument("--output",   required=True,
                         help="Output HTML file path")
+    parser.add_argument("--no-llm", action="store_true",
+                        help="Disable LLM-assisted control mapping (heuristic-only, deterministic)")
+    parser.add_argument("--slug", default=None,
+                        help="URL-safe project slug (derived from --project if omitted)")
     args = parser.parse_args()
 
-    gateway_key    = os.environ.get("LLM_GATEWAY_KEY")
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-    if gateway_key:
-        print("[sic_to_audit] LLM mapping: LLM Gateway")
-    elif openrouter_key:
-        print("[sic_to_audit] LLM mapping: OpenRouter (fallback)")
+    slug = args.slug or re.sub(r'[^a-z0-9]+', '-', args.project.lower()).strip('-')
+
+    if args.no_llm:
+        gateway_key    = None
+        openrouter_key = None
+        print("[sic_to_audit] LLM mapping: disabled (--no-llm)")
     else:
-        print("[sic_to_audit] LLM mapping: disabled (set LLM_GATEWAY_KEY or OPENROUTER_API_KEY)")
+        gateway_key    = os.environ.get("LLM_GATEWAY_KEY")
+        openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+        if gateway_key:
+            print("[sic_to_audit] LLM mapping: LLM Gateway")
+        elif openrouter_key:
+            print("[sic_to_audit] LLM mapping: OpenRouter (fallback)")
+        else:
+            print("[sic_to_audit] LLM mapping: disabled (set LLM_GATEWAY_KEY or OPENROUTER_API_KEY)")
 
     print(f"[sic_to_audit] Loading {args.results}")
     findings = load_findings(args.results)
@@ -565,13 +543,22 @@ def main():
     passed = sum(1 for v in fill_data.values() if v["pass"] is True)
     print(f"[sic_to_audit] FAIL={failed}  PASS={passed}  MANUAL={manual}  TOTAL=42")
 
+    sev_counts = Counter(_sev(f) for f in findings)
+    breakdown = "  ".join(
+        f"{s}={sev_counts[s]}"
+        for s in ["critical", "high", "medium", "low", "info"]
+        if sev_counts.get(s)
+    )
+    if breakdown:
+        print(f"[sic_to_audit] Severity: {breakdown}")
+
     html = Path(args.template).read_text(encoding="utf-8", errors="replace")
     out  = inject_fill(html, fill_data, args.project)
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(out, encoding="utf-8")
     print(f"[sic_to_audit] Written -> {args.output}")
-    print(f"[sic_to_audit] Summary: PASS={passed} FAIL={failed} MANUAL={manual}")
+    print(f"[sic_to_audit] Summary: PASS={passed} FAIL={failed} MANUAL={manual}  slug={slug}")
 
 
 if __name__ == "__main__":
