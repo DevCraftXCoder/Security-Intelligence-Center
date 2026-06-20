@@ -16,7 +16,7 @@ def main() -> None:
         print(f"Usage: {sys.argv[0]} <project> <soc_report_path>")
         sys.exit(1)
 
-    project = sys.argv[1]
+    _project = sys.argv[1]  # accepted for CLI parity; name is validated via project-data JSON
     report = Path(sys.argv[2])
 
     # 1. File exists and is > 50KB

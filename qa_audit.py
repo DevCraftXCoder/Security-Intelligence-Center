@@ -28,7 +28,7 @@ def main() -> None:
         print(f"Usage: {sys.argv[0]} <project> <audit_report_path>")
         sys.exit(1)
 
-    project = sys.argv[1]
+    _project = sys.argv[1]  # accepted for CLI parity; checked by QA logic via HTML content
     report = Path(sys.argv[2])
 
     assert report.exists(), f"FAIL: report file not created: {report}"
