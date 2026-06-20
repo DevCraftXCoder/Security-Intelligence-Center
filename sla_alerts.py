@@ -18,7 +18,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -115,16 +115,17 @@ def check_and_alert(discord_webhook_url: str | None = None, dry_run: bool = Fals
               file=sys.stderr)
         return 0
 
+    # P3-6: open-ended lookback. A {today, yesterday} window permanently skips a
+    # breach if a cron run is missed for more than a day. The sent-set already
+    # guarantees idempotency, so alert on any crossed deadline not yet notified.
     today = _today()
-    yesterday = today - timedelta(days=1)
-    window = {today, yesterday}
 
     sent = _load_sent()
     candidates: list[dict] = []
     for priority in ("P0", "P1"):
         for f in findings_db.list_findings(priority=priority, status="open"):
             dl = _deadline_date(f.get("sla_deadline"))
-            if dl is not None and dl in window and f["id"] not in sent:
+            if dl is not None and dl <= today and f["id"] not in sent:
                 candidates.append(f)
 
     count = 0

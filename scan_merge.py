@@ -200,11 +200,31 @@ def _severity_of(f: dict[str, Any]) -> str:
     return str(raw).lower()
 
 
+def _asset_of(f: dict[str, Any]) -> str:
+    """Best-effort asset/location identity for a finding (host, URL, target, IP…)."""
+    for k in ("matched_at", "url", "host", "target", "ip", "asset", "location",
+              "path", "endpoint"):
+        v = f.get(k)
+        if v:
+            return str(v)
+    info = f.get("info") or {}
+    for k in ("host", "url", "target"):
+        v = info.get(k)
+        if v:
+            return str(v)
+    return ""
+
+
 def _fingerprint(f: dict[str, Any]) -> str:
-    """Stable dedup key: SHA256(name[:40] + '|' + severity)[:16]."""
+    """Stable dedup key: SHA256(name[:40] + '|' + severity + '|' + asset)[:16].
+
+    P3-5: asset identity is part of the key so the same vuln class on two distinct
+    hosts/URLs is not collapsed into a single finding.
+    """
     name = str(_name_of(f))[:40]
     sev = _severity_of(f)
-    key = f"{name}|{sev}"
+    asset = _asset_of(f)[:120]
+    key = f"{name}|{sev}|{asset}"
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 

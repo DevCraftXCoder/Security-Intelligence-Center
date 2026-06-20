@@ -191,10 +191,14 @@ def get_tier(email: str) -> str:
         "refunded", "disputed",
     ):
         return "community"
-    # past_due: retain tier for 7-day grace period, then downgrade
+    # past_due: retain tier for 7-day grace period, then downgrade.
+    # If current_period_end is NULL the billing cycle is unknown — deny paid access
+    # immediately rather than granting infinite grace.
     if status == "past_due":
         period_end = row["current_period_end"]
-        if period_end is not None and (period_end + _PAST_DUE_GRACE_SECONDS) < int(time.time()):
+        if period_end is None:
+            return "community"
+        if (period_end + _PAST_DUE_GRACE_SECONDS) < int(time.time()):
             return "community"
         return tier
     return tier

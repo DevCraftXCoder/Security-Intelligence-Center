@@ -62,12 +62,13 @@ def _studio_gated(f):
 # ---------------------------------------------------------------------------
 try:
     from auth import require_auth as _require_auth  # noqa: PLC0415
-except ImportError:
-    # Fallback — should never happen in a live deployment, but keeps module importable
-    def _require_auth(f):  # type: ignore[misc]
-        return f
-
-    logger.warning("auth module not found — SSO admin routes will be unprotected")
+except ImportError as _auth_import_err:
+    # P1-7: auth import failure must be fatal — silently removing auth from all SSO
+    # admin routes is a security regression worse than a startup crash.
+    raise RuntimeError(
+        "auth module could not be imported — SSO admin routes would be unprotected. "
+        "Fix the import error before starting the server."
+    ) from _auth_import_err
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +329,14 @@ def saml_callback(workspace_id: str):
         logger.exception("Unexpected SAML error workspace=%s", workspace_id)
         return jsonify({"error": "saml_error"}), 500
 
+    # P1-8: guard missing/malformed email claim — return 400 instead of IndexError/500
+    email = (email or "").strip()
+    if not email:
+        logger.warning("SAML callback missing email claim workspace=%s", workspace_id)
+        return jsonify({"error": "missing_email_claim", "detail": "SAML response did not include an email attribute."}), 400
+    email_parts = email.split("@")
+    email_domain = email_parts[1] if len(email_parts) == 2 else "unknown"
+
     # Determine redirect target (safe relative path only)
     redirect_to = "/dashboard/"
     if relay_state and relay_state.startswith("/"):
@@ -335,7 +344,7 @@ def saml_callback(workspace_id: str):
 
     resp = redirect(redirect_to)
     _set_session_cookie(resp, email)
-    logger.info("SSO SAML login success workspace=%s email_domain=%s", workspace_id, email.split("@")[1])
+    logger.info("SSO SAML login success workspace=%s email_domain=%s", workspace_id, email_domain)
     return resp
 
 
@@ -394,11 +403,17 @@ def oidc_callback(workspace_id: str):
         logger.exception("Unexpected OIDC error workspace=%s", workspace_id)
         return jsonify({"error": "oidc_error"}), 500
 
-    email = claims.get("email", "")
+    # P1-8: use .get() so a missing email claim returns HTTP 400 instead of IndexError/500
+    email = claims.get("email", "").strip()
+    if not email:
+        logger.warning("OIDC callback missing email claim workspace=%s", workspace_id)
+        return jsonify({"error": "missing_email_claim", "detail": "OIDC token did not include an email claim."}), 400
+    email_parts = email.split("@")
+    email_domain = email_parts[1] if len(email_parts) == 2 else "unknown"
     resp = redirect("/dashboard/")
     _set_session_cookie(resp, email)
     _clear_state_cookie(resp, workspace_id)
-    logger.info("SSO OIDC login success workspace=%s email_domain=%s", workspace_id, email.split("@")[1])
+    logger.info("SSO OIDC login success workspace=%s email_domain=%s", workspace_id, email_domain)
     return resp
 
 

@@ -3,7 +3,8 @@
 
 import pathlib
 
-srv = pathlib.Path("/app/hexstrike_server.py")
+# P2-1: resolve relative to this file so the script works outside Docker too
+srv = pathlib.Path(__file__).parent / "hexstrike_server.py"
 txt = srv.read_text(encoding="utf-8")
 
 # Check if already patched

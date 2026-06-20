@@ -31,6 +31,18 @@ import findings_db  # noqa: E402
 PORT = 9016
 SECRET = os.environ.get("SOC_FEED_SECRET", "dev")
 
+# P1-4: refuse to start with the insecure default secret in production.
+# SIC_ENV=production with SECRET=="dev" means the secret was never set —
+# every request would pass auth with the publicly-known default.
+_is_production = os.environ.get("SIC_ENV", "development") == "production"
+if _is_production and SECRET == "dev":
+    print(
+        "[soc_feed] FATAL: SOC_FEED_SECRET is the insecure default 'dev' in production. "
+        "Set SOC_FEED_SECRET to a strong random value and restart.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
 
 class SOCFeedHandler(BaseHTTPRequestHandler):
     def _send(self, status: int, payload: dict | list) -> None:

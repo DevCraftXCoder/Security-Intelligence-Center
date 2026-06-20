@@ -367,8 +367,17 @@ def request_link():
         )
         con.commit()
 
-    host = request.host_url.rstrip("/")
-    link = f"{host}/auth/verify?token={token}"
+    # P3-4: prefer a configured base URL so a spoofed Host header cannot point the
+    # magic link at an attacker-controlled origin. Fall back to request.host_url
+    # only when SIC_BASE_URL is unset (dev), with a warning.
+    base_url = os.environ.get("SIC_BASE_URL", "").rstrip("/")
+    if not base_url:
+        logger.warning(
+            "SIC_BASE_URL not set — deriving magic-link host from the request Host "
+            "header, which is vulnerable to host-header injection. Set SIC_BASE_URL."
+        )
+        base_url = request.host_url.rstrip("/")
+    link = f"{base_url}/auth/verify?token={token}"
     logger.info("magic link issued for %s, expires %s", email, expires)
 
     try:
@@ -428,9 +437,12 @@ def request_link():
             "error": "Email delivery not configured. Contact the administrator.",
         }), 503
 
+    # P3-3: only leak the raw magic link in explicit dev mode AND never in
+    # production, so an accidental SIC_DEV_MODE in prod cannot expose the token.
     dev_mode = os.environ.get("SIC_DEV_MODE", "").lower() in ("1", "true", "yes")
+    is_production = os.environ.get("SIC_ENV", "development") == "production"
     resp_body: dict = {"ok": True, "expires_at": expires}
-    if dev_mode:
+    if dev_mode and not is_production:
         resp_body["link"] = link
 
     return jsonify(resp_body), 200
@@ -594,8 +606,24 @@ def get_session_role(workspace_id: str | None = None) -> str | None:
     if not email:
         return None
 
-    # Single-tenant fallback: no workspace context → treat any authed user as admin
+    # P2-8/P2-11: no workspace context. Granting blanket admin to any authenticated
+    # user is a privilege-escalation risk on multi-user installs. Enforce an explicit
+    # owner allowlist (SIC_ADMIN_EMAILS, comma-separated) when configured; otherwise
+    # fall back to single-tenant admin but log it so operators know to lock it down.
     if workspace_id is None:
+        admin_emails = [
+            e.strip().lower()
+            for e in os.environ.get("SIC_ADMIN_EMAILS", "").split(",")
+            if e.strip()
+        ]
+        if admin_emails:
+            return "admin" if email.lower() in admin_emails else "viewer"
+        logger.warning(
+            "get_session_role: SIC_ADMIN_EMAILS not set — granting admin to "
+            "authenticated user %s via single-tenant fallback; set SIC_ADMIN_EMAILS "
+            "to enforce least privilege.",
+            email,
+        )
         return "admin"
 
     try:

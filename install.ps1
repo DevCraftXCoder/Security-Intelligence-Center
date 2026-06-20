@@ -113,7 +113,9 @@ Write-Step "Installing Python dependencies (requirements.txt)"
 
 Write-Info "Running pip install -- this may take a few minutes on first run..."
 & $VenvPip install --quiet --upgrade pip
+if ($LASTEXITCODE -ne 0) { Write-Err "pip self-upgrade failed (exit $LASTEXITCODE)"; exit 1 }
 & $VenvPip install --quiet -r requirements.txt
+if ($LASTEXITCODE -ne 0) { Write-Err "pip install -r requirements.txt failed (exit $LASTEXITCODE)"; exit 1 }
 Write-OK "Python dependencies installed"
 
 # =============================================================================

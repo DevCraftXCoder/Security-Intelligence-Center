@@ -15,6 +15,20 @@
 // app to open 'python'" picker on every PM2 respawn.
 const PYTHON = "C:/Users/J/AppData/Local/Programs/Python/Python312/python.exe";
 
+// P3-2: fail fast on a missing required secret in production instead of silently
+// injecting `undefined` (which PM2 forwards to the child as the literal string
+// "undefined"). In dev (SIC_ENV unset/development) the secret is allowed to be
+// absent so local startup is not blocked.
+function requireSecret(name) {
+  const v = process.env[name];
+  if (!v && process.env.SIC_ENV === "production") {
+    throw new Error(
+      `[ecosystem] ${name} is required when SIC_ENV=production but is not set`
+    );
+  }
+  return v;
+}
+
 module.exports = {
   apps: [
     {
@@ -101,7 +115,8 @@ module.exports = {
         SIC_ENV: "development",
         // P2-1: secret moved out of source — read from environment instead.
         // Set SOC_FEED_SECRET in sic/.env (see .env.example for generation instructions).
-        SOC_FEED_SECRET: process.env.SOC_FEED_SECRET,
+        // P3-2: required in production (throws if missing) so it is never injected as undefined.
+        SOC_FEED_SECRET: requireSecret("SOC_FEED_SECRET"),
       },
       max_memory_restart: "128M",
       error_file: "logs/soc-feed-error.log",

@@ -253,12 +253,17 @@ async function loadRecent() {
     `;
     // H3: event delegation — scan IDs stay as inert data attributes, never
     // interpolated into JS execution context via onclick strings.
-    el.addEventListener("click", function(e) {
-      const exportBtn = e.target.closest(".js-export-scan");
-      const shareBtn  = e.target.closest(".js-share-scan");
-      if (exportBtn) exportScan(exportBtn.dataset.scanId);
-      if (shareBtn)  shareScan(shareBtn.dataset.scanId);
-    });
+    // P2-9: bind the delegated listener once — `el` persists across loadRecent
+    // calls (only its innerHTML is replaced), so re-adding would fire N times.
+    if (!el.dataset.scanListenerBound) {
+      el.addEventListener("click", function(e) {
+        const exportBtn = e.target.closest(".js-export-scan");
+        const shareBtn  = e.target.closest(".js-share-scan");
+        if (exportBtn) exportScan(exportBtn.dataset.scanId);
+        if (shareBtn)  shareScan(shareBtn.dataset.scanId);
+      });
+      el.dataset.scanListenerBound = "1";
+    }
     // Apply tier gating to the newly rendered buttons
     applyTierGating();
   } catch (e) {
@@ -954,6 +959,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 let _galaxyRaf = null;
 let _glitchInterval = null;
+// P2-3: store the active background's resize handler so it can be detached on
+// teardown — anonymous listeners accumulate one per theme cycle otherwise.
+let _galaxyResizeHandler = null;
 
 function initTheme() {
   const saved = localStorage.getItem("sic-bg-theme") || "default";
@@ -1062,9 +1070,11 @@ function startGalaxy() {
   }
 
   if (_galaxyRaf) cancelAnimationFrame(_galaxyRaf);
+  if (_galaxyResizeHandler) window.removeEventListener("resize", _galaxyResizeHandler);
   resize();
   initStars();
-  window.addEventListener("resize", () => { resize(); initStars(); });
+  _galaxyResizeHandler = () => { resize(); initStars(); };
+  window.addEventListener("resize", _galaxyResizeHandler);
   _galaxyRaf = requestAnimationFrame(draw);
 }
 
@@ -1076,6 +1086,10 @@ function stopGalaxy() {
   if (_glitchInterval) {
     clearTimeout(_glitchInterval);
     _glitchInterval = null;
+  }
+  if (_galaxyResizeHandler) {
+    window.removeEventListener("resize", _galaxyResizeHandler);
+    _galaxyResizeHandler = null;
   }
   const canvas = document.getElementById("galaxy-canvas");
   if (canvas) {
@@ -1162,8 +1176,10 @@ function startLetterGlitch() {
     _glitchInterval = setTimeout(tick, 50);
   }
 
+  if (_galaxyResizeHandler) window.removeEventListener("resize", _galaxyResizeHandler);
   resize();
-  window.addEventListener("resize", resize);
+  _galaxyResizeHandler = resize;
+  window.addEventListener("resize", _galaxyResizeHandler);
   tick();
 }
 
@@ -1192,6 +1208,12 @@ function initLogoUpload() {
   fileInput.addEventListener("change", () => {
     const file = fileInput.files[0];
     if (!file) return;
+    // P2-2: validate MIME type before reading
+    if (!file.type.startsWith("image/")) {
+      alert("Only image files are accepted for the logo.");
+      fileInput.value = "";
+      return;
+    }
     if (file.size > 2 * 1024 * 1024) {
       alert("Logo image must be under 2MB.");
       return;
@@ -1199,7 +1221,13 @@ function initLogoUpload() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target.result;
-      localStorage.setItem("sic-custom-logo", dataUrl);
+      try {
+        localStorage.setItem("sic-custom-logo", dataUrl);
+      } catch (storageErr) {
+        // P2-2: handle QuotaExceededError gracefully
+        alert("Could not save logo — browser storage is full. Clear some storage and try again.");
+        return;
+      }
       if (logoImg) {
         logoImg.src = dataUrl;
         logoImg.style.display = "inline-block";

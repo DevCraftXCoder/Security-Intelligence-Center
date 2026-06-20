@@ -26,30 +26,25 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Determine whether to use live or test price IDs based on SIC_ENV
-_is_live = os.environ.get("SIC_ENV", "development") == "production"
+# P2-10: evaluate live/test mode at CALL TIME, not import time. Freezing this at
+# import made price selection depend on import order — a late load_dotenv() or env
+# mutation could silently leave production using test price IDs.
+def _is_live() -> bool:
+    """True when SIC_ENV selects live Stripe price IDs."""
+    return os.environ.get("SIC_ENV", "development") == "production"
 
-# Tier → interval → env var name for the Stripe Price ID (live vs test)
-_PRICE_IDS: dict[str, dict[str, str]] = {
+
+# Tier → interval → (live env var, test env var) for the Stripe Price ID.
+_PRICE_ENV: dict[str, dict[str, tuple[str, str]]] = {
     "team": {
-        "month": "STRIPE_PRICE_TEAM_LIVE" if _is_live else "STRIPE_PRICE_TEAM",
-        "year": "STRIPE_PRICE_TEAM_YEARLY_LIVE" if _is_live else "STRIPE_PRICE_TEAM_YEARLY",
+        "month": ("STRIPE_PRICE_TEAM_LIVE", "STRIPE_PRICE_TEAM"),
+        "year": ("STRIPE_PRICE_TEAM_YEARLY_LIVE", "STRIPE_PRICE_TEAM_YEARLY"),
     },
     "studio": {
-        "month": "STRIPE_PRICE_STUDIO_LIVE" if _is_live else "STRIPE_PRICE_STUDIO",
-        "year": "STRIPE_PRICE_STUDIO_YEARLY_LIVE" if _is_live else "STRIPE_PRICE_STUDIO_YEARLY",
+        "month": ("STRIPE_PRICE_STUDIO_LIVE", "STRIPE_PRICE_STUDIO"),
+        "year": ("STRIPE_PRICE_STUDIO_YEARLY_LIVE", "STRIPE_PRICE_STUDIO_YEARLY"),
     },
 }
-
-# Guard: warn loudly if production env is using a test key — real payments will fail
-_stripe_key_check = os.environ.get("STRIPE_SECRET_KEY", "")
-if _is_live and _stripe_key_check.startswith("sk_test_"):
-    import warnings
-    warnings.warn(
-        "[billing WARNING] SIC_ENV=production but STRIPE_SECRET_KEY is a test key"
-        " — real payments will fail",
-        stacklevel=1,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -94,10 +89,17 @@ def get_price_id(tier: str, interval: str = "month") -> str:
     """
     tier = tier.lower()
     interval = interval if interval in ("month", "year") else "month"
-    tier_map = _PRICE_IDS.get(tier)
+    tier_map = _PRICE_ENV.get(tier)
     if tier_map is None:
         raise ValueError(f"Unknown billing tier: {tier!r}")
-    env_var = tier_map[interval]
+    live = _is_live()
+    live_var, test_var = tier_map[interval]
+    env_var = live_var if live else test_var
+    # Guard: production selecting a test key means real payments silently fail.
+    if live and os.environ.get("STRIPE_SECRET_KEY", "").startswith("sk_test_"):
+        logger.warning(
+            "SIC_ENV=production but STRIPE_SECRET_KEY is a test key — real payments will fail"
+        )
     price_id = os.environ.get(env_var, "")
     if not price_id:
         raise EnvironmentError(

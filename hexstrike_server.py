@@ -102,7 +102,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB — cap runaway AI/
 app.secret_key = os.environ.get('SIC_SECRET_KEY') or os.urandom(32)
 
 # API Configuration
-API_PORT = int(os.environ.get('HEXSTRIKE_PORT', 8888))
+API_PORT = int(os.environ.get('HEXSTRIKE_PORT', 9888))  # P2-6: default aligned to Docker/MCP (was 8888)
 API_HOST = os.environ.get('HEXSTRIKE_HOST', '127.0.0.1')
 
 # ---------------------------------------------------------------------------
@@ -5517,10 +5517,12 @@ class EnhancedProcessManager:
                 if not command.startswith("nice"):
                     command = f"nice -n 10 {command}"
 
-            # Execute command
+            # Execute command — list-form to prevent shell injection (P1-5)
+            import shlex as _shlex  # noqa: PLC0415
+            _cmd_list = _shlex.split(command) if isinstance(command, str) else list(command)
             process = subprocess.Popen(
-                command,
-                shell=True,
+                _cmd_list,
+                shell=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -7125,9 +7127,12 @@ class EnhancedCommandExecutor:
         logger.info(f"⏱️  TIMEOUT: {self.timeout}s | PID: Starting...")
 
         try:
+            # List-form to prevent shell injection (P1-5)
+            import shlex as _shlex  # noqa: PLC0415
+            _cmd_list = _shlex.split(self.command) if isinstance(self.command, str) else list(self.command)
             self.process = subprocess.Popen(
-                self.command,
-                shell=True,
+                _cmd_list,
+                shell=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -9441,6 +9446,21 @@ def generic_command():
             logger.warning("⚠️  Command endpoint called without command parameter")
             return jsonify({
                 "error": "Command parameter is required"
+            }), 400
+
+        # P1-5: Reject shell metacharacters to prevent command injection.
+        # Authenticated users could still chain arbitrary OS commands via ; | & ` $()
+        # if these are passed through to shell=True execution.
+        import re as _re  # noqa: PLC0415
+        _SHELL_META_RE = _re.compile(r'[;|&`$><(){}\[\]\n\r\\]')
+        if _SHELL_META_RE.search(command):
+            logger.warning(
+                "⚠️  /api/command rejected — shell metacharacter in command: %r",
+                command[:120],
+            )
+            return jsonify({
+                "error": "invalid_command",
+                "detail": "Shell metacharacters are not permitted in command strings.",
             }), 400
 
         # P0-2 / A6: scope check — validate target against ALLOWED_TARGETS.

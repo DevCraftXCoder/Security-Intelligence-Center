@@ -10,10 +10,19 @@
 # CORE FRAMEWORK DEPENDENCIES (ACTUALLY USED)
 # ============================================================================
 flask>=3.1.3,<4.0.0             # Web framework for API server (flask import)
+python-dotenv>=1.0.0            # .env loader (start_server.py loads .env on startup)
 flask-limiter>=3.5.0,<4.0.0    # Per-IP rate limiting for high-risk endpoints
 requests>=2.31.0,<3.0.0         # HTTP library (requests import)
 psutil>=5.9.0,<6.0.0            # System utilities (psutil import)
 fastmcp>=3.2.0,<4.0.0           # MCP framework (from mcp.server.fastmcp import FastMCP)
+
+# ============================================================================
+# REPORTING (OPTIONAL — needs native Cairo/Pango / GTK)
+# ============================================================================
+# P3-1: weasyprint is NOT in requirements-core.txt because GTK is absent on a
+# bare Windows host and breaks the npx install. PDF export degrades gracefully
+# when this is not installed.
+weasyprint>=60.0                # PDF export of SOC reports (optional)
 
 # ============================================================================
 # WEB SCRAPING & AUTOMATION (ACTUALLY USED)
@@ -59,10 +68,10 @@ protobuf>=5.29.6            # CVE-2025-4565, CVE-2026-0994
 brotli>=1.2.0               # CVE-2025-6176
 
 # ============================================================================
-# EXTERNAL SECURITY TOOLS (150+ Tools - Install separately)
+# EXTERNAL SECURITY TOOLS (85 tools - Install separately)
 # ============================================================================
 #
-# SIC v6.0 integrates with 150+ external security tools that must be
+# SIC v6.0 integrates with 85 external security tools that must be
 # installed separately from their official sources:
 #
 # 🔍 Network & Reconnaissance (25+ tools):

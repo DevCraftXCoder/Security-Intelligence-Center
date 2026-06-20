@@ -645,6 +645,33 @@ def _send_provisioning_email(email: str, session_obj: dict) -> None:  # noqa: AR
         logger.warning("auto-provision email failed for %.6s***: %s", email[:6], _e)
 
 
+def _stale_access_grant(email: str | None, event_period_end: int | None) -> bool:
+    """Return True if this event should be skipped because stored subscription state
+    is already revoked/canceled AND the event's period_end is older than what we have.
+
+    This prevents delayed or redelivered webhooks from re-granting access that was
+    already revoked by a later subscription.deleted or subscription.updated event.
+    """
+    if not email:
+        return False
+    existing = get_subscription(email)
+    if existing is None:
+        return False  # No record — always process to provision
+    revoked_statuses = ("canceled", "unpaid", "refunded", "disputed", "incomplete_expired")
+    if existing["status"] not in revoked_statuses:
+        return False  # Current status is not revoked — safe to process
+    # Status is revoked: skip if the event period_end is older than what we already stored
+    stored_end = existing["current_period_end"]
+    if stored_end is not None and event_period_end is not None and event_period_end <= stored_end:
+        logger.warning(
+            "stale access-grant event skipped: stored period_end=%s event period_end=%s "
+            "status=%s email=%.6s***",
+            stored_end, event_period_end, existing["status"], email[:6],
+        )
+        return True
+    return False
+
+
 def _handle_checkout_completed(event, email: str | None) -> None:
     """Provision or upgrade the subscription after a successful checkout."""
     obj = event["data"]["object"]
@@ -658,6 +685,10 @@ def _handle_checkout_completed(event, email: str | None) -> None:
 
     customer_id: str | None = obj.get("customer")
     subscription_id: str | None = obj.get("subscription")
+
+    # P1-3: stale/redelivered event guard — do not re-grant access that was already revoked
+    if _stale_access_grant(email, obj.get("expires_at")):
+        return
 
     # Bug 3: Validate sic_tier metadata before provisioning.
     # Missing or unrecognised tier is suspicious (could indicate a tampered/malformed
@@ -733,8 +764,13 @@ def _handle_checkout_completed(event, email: str | None) -> None:
         email[:6],
     )
 
-    # Auto-provision: send a magic link so the customer can log in immediately
-    _send_provisioning_email(email, obj)
+    # P1-6: Auto-provision email in a background daemon thread so the webhook
+    # handler returns 200 fast and Stripe does not retry due to timeout.
+    threading.Thread(
+        target=_send_provisioning_email,
+        args=(email, obj),
+        daemon=True,
+    ).start()
 
     # Log email to stats-server (non-blocking — billing webhook must not fail over this)
     _stats_url = os.environ.get("STATS_SERVER_URL", "")
@@ -878,6 +914,10 @@ def _handle_invoice_paid(event, email: str | None) -> None:
             "invoice.paid — no email extractable from event %s",
             event.get("id"),
         )
+        return
+
+    # P1-3: stale/redelivered event guard — do not re-activate a revoked subscription
+    if _stale_access_grant(email, period_end):
         return
 
     # Preserve the existing tier AND billing_interval — only refresh status and period_end.
@@ -1256,7 +1296,9 @@ def public_trial():
         existing = get_subscription(email_raw)
         if existing and existing.get("tier") in ("team", "studio"):
             # Already on a paid tier — don't downgrade, just re-send magic link
-            _send_provisioning_email(email_raw, {})
+            threading.Thread(
+                target=_send_provisioning_email, args=(email_raw, {}), daemon=True
+            ).start()
             return jsonify({"ok": True, "note": "existing_subscription"}), 200
 
         upsert_subscription(
@@ -1266,7 +1308,9 @@ def public_trial():
             tier="community",
             status="active",
         )
-        _send_provisioning_email(email_raw, {})
+        threading.Thread(
+            target=_send_provisioning_email, args=(email_raw, {}), daemon=True
+        ).start()
         logger.info("community trial provisioned for %.6s***", email_raw[:6])
         return jsonify({"ok": True}), 200
     except Exception as exc:
