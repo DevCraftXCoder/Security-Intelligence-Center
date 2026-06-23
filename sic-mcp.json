@@ -19,6 +19,8 @@
       "description": "SIEMen — security-focused AI data layer. KV scratch cache, vector search over findings/CVEs/controls, semantic LLM triage cache, per-engagement agent memory. Requires SIEMEN_API_KEY env var.",
       "alwaysAllow": [
         "engagement_open",
+        "engagement_report",
+        "engagement_list",
         "sec_cache_get",
         "finding_search",
         "engagement_recall",
