@@ -1,6 +1,6 @@
 {
   "name": "sic-security",
-  "version": "6.0.4",
+  "version": "6.0.5",
   "description": "SIC — AI-Powered Security Intelligence Center: MCP framework with 85 pentesting tools for authorized security testing, CTF, and defensive research",
   "keywords": [
     "security",
@@ -34,6 +34,7 @@
     "hexstrike_server.py",
     "mcp_server.py",
     "scan_alerts.py",
+    "scan_python.py",
     "scope_enforcer.py",
     "auth.py",
     "incidents.py",

@@ -8,6 +8,7 @@ const os = require("os");
 
 const ROOT = path.resolve(__dirname, "..");
 const LAUNCHER = path.join(ROOT, "launcher.py");
+const SCANNER = path.join(ROOT, "scan_python.py");
 const REQ_CORE = path.join(ROOT, "requirements-core.txt");
 const MIN_PYTHON = [3, 8];
 
@@ -171,6 +172,7 @@ if (detected.length) {
   log("No recognized project markers found — scans will still run against this directory.");
   log("Tip: run `npx sic-security` from the root of the codebase you want to inspect.");
 }
+log("Run `npx sic-security scan` for an instant code scan (secrets, unsafe patterns, dep CVEs) — no extra tools needed.");
 
 ensureVenv();
 ensureDeps(pkg.version);
@@ -178,14 +180,29 @@ ensureDeps(pkg.version);
 // Strip our own flags before handing argv to the launcher.
 const args = process.argv.slice(2).filter((a) => a !== "--reinstall");
 
-// The server resolves `dashboard/`, `assets/`, and its sibling modules via
-// `Path(__file__).parent`, so cwd MUST stay at ROOT for imports to work. The
-// user's codebase is passed explicitly via SIC_PROJECT_DIR — the server confines
-// all inspect/spawn-claude operations to that root (see _resolve_spawn_cwd).
-const result = spawnSync(VENV_PYTHON, [LAUNCHER, ...args], {
-  cwd: ROOT,
-  stdio: "inherit",
-  env: { ...process.env, SIC_NPX: "1", SIC_PROJECT_DIR: PROJECT_DIR },
-});
+// `npx sic-security scan` runs the zero-dependency Python code scanner against the
+// user's codebase and prints findings immediately — no server, no external binaries.
+// Bare `npx sic-security` launches the full dashboard / MCP server.
+const isScan = args[0] === "scan";
+
+let result;
+if (isScan) {
+  log(`Scanning ${PROJECT_DIR} ...`);
+  result = spawnSync(VENV_PYTHON, [SCANNER, PROJECT_DIR, ...args.slice(1)], {
+    cwd: ROOT,
+    stdio: "inherit",
+    env: { ...process.env, SIC_NPX: "1", SIC_PROJECT_DIR: PROJECT_DIR },
+  });
+} else {
+  // The server resolves `dashboard/`, `assets/`, and its sibling modules via
+  // `Path(__file__).parent`, so cwd MUST stay at ROOT for imports to work. The
+  // user's codebase is passed explicitly via SIC_PROJECT_DIR — the server confines
+  // all inspect/spawn-claude operations to that root (see _resolve_spawn_cwd).
+  result = spawnSync(VENV_PYTHON, [LAUNCHER, ...args], {
+    cwd: ROOT,
+    stdio: "inherit",
+    env: { ...process.env, SIC_NPX: "1", SIC_PROJECT_DIR: PROJECT_DIR },
+  });
+}
 
 process.exit(result.status ?? 1);

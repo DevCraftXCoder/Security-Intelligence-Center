@@ -311,13 +311,80 @@ def run_all(project_path: str, output_dir: Optional[str] = None) -> str:
     return out_file
 
 
+_SEVERITY_ORDER = ["critical", "high", "medium", "low"]
+
+
+def _print_report(findings: list[dict[str, Any]], project_path: str, out_file: str) -> None:
+    """Print a human-readable scan report to stdout (used by `npx sic-security scan`)."""
+    use_color = sys.stdout.isatty()
+    red = "\033[91m" if use_color else ""
+    yellow = "\033[93m" if use_color else ""
+    dim = "\033[2m" if use_color else ""
+    bold = "\033[1m" if use_color else ""
+    green = "\033[92m" if use_color else ""
+    reset = "\033[0m" if use_color else ""
+
+    counts = {sev: 0 for sev in _SEVERITY_ORDER}
+    for f in findings:
+        sev = str(f.get("severity", "low")).lower()
+        counts[sev] = counts.get(sev, 0) + 1
+
+    print()
+    print(f"{bold}SIC code scan{reset} {dim}- {project_path}{reset}")
+    if not findings:
+        print(f"{green}[OK] No issues found.{reset} Scanned source for hardcoded secrets, "
+              f"dangerous patterns, and dependency CVEs.")
+        print(f"{dim}Report: {out_file}{reset}")
+        return
+
+    summary = "  ".join(
+        f"{counts.get(sev, 0)} {sev}" for sev in _SEVERITY_ORDER if counts.get(sev, 0)
+    )
+    print(f"{bold}{len(findings)} findings{reset}  ({summary})")
+    print()
+
+    shown = 0
+    cap = 50
+    for sev in _SEVERITY_ORDER:
+        bucket = [f for f in findings if str(f.get("severity", "")).lower() == sev]
+        if not bucket:
+            continue
+        color = red if sev in ("critical", "high") else (yellow if sev == "medium" else dim)
+        for f in bucket:
+            if shown >= cap:
+                break
+            loc = f.get("file", "?")
+            line = f.get("line", 0)
+            loc_str = f"{loc}:{line}" if line else loc
+            print(f"  {color}{sev.upper():<8}{reset} {f.get('name', 'issue')}  {dim}{loc_str}{reset}")
+            shown += 1
+        if shown >= cap:
+            break
+
+    if len(findings) > cap:
+        print(f"  {dim}... and {len(findings) - cap} more - see full JSON below.{reset}")
+    print()
+    print(f"{dim}Full report: {out_file}{reset}")
+
+
 if __name__ == "__main__":
     import argparse
 
     p = argparse.ArgumentParser(description="Python-native security scanner")
     p.add_argument("path", nargs="?", default=".", help="Project path to scan")
     p.add_argument("--output-dir", help="Output directory for findings JSON")
+    p.add_argument("--json-only", action="store_true",
+                   help="Print only the JSON output path (for programmatic callers)")
     args = p.parse_args()
 
     out = run_all(args.path, args.output_dir)
-    print(out)
+
+    if args.json_only:
+        print(out)
+    else:
+        try:
+            with open(out, encoding="utf-8") as _fh:
+                _findings = json.load(_fh)
+        except (OSError, json.JSONDecodeError):
+            _findings = []
+        _print_report(_findings, args.path, out)

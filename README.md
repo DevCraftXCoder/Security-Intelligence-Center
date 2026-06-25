@@ -27,8 +27,15 @@ SIC runs as a local server exposing an MCP interface for integration with any MC
 ```bash
 # Run this from the root of the codebase you want SIC to inspect:
 cd /path/to/your-project
-npx sic-security
+npx sic-security          # launch the full dashboard / MCP server
+npx sic-security scan     # instant code scan — no external tools required
 ```
+
+**`npx sic-security scan`** runs SIC's built-in, zero-dependency code scanner
+against your project and prints findings immediately — hardcoded secrets,
+dangerous patterns (`eval`, `shell=True`, SQL string-building, unsafe YAML/pickle,
+CORS wildcards, …), and dependency CVEs (when `pip-audit` is present). It needs no
+nmap/nuclei/external binaries, so it works on a fresh install on any machine.
 
 `npx sic-security` (the `bin/sic.js` launcher) creates an isolated Python venv
 under `~/.sic-security/venv`, installs the core dependencies (first run only),
