@@ -213,6 +213,10 @@ def _checkout_rate_limit() -> None:  # type: ignore[return-value]
 # ---------------------------------------------------------------------------
 
 _CORS_ORIGINS = frozenset({
+    # Production CF tunnel origins
+    "https://sic.frxncois.com",
+    "https://frxncois.com",
+    # Local dev
     "http://localhost:9888",
     "http://localhost:9889",
     "http://127.0.0.1:9888",

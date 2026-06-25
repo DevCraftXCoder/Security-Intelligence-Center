@@ -36,8 +36,15 @@ function fmtUptime(seconds) {
 // directly on the SIC port or through a reverse proxy / tunnel (e.g. https://sic.example.com).
 // Hardcoding ":9890" broke tunnel access: the tunnel doesn't listen on that port.
 const SIC_MAIN_BASE = "";
-// Billing server runs on a separate port — must be absolute.
-const BILLING_BASE = window.location.protocol + "//" + window.location.hostname + ":9015";
+// Billing server: CF tunnel maps sic-api.frxncois.com → localhost:9015.
+// Local dev falls back to :9015 on localhost.
+const BILLING_BASE = (() => {
+  const h = window.location.hostname;
+  if (h === "localhost" || h === "127.0.0.1") {
+    return window.location.protocol + "//" + h + ":9015";
+  }
+  return "https://sic-api.frxncois.com";
+})();
 
 // billingFetch — routes to the separate billing server on :9015
 async function billingFetch(path, options) {
@@ -1404,7 +1411,10 @@ async function exportScan(scanId) {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `scan-${scanId}.json`; a.click();
+    a.href = url; a.download = `scan-${scanId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch (err) { showToast("Export failed: " + ((err.body && err.body.error) || err.message), "error"); }
 }

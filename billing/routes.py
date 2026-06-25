@@ -694,6 +694,34 @@ def _stale_access_grant(email: str | None, event_period_end: int | None) -> bool
     return False
 
 
+def _save_email_to_stats(email: str) -> None:
+    """Fire-and-forget: log email to stats-server so HomeTab sees it."""
+    stats_url = os.environ.get("STATS_SERVER_URL", "").rstrip("/")
+    stats_secret = os.environ.get("STATS_SECRET", "")
+    if not (email and stats_url and stats_secret):
+        return
+
+    def _post(url: str, secret: str, addr: str) -> None:
+        try:
+            import json as _json  # noqa: PLC0415
+            import urllib.request as _ur  # noqa: PLC0415
+            req = _ur.Request(
+                f"{url}/save-email",
+                data=_json.dumps({"email": addr}).encode(),
+                headers={
+                    "Content-Type": "application/json",
+                    "x-stats-secret": secret,
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                method="POST",
+            )
+            _ur.urlopen(req, timeout=5)
+        except Exception as _e:  # noqa: BLE001
+            logger.warning("stats-server email log failed (non-critical): %s", _e)
+
+    threading.Thread(target=_post, args=(stats_url, stats_secret, email), daemon=True).start()
+
+
 def _handle_checkout_completed(event, email: str | None) -> None:
     """Provision or upgrade the subscription after a successful checkout."""
     obj = event["data"]["object"]
@@ -795,31 +823,8 @@ def _handle_checkout_completed(event, email: str | None) -> None:
     ).start()
 
     # Log email to stats-server (non-blocking — billing webhook must not fail over this)
-    _stats_url = os.environ.get("STATS_SERVER_URL", "")
-    _stats_secret = os.environ.get("STATS_SECRET", "")
-    if email and _stats_url and _stats_secret:
-        def _log_email_to_stats(url: str, secret: str, addr: str) -> None:
-            try:
-                import json as _json  # noqa: PLC0415
-                import urllib.request as _ur  # noqa: PLC0415
-                req = _ur.Request(
-                    f"{url}/save-email",
-                    data=_json.dumps({"email": addr}).encode(),
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-stats-secret": secret,
-                        "X-Requested-With": "XMLHttpRequest",
-                    },
-                    method="POST",
-                )
-                _ur.urlopen(req, timeout=5)
-            except Exception as _e:  # noqa: BLE001
-                logger.warning("stats-server email log failed (non-critical): %s", _e)
-        threading.Thread(
-            target=_log_email_to_stats,
-            args=(_stats_url, _stats_secret, email),
-            daemon=True,
-        ).start()
+    if email:
+        _save_email_to_stats(email)
 
 
 def _handle_subscription_updated(event, email: str | None) -> None:
@@ -1333,6 +1338,7 @@ def public_trial():
         threading.Thread(
             target=_send_provisioning_email, args=(email_raw, {}), daemon=True
         ).start()
+        _save_email_to_stats(email_raw)
         logger.info("community trial provisioned for %.6s***", email_raw[:6])
         return jsonify({"ok": True}), 200
     except Exception as exc:
