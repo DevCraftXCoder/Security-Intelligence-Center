@@ -462,20 +462,29 @@ def request_link():
             import urllib.request as _ur  # noqa: PLC0415
 
             _payload = _json.dumps({
-                "from": _from,
+                "from": f"SIC Security <{_from}>",
                 "to": [email],
-                "subject": "Your SIC login link",
+                "subject": "Sign in to SIC — your magic link",
                 "html": (
                     '<div style="font-family:DM Sans,sans-serif;background:#0a0a0a;color:#fff;'
-                    'padding:40px;max-width:480px;margin:auto;border-radius:8px;">'
-                    '<h2 style="color:#e94560;margin-top:0;">Security Intelligence Center</h2>'
-                    '<p style="color:#ccc;">Click the button below to sign in. '
-                    "This link expires in 24 hours.</p>"
-                    f'<a href="{link}" style="display:inline-block;background:#e94560;color:#fff;'
-                    'padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;'
-                    'margin:16px 0;">Sign in to SIC</a>'
-                    '<p style="color:#666;font-size:12px;margin-top:24px;">'
-                    "If you didn&#39;t request this, you can safely ignore this email.</p>"
+                    'padding:48px 40px;max-width:500px;margin:auto;">'
+                    '<p style="font-family:\'JetBrains Mono\',monospace;font-size:11px;'
+                    'letter-spacing:.08em;color:#e94560;margin:0 0 24px;text-transform:uppercase;">'
+                    "Security Intelligence Center</p>"
+                    '<h1 style="font-size:22px;font-weight:700;margin:0 0 8px;color:#fff;">'
+                    "Sign in to SIC.</h1>"
+                    '<p style="color:#999;font-size:15px;margin:0 0 32px;line-height:1.6;">'
+                    "Use the button below to sign in. This link is single-use and expires "
+                    "in 24 hours.</p>"
+                    f'<a href="{link}" style="display:inline-block;background:#e94560;'
+                    'color:#fff;padding:14px 32px;text-decoration:none;font-weight:600;'
+                    'font-size:15px;letter-spacing:.02em;margin:0 0 32px;">'
+                    "Sign In &rarr;</a>"
+                    '<hr style="border:none;border-top:1px solid #1a1a1a;margin:0 0 24px;">'
+                    '<p style="color:#555;font-size:12px;line-height:1.6;margin:0;">'
+                    "If you did not request this link, you can safely ignore this email &mdash; "
+                    "your account is secure.<br>"
+                    "Questions? Reply to this email.</p>"
                     "</div>"
                 ),
             }).encode()
@@ -485,6 +494,7 @@ def request_link():
                 headers={
                     "Authorization": f"Bearer {_resend_key}",
                     "Content-Type": "application/json",
+                    "User-Agent": "SIC-Auth/1.0",
                 },
             )
             _ur.urlopen(_req, timeout=5)
