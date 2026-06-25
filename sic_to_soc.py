@@ -615,6 +615,7 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
     scan_name = Path(scan_path).name if scan_path else "scan.json"
 
     project_data = {
+        "reportKey": f"soc-{slug}-{now_iso[:10]}",
         "project": {
             "name":     project,
             "slug":     slug,

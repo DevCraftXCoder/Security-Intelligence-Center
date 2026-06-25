@@ -1,11 +1,12 @@
 <!doctype html>
 <!--
   3SIXTYCO. Design System v1.2
-  PROJECT   : {{PROJECT_NAME}}
+  PROJECT   : {{PROJECT_NAME}}  ← replaced at generation time by inject_project_data()
   REPORT    : SOC HANDOFF V1
   BASIS     : repo @ commit f5d2c0c (render-token S012); every control is code-traceable.
   SOC FRAME : NIST SP 800-61 Rev 3 Senior Analyst Handoff + MITRE ATT&CK TTP Mapping
   NOTE      : render engine builds DOM via createElement/textContent (no markup injection) — XSS-safe by construction.
+  PLACEHOLDERS: {{PROJECT_NAME}} / {{PROJECT_SLUG}} — never hardcode project names in this template.
 -->
 <html lang="en" data-theme="dark">
 <head>
@@ -1195,10 +1196,10 @@ const DEFAULT_DONE_BASE=Array.isArray(PD.controls)
 /* ─── engine (3SIXTYCO v1.2 — DOM via createElement/textContent, no markup injection) ─── */
 const W={p0:4,p1:3,p2:2,p3:1};
 const RC=2*Math.PI*62;
-const SK='ds-soc-handoff-blank';
+const SK=PD.reportKey||'ds-soc-handoff-blank';
 const DEFAULT_DONE=(DEFAULT_DONE_BASE&&DEFAULT_DONE_BASE.length)?DEFAULT_DONE_BASE:[];
 let saved={};try{saved=JSON.parse(localStorage.getItem(SK)||'{}')}catch(e){}
-let checked=new Set(Array.isArray(saved.checked)?saved.checked:DEFAULT_DONE);
+let checked=new Set([...DEFAULT_DONE,...(Array.isArray(saved.checked)?saved.checked:[])]);
 let weekOff=saved.week||0;
 let notes=saved.notes&&typeof saved.notes==='object'?saved.notes:{};
 let snapshots=saved.snapshots&&typeof saved.snapshots==='object'?saved.snapshots:{};

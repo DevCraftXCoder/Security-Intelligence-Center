@@ -97,8 +97,16 @@ def main() -> None:
     if "first_scan" in diff:
         print(f"[SOC-QA] first_scan={diff['first_scan']}")
 
+    # 7. project.name must differ from the raw slug (display name was set)
+    project_slug = (pd.get("project") or {}).get("slug", "")
+    assert name != project_slug, (
+        f"FAIL: project.name {name!r} equals slug {project_slug!r} — "
+        "pass --project-name to set a human-readable display name"
+    )
+    print(f"[SOC-QA] project.name {name!r} != slug {project_slug!r} (display name set)")
+
     print()
-    print("=== SOC QA RESULT: ALL 6 CHECKS PASSED ===")
+    print("=== SOC QA RESULT: ALL 7 CHECKS PASSED ===")
 
 
 if __name__ == "__main__":

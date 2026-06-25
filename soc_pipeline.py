@@ -100,6 +100,7 @@ def stage1_net(
     project_path: str,
     output_base: str | None = None,
     template_path: str | None = None,
+    project_name: str | None = None,
 ) -> dict:
     """Stage 1: Generate Wide-Net SOC template from architecture profile.
 
@@ -151,7 +152,7 @@ def stage1_net(
     slug_upper = slug.upper().replace("-", "")
     project_data = {
         "project": {
-            "name":     slug.upper(),
+            "name":     project_name or slug.upper(),
             "slug":     slug,
             "repo":     Path(project_path).name,
             "commit":   now[:10],
@@ -281,10 +282,14 @@ def stage2_refine(
     out_dir = _output_dir(output_base, slug)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Register project if not already registered
+    # Register project if not already registered; auto-load display name from .sic.yaml
     try:
-        from project_config import register_from_git
+        from project_config import register_from_git, load_config
         register_from_git(project_path)
+        if not project_name:
+            cfg = load_config(project_path)
+            if cfg.get("_source") == "file" and cfg.get("name"):
+                project_name = cfg["name"]
     except Exception:
         pass
 
@@ -585,6 +590,12 @@ def main() -> None:
              "Defaults to the directory name slug.",
     )
     parser.add_argument(
+        "--copy-to",
+        default=None,
+        metavar="DEST",
+        help="Copy the final Refined Verdict HTML to DEST after generation (e.g. ~/Documents/).",
+    )
+    parser.add_argument(
         "--qa",
         action="store_true",
         help="Run qa_soc.py against the generated Refined Verdict and fail the command on QA error",
@@ -599,16 +610,6 @@ def main() -> None:
     if args.discord:
         discord_url = (os.environ.get("DISCORD_WEBHOOK_SOC") or "").strip()
         if not discord_url:
-            legacy = (os.environ.get("DROPSTREAM_SOC_DISCORD_WEBHOOK") or "").strip()
-            if legacy:
-                print(
-                    "[soc_pipeline] WARNING: DISCORD_WEBHOOK_SOC not set — falling back "
-                    "to deprecated DROPSTREAM_SOC_DISCORD_WEBHOOK. Migrate to "
-                    "DISCORD_WEBHOOK_SOC.",
-                    file=sys.stderr,
-                )
-                discord_url = legacy
-        if not discord_url:
             print(
                 "[soc_pipeline] WARNING: --discord requested but neither "
                 "DISCORD_WEBHOOK_SOC nor DROPSTREAM_SOC_DISCORD_WEBHOOK is set",
@@ -616,7 +617,7 @@ def main() -> None:
             )
 
     if args.auto or args.net:
-        result1 = stage1_net(args.path, args.output_dir, args.template)
+        result1 = stage1_net(args.path, args.output_dir, args.template, project_name=args.project_name)
         print(f"Stage 1 complete: {result1['output_path']}")
         print(f"  Components: {result1['profile'].get('components', [])}")
         print(f"  Net sections: {len(result1['net'])}")
@@ -647,7 +648,7 @@ def main() -> None:
         if args.qa:
             import subprocess
             qa_path = Path(__file__).parent / "qa_soc.py"
-            print(f"[soc_pipeline] Running QA gate: {qa_path.name}", file=sys.stderr)
+            print(f"[soc_pipeline] Running QA gate: {qa_path.name}")
             qa = subprocess.run(
                 [sys.executable, str(qa_path), result2["slug"], result2["output_path"]],
                 capture_output=True, text=True,
@@ -658,7 +659,16 @@ def main() -> None:
                 print("[soc_pipeline] FATAL: QA gate failed — report rejected",
                       file=sys.stderr)
                 sys.exit(1)
-            print("[soc_pipeline] QA gate passed", file=sys.stderr)
+            print("[soc_pipeline] QA gate passed")
+
+        if args.copy_to:
+            import shutil
+            dest = Path(args.copy_to).expanduser()
+            if dest.is_dir():
+                dest = dest / Path(result2["output_path"]).name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(result2["output_path"], dest)
+            print(f"[soc_pipeline] Report copied to: {dest}")
 
 
 if __name__ == "__main__":
