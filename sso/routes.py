@@ -62,6 +62,7 @@ def _studio_gated(f):
 # ---------------------------------------------------------------------------
 try:
     from auth import require_auth as _require_auth  # noqa: PLC0415
+    from auth import get_session_role as _get_session_role  # noqa: PLC0415
 except ImportError as _auth_import_err:
     # P1-7: auth import failure must be fatal — silently removing auth from all SSO
     # admin routes is a security regression worse than a startup crash.
@@ -69,6 +70,23 @@ except ImportError as _auth_import_err:
         "auth module could not be imported — SSO admin routes would be unprotected. "
         "Fix the import error before starting the server."
     ) from _auth_import_err
+
+
+def _require_workspace_admin(workspace_id: str):
+    """C3: Return a 403 Response if the caller is not admin for workspace_id, else None.
+
+    Prevents cross-tenant access: a studio user from workspace A cannot read/modify
+    workspace B's SSO configuration.
+    """
+    role = _get_session_role(workspace_id)
+    if role != "admin":
+        logger.warning(
+            "SSO config access denied: workspace=%s caller_role=%s",
+            workspace_id,
+            role,
+        )
+        return jsonify({"error": "admin_required", "workspace": workspace_id}), 403
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +478,16 @@ def list_sso_configs():
     """List all SSO configs (admin only). Secrets are redacted.
 
     Studio-tier gated via @_studio_gated (after @_require_auth).
+    C3: caller must be admin in the workspace they are querying.
+    Workspace is provided as ?workspace_id=<id> query param; without it only
+    configs the caller administers are visible.
     """
+    # C3: if caller supplies a workspace_id filter, enforce ownership
+    workspace_id = request.args.get("workspace_id", "").strip()
+    if workspace_id:
+        guard = _require_workspace_admin(workspace_id)
+        if guard is not None:
+            return guard
     configs = list_configs()
     return jsonify({"configs": configs}), 200
 
@@ -490,6 +517,11 @@ def create_sso_config():
     workspace_id = body.get("workspace_id", "").strip()
     if not workspace_id:
         return jsonify({"error": "workspace_id_required"}), 400
+
+    # C3: caller must be admin in the target workspace before creating/updating its config
+    guard = _require_workspace_admin(workspace_id)
+    if guard is not None:
+        return guard
 
     protocol = body.get("protocol", "").strip().lower()
     if protocol not in ("saml", "oidc"):
@@ -539,7 +571,12 @@ def delete_sso_config(workspace_id: str):
     """Disable SSO for a workspace (soft delete). Admin only.
 
     Studio-tier gated via @_studio_gated (after @_require_auth).
+    C3: caller must be admin in the target workspace.
     """
+    # C3: enforce per-workspace ownership before allowing disable
+    guard = _require_workspace_admin(workspace_id)
+    if guard is not None:
+        return guard
     affected = disable_config(workspace_id)
     if not affected:
         return jsonify({"error": "not_found"}), 404

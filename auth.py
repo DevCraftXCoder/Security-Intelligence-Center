@@ -159,6 +159,53 @@ def _cleanup_expired_tokens() -> None:
 
 
 # ---------------------------------------------------------------------------
+# H5: Server-side session revocation (file-backed token blocklist)
+# ---------------------------------------------------------------------------
+
+_BLOCKLIST_PATH = Path.home() / ".sic" / "revoked_sessions.json"
+_blocklist_lock = threading.Lock()
+
+
+def _load_blocklist() -> set:
+    """Load revoked session token SHAs from disk. Returns empty set on error."""
+    try:
+        if _BLOCKLIST_PATH.exists():
+            import json as _json  # noqa: PLC0415
+            data = _json.loads(_BLOCKLIST_PATH.read_text(encoding="utf-8"))
+            return set(data) if isinstance(data, list) else set()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[auth] blocklist load failed: %s", exc)
+    return set()
+
+
+def _save_blocklist(blocked: set) -> None:
+    """Persist the revoked session set to disk. Best-effort."""
+    try:
+        import json as _json  # noqa: PLC0415
+        _BLOCKLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _BLOCKLIST_PATH.write_text(_json.dumps(sorted(blocked)), encoding="utf-8")
+        _BLOCKLIST_PATH.chmod(0o600)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[auth] blocklist save failed: %s", exc)
+
+
+def _revoke_session_token(token: str) -> None:
+    """Add the given session token's SHA-256 digest to the revocation blocklist."""
+    token_sha = hashlib.sha256(token.encode()).hexdigest()
+    with _blocklist_lock:
+        blocked = _load_blocklist()
+        blocked.add(token_sha)
+        _save_blocklist(blocked)
+
+
+def _is_session_revoked(token: str) -> bool:
+    """Return True if the session token has been explicitly revoked."""
+    token_sha = hashlib.sha256(token.encode()).hexdigest()
+    with _blocklist_lock:
+        return token_sha in _load_blocklist()
+
+
+# ---------------------------------------------------------------------------
 # Signing helpers
 # ---------------------------------------------------------------------------
 
@@ -185,7 +232,11 @@ def _make_token(email: str, issued_at: int, expires_at: int) -> str:
 
 
 def _verify_token(token: str) -> dict | None:
-    """Verify an HMAC-signed token. Returns payload dict or None."""
+    """Verify an HMAC-signed token. Returns payload dict or None.
+
+    H5: Also checks the server-side revocation blocklist so logout is enforced
+    even when a valid cookie is replayed.
+    """
     try:
         parts = token.split(".")
         if len(parts) != 2:
@@ -193,6 +244,9 @@ def _verify_token(token: str) -> dict | None:
         payload_b64, sig = parts
         expected_sig = _sign(payload_b64)
         if not hmac.compare_digest(expected_sig, sig):
+            return None
+        # H5: check blocklist before trusting a cryptographically-valid token
+        if _is_session_revoked(token):
             return None
         payload_str = _b64url_decode(payload_b64).decode()
         fields = payload_str.split("|")
@@ -327,8 +381,17 @@ def request_link():
       gating in feature_gates.py still restricts what they can do.
     - All others: 403 unauthorized.
     """
-    # P1: Rate limit — 5 requests per hour per IP
-    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
+    # H6: Build rate-limit key from remote_addr (actual TCP connection) to prevent
+    # X-Forwarded-For spoofing.  Only trust XFF when a TRUSTED_PROXY env var is set,
+    # which means the operator explicitly acknowledges a proxy is in front.
+    trusted_proxy = os.environ.get("TRUSTED_PROXY", "").strip()
+    if trusted_proxy:
+        # Operator trusts their proxy — use the first XFF IP (proxy-appended)
+        xff = request.headers.get("X-Forwarded-For", "")
+        client_ip = xff.split(",")[0].strip() if xff else (request.remote_addr or "unknown")
+    else:
+        # No proxy configured — always use the real TCP connection IP
+        client_ip = request.remote_addr or "unknown"
     if not _request_link_rate_check(client_ip):
         logger.warning("[auth] rate limit exceeded for /auth/request-link from %s", client_ip)
         return jsonify({"error": "rate_limit_exceeded", "retry_after": _RL_WINDOW_SECONDS}), 429
@@ -488,7 +551,15 @@ def verify():
 
 @auth_bp.post("/logout")
 def logout():
-    """Clear the session cookie."""
+    """Clear the session cookie and revoke the session server-side (H5)."""
+    # H5: server-side revocation so cookie replay is rejected even if the cookie
+    # persists in a browser or was captured.
+    cookie = request.cookies.get(_COOKIE_NAME)
+    if cookie:
+        try:
+            _revoke_session_token(cookie)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[auth] logout revocation failed: %s", exc)
     resp = jsonify({"ok": True})
     resp.set_cookie(
         _COOKIE_NAME,

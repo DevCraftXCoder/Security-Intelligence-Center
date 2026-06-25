@@ -26,7 +26,14 @@ _SKIP_DIRS = {
     "node_modules", ".git", "dist", ".next", "__pycache__",
     ".venv", "venv", "env", "build", "out", ".cache",
     "coverage", ".turbo", ".wrangler",
+    # Scanner output — scanning prior artifacts inflates FP count
+    "_runs", "_archive",
+    # Test code — asserts, SQL fixtures, etc. are expected patterns
+    "tests",
 }
+
+# This scanner's own source file — skip to avoid detecting its own pattern definitions
+_SELF_FILE = Path(__file__).name
 
 # Source file extensions to scan for secrets and dangerous patterns.
 _SCAN_EXTENSIONS = {
@@ -131,6 +138,8 @@ def _walk_source_files(project_path: str) -> list[Path]:
     results: list[Path] = []
     for path in root.rglob("*"):
         if any(part in _SKIP_DIRS for part in path.parts):
+            continue
+        if path.name == _SELF_FILE:
             continue
         if path.is_file() and path.suffix in _SCAN_EXTENSIONS:
             results.append(path)

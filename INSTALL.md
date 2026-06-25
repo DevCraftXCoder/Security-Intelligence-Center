@@ -36,10 +36,12 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 The installer will:
 1. Verify Python 3.8+ and Node.js 16+
 2. Create a Python virtual environment (`venv/`)
-3. Install all pip dependencies from `requirements.txt`
+3. Install core pip dependencies from `requirements-core.txt` (add `--full` for angr/pwntools/mitmproxy)
 4. Generate `.env` from `.env.example` with auto-generated secrets
 5. Install PM2 globally if missing
 6. Start `sic-main`, `sic-mcp`, `sic-billing`, and `sic-soc-feed` via PM2
+
+> **Ports:** The SIC Flask web dashboard (`sic-main`) runs on **port 9890** by default. The Docker `sic-scanner` health endpoint runs on **port 9888**. These are separate services — do not conflate them.
 
 ---
 
@@ -174,9 +176,9 @@ pm2 logs sic-main --lines 50
 
 Common causes:
 - Missing required env vars (`SIC_ADMIN_EMAILS`, `SIC_SECRET_KEY`)
-- Port 9888 or 9015 already in use — find the occupying process:
-  - Linux/Mac: `lsof -i :9888`
-  - Windows: `netstat -ano | findstr :9888`
+- Port conflict — `sic-main` (Flask dashboard) uses **port 9890**, `sic-billing` uses **port 9015**, and the Docker `sic-scanner` container uses **port 9888**. Check each separately:
+  - Linux/Mac: `lsof -i :9890` / `lsof -i :9888`
+  - Windows: `netstat -ano | findstr :9890` / `netstat -ano | findstr :9888`
 - Python venv not activated — the ecosystem config uses an absolute interpreter path on Windows; on Linux/Mac the venv `python` is used. Ensure `venv/bin/python` (Linux/Mac) or `venv\Scripts\python.exe` (Windows) exists.
 
 ### Port conflict

@@ -109,13 +109,23 @@ Write-OK "Virtual environment ready"
 # =============================================================================
 # STEP 4: Install Python dependencies
 # =============================================================================
-Write-Step "Installing Python dependencies (requirements.txt)"
+Write-Step "Installing Python dependencies"
+
+# M3: default to requirements-core.txt (no angr/pwntools/mitmproxy).
+# Pass --full to install requirements.txt for advanced users who need those tools.
+$FullInstall = $args -contains "--full"
+$RequirementsFile = if ($FullInstall) { "requirements.txt" } else { "requirements-core.txt" }
+if ($FullInstall) {
+    Write-Info "Full install requested (--full) -- installing all dependencies from requirements.txt"
+} else {
+    Write-Info "Installing core dependencies from requirements-core.txt (add --full for angr/pwntools/mitmproxy)"
+}
 
 Write-Info "Running pip install -- this may take a few minutes on first run..."
 & $VenvPip install --quiet --upgrade pip
 if ($LASTEXITCODE -ne 0) { Write-Err "pip self-upgrade failed (exit $LASTEXITCODE)"; exit 1 }
-& $VenvPip install --quiet -r requirements.txt
-if ($LASTEXITCODE -ne 0) { Write-Err "pip install -r requirements.txt failed (exit $LASTEXITCODE)"; exit 1 }
+& $VenvPip install --quiet -r $RequirementsFile
+if ($LASTEXITCODE -ne 0) { Write-Err "pip install -r $RequirementsFile failed (exit $LASTEXITCODE)"; exit 1 }
 Write-OK "Python dependencies installed"
 
 # =============================================================================

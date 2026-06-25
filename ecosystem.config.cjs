@@ -42,6 +42,11 @@ module.exports = {
         SIC_ENV: "development",
         SIC_PORT: "9888",
         HEXSTRIKE_PORT: "9890",
+        // C2: safe defaults — operator can override via shell env before `pm2 start`.
+        // Empty ALLOWED_TARGETS means scope gate in enforce_target_scope() skips (dev mode).
+        // DRY_RUN_DEFAULT=true prevents accidental live scans on a fresh install.
+        ALLOWED_TARGETS: process.env.ALLOWED_TARGETS || "",
+        DRY_RUN_DEFAULT: process.env.DRY_RUN_DEFAULT || "true",
       },
       max_memory_restart: "1G",
       error_file: "logs/sic-error.log",

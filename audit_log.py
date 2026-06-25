@@ -25,5 +25,6 @@ def audit_log(event: str, **kwargs: object) -> None:
         with _lock:
             with log_file.open("a", encoding="utf-8") as fh:
                 fh.write(line)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        import sys as _sys  # noqa: PLC0415
+        print(f"[audit_log] WARNING: write failed — {exc}", file=_sys.stderr)

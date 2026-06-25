@@ -106,11 +106,26 @@ ok "Virtual environment activated"
 # =============================================================================
 # STEP 4: Install Python dependencies
 # =============================================================================
-step "Installing Python dependencies (requirements.txt)"
+step "Installing Python dependencies"
+
+# M3: default to requirements-core.txt (no angr/pwntools/mitmproxy).
+# Pass --full to install requirements.txt for advanced users who need those tools.
+FULL_INSTALL=false
+for arg in "$@"; do
+  [ "$arg" = "--full" ] && FULL_INSTALL=true
+done
+
+REQUIREMENTS_FILE="requirements-core.txt"
+if $FULL_INSTALL; then
+  REQUIREMENTS_FILE="requirements.txt"
+  info "Full install requested (--full) — installing all dependencies from requirements.txt"
+else
+  info "Installing core dependencies from requirements-core.txt (add --full for angr/pwntools/mitmproxy)"
+fi
 
 info "Running pip install — this may take a few minutes on first run..."
 pip install --quiet --upgrade pip
-pip install --quiet -r requirements.txt
+pip install --quiet -r "$REQUIREMENTS_FILE"
 ok "Python dependencies installed"
 
 # =============================================================================

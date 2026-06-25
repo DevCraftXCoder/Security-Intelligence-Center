@@ -253,8 +253,20 @@ def stage2_refine(
     scan_json: str | None = None,
     output_base: str | None = None,
     template_path: str | None = None,
+    analyst: str = "",
+    analyst_role: str = "",
+    output_path_override: str | None = None,
+    asset_tier: str = "production",
 ) -> dict:
     """Stage 2: Run SIC scanner, adjudicate net, produce Refined Verdict report.
+
+    Args:
+        analyst: Analyst name — injected into caseMetadata.incidentLead and
+            closure.handingOffTo so the one-command pipeline can sign the report.
+        analyst_role: Analyst role — injected into caseMetadata.analystRole.
+        output_path_override: Explicit output HTML path (default: auto-derived
+            {slug}-soc-refined-{date}.html under the output dir).
+        asset_tier: Asset tier for SLA calculation (default: production).
 
     Returns dict with keys: output_path, slug, proven_count, untested_count
     """
@@ -319,7 +331,11 @@ def stage2_refine(
         scanners_run = list(meta.get("sources") or [])
 
     ts = now[:10].replace("-", "")
-    out_path = out_dir / f"{slug}-soc-refined-{ts}.html"
+    if output_path_override:
+        out_path = Path(output_path_override)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        out_path = out_dir / f"{slug}-soc-refined-{ts}.html"
 
     # Build project_data with net-adjudication
     project_data = sic_to_soc.build_project_data(
@@ -330,10 +346,19 @@ def stage2_refine(
         now_iso=now,
         runs_dir=str(out_dir),
         output_path=str(out_path),
-        asset_tier="production",
+        asset_tier=asset_tier,
         net=net,
         scanners_run=scanners_run,
     )
+
+    # Post-hoc analyst signature injection — mirrors sic_to_soc.py:921-924 so the
+    # one-command pipeline can emit a signed report (build_project_data defaults
+    # incidentLead/handingOffTo/analystRole to placeholders).
+    if analyst:
+        project_data.setdefault("caseMetadata", {})["incidentLead"] = analyst
+        project_data.setdefault("closure", {})["handingOffTo"] = analyst
+    if analyst_role:
+        project_data.setdefault("caseMetadata", {})["analystRole"] = analyst_role
 
     tpl = template_path or sic_to_soc.DEFAULT_TEMPLATE
     try:
@@ -532,6 +557,31 @@ def main() -> None:
         action="store_true",
         help="Post results to the Discord SOC report channel (uses DISCORD_WEBHOOK_SOC env var)",
     )
+    parser.add_argument(
+        "--analyst",
+        default="",
+        help="Analyst name — signs the report (caseMetadata.incidentLead + closure.handingOffTo)",
+    )
+    parser.add_argument(
+        "--analyst-role",
+        default="",
+        help="Analyst role/title for the signed report (caseMetadata.analystRole)",
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="Explicit output HTML path for the Refined Verdict (default: auto-derived under output dir)",
+    )
+    parser.add_argument(
+        "--asset-tier",
+        default="production",
+        help="Asset tier for SLA calculation (default: production)",
+    )
+    parser.add_argument(
+        "--qa",
+        action="store_true",
+        help="Run qa_soc.py against the generated Refined Verdict and fail the command on QA error",
+    )
     args = parser.parse_args()
 
     if not (args.net or args.refine or args.auto):
@@ -567,11 +617,40 @@ def main() -> None:
             _notify_discord(discord_url, "wide-net", result1["slug"], result1["output_path"], result1)
 
     if args.auto or args.refine:
-        result2 = stage2_refine(args.path, args.scan_json, args.output_dir, args.template)
+        result2 = stage2_refine(
+            args.path,
+            args.scan_json,
+            args.output_dir,
+            args.template,
+            analyst=args.analyst,
+            analyst_role=args.analyst_role,
+            output_path_override=args.output,
+            asset_tier=args.asset_tier,
+        )
         print(f"Stage 2 complete: {result2['output_path']}")
         print(f"  Proven: {result2['proven_count']}  Untested: {result2['untested_count']}")
+        if args.analyst:
+            print(f"  Signed by: {args.analyst}"
+                  + (f" ({args.analyst_role})" if args.analyst_role else ""))
         if discord_url:
             _notify_discord(discord_url, "refined-verdict", result2["slug"], result2["output_path"], result2)
+
+        # QA gate — one-command flow self-validates the signed artifact.
+        if args.qa:
+            import subprocess
+            qa_path = Path(__file__).parent / "qa_soc.py"
+            print(f"[soc_pipeline] Running QA gate: {qa_path.name}", file=sys.stderr)
+            qa = subprocess.run(
+                [sys.executable, str(qa_path), result2["slug"], result2["output_path"]],
+                capture_output=True, text=True,
+            )
+            sys.stdout.write(qa.stdout)
+            sys.stderr.write(qa.stderr)
+            if qa.returncode != 0:
+                print("[soc_pipeline] FATAL: QA gate failed — report rejected",
+                      file=sys.stderr)
+                sys.exit(1)
+            print("[soc_pipeline] QA gate passed", file=sys.stderr)
 
 
 if __name__ == "__main__":

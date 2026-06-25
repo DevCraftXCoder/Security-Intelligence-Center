@@ -484,7 +484,7 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
                     ctrl_items.append({
                         "id": f"{section['id']}-{idx:03d}",
                         "p": section.get("priority", "p2"),
-                        "done": False,
+                        "done": f.get("status", "").upper() == "RESOLVED",
                         "name": _name(f)[:80],
                         "desc": _desc(f),
                         "ref": _ref(f),
@@ -574,7 +574,7 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
             item: dict = {
                 "id":   f"{section_id}-{idx:03d}",
                 "p":    SEV_TO_P.get(sev, "p3"),
-                "done": False,
+                "done": f.get("status", "").upper() == "RESOLVED",
                 "name": _name(f)[:80],
                 "desc": _desc(f),
                 "ref":  _ref(f),

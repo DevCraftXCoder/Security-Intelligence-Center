@@ -103,7 +103,16 @@ app.secret_key = os.environ.get('SIC_SECRET_KEY') or os.urandom(32)
 
 # API Configuration
 API_PORT = int(os.environ.get('HEXSTRIKE_PORT', 9888))  # P2-6: default aligned to Docker/MCP (was 8888)
-API_HOST = os.environ.get('HEXSTRIKE_HOST', '127.0.0.1')
+_host = os.environ.get('HEXSTRIKE_HOST', '127.0.0.1')
+# M2: Warn if the scanner is being exposed to the network — loopback is the safe default.
+if _host not in ('127.0.0.1', 'localhost', '::1'):
+    import warnings as _warnings
+    _warnings.warn(
+        f"HEXSTRIKE_HOST={_host!r} exposes scanner to the network — "
+        "ensure this is intentional and the host is behind a firewall.",
+        stacklevel=1,
+    )
+API_HOST = _host
 
 # ---------------------------------------------------------------------------
 # P0-1: App factory — register auth blueprint + all sub-blueprints
@@ -301,7 +310,8 @@ def require_auth() -> None:
                 try:
                     from api_tokens import verify_api_token  # noqa: PLC0415
                     raw = auth_header[len("Bearer "):]
-                    token_row = verify_api_token(raw)
+                    # H4: require at minimum 'read' scope for any API access
+                    token_row = verify_api_token(raw, required_scope="read")
                     if token_row is None:
                         return jsonify({"error": "invalid_token"}), 401  # type: ignore[return-value]
                     from flask import g as _g  # noqa: PLC0415
@@ -310,6 +320,52 @@ def require_auth() -> None:
                     return jsonify({"error": "unauthorized"}), 401  # type: ignore[return-value]
             else:
                 return jsonify({"error": "unauthorized"}), 401  # type: ignore[return-value]
+
+    return None  # type: ignore[return-value]
+
+
+@app.before_request
+def enforce_target_scope() -> None:  # type: ignore[return-value]
+    """C1: Enforce ALLOWED_TARGETS scope check on /api/tools/ and /api/intelligence/ routes.
+
+    These routes accept a ``target`` parameter but historically bypassed the scope
+    enforcer that only lived inside /api/command.  This gate closes that gap:
+
+    - Skipped entirely when ALLOWED_TARGETS is empty string (dev mode / Docker sandbox
+      already constrains the network).
+    - Extracts ``target`` from JSON body or form data.
+    - Returns 403 TARGET_NOT_ALLOWED if target is not in the allowlist.
+    """
+    path = request.path
+    if not (path.startswith("/api/tools/") or path.startswith("/api/intelligence/")):
+        return None  # type: ignore[return-value]
+
+    _allowed_raw = os.environ.get("ALLOWED_TARGETS", "").strip()
+    if not _allowed_raw:
+        # Dev mode: ALLOWED_TARGETS not set — skip gate (Docker sandbox handles isolation)
+        return None  # type: ignore[return-value]
+
+    # Extract target from request body (JSON preferred, form fallback)
+    target: str | None = None
+    try:
+        body = request.get_json(silent=True, force=False) or {}
+        target = body.get("target") or body.get("host") or body.get("url")
+    except Exception:  # noqa: BLE001
+        pass
+    if not target:
+        target = request.form.get("target") or request.form.get("host") or request.form.get("url")
+
+    if not target:
+        return None  # type: ignore[return-value]  # no target to check
+
+    enforcer = get_enforcer()
+    if not enforcer.is_target_allowed(str(target)):
+        logger.warning(
+            "SCOPE BLOCKED %s: target=%r not in ALLOWED_TARGETS allowlist",
+            path,
+            str(target)[:120],
+        )
+        return jsonify({"error": "TARGET_NOT_ALLOWED", "target": str(target)}), 403  # type: ignore[return-value]
 
     return None  # type: ignore[return-value]
 
@@ -6929,9 +6985,15 @@ class HexStrikeCache:
         self.stats = {"hits": 0, "misses": 0, "evictions": 0}
 
     def _generate_key(self, command: str, params: Dict[str, Any]) -> str:
-        """Generate cache key from command and parameters"""
+        """Generate cache key from command and parameters.
+
+        M1: Uses SHA-256 instead of MD5. Cache keys are not compared against
+        stored values — they are purely in-memory lookup keys — so no migration
+        step is required; all in-flight cache entries will simply miss and be
+        repopulated with the new hash.
+        """
         key_data = f"{command}:{json.dumps(params, sort_keys=True)}"
-        return hashlib.md5(key_data.encode()).hexdigest()
+        return hashlib.sha256(key_data.encode()).hexdigest()
 
     def _is_expired(self, timestamp: float) -> bool:
         """Check if cache entry is expired"""
@@ -9190,10 +9252,27 @@ class FileOperationsManager:
         self.base_dir.mkdir(exist_ok=True)
         self.max_file_size = 100 * 1024 * 1024  # 100MB
 
+    def _validate_filename(self, filename: str) -> None:
+        """H3: Reject filenames containing path separators or null bytes."""
+        if any(c in filename for c in ('/', '\\', '\0')):
+            raise ValueError(f"Invalid filename — path separators and null bytes not allowed: {filename!r}")
+
+    def _check_traversal(self, path: Path) -> None:
+        """H2: Reject paths that escape the base directory (path traversal guard)."""
+        try:
+            resolved = path.resolve()
+            base_resolved = self.base_dir.resolve()
+        except OSError as exc:
+            raise ValueError(f"Path resolution failed: {exc}") from exc
+        if not resolved.is_relative_to(base_resolved):
+            raise ValueError(f"Path traversal rejected: {resolved!r} escapes {base_resolved!r}")
+
     def create_file(self, filename: str, content: str, binary: bool = False) -> Dict[str, Any]:
         """Create a file with the specified content"""
         try:
+            self._validate_filename(filename)  # H3
             file_path = self.base_dir / filename
+            self._check_traversal(file_path)  # H2
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
             if len(content.encode()) > self.max_file_size:
@@ -9216,7 +9295,9 @@ class FileOperationsManager:
     def modify_file(self, filename: str, content: str, append: bool = False) -> Dict[str, Any]:
         """Modify an existing file"""
         try:
+            self._validate_filename(filename)  # H3
             file_path = self.base_dir / filename
+            self._check_traversal(file_path)  # H2
             if not file_path.exists():
                 return {"success": False, "error": "File does not exist"}
 
@@ -9234,7 +9315,9 @@ class FileOperationsManager:
     def delete_file(self, filename: str) -> Dict[str, Any]:
         """Delete a file or directory"""
         try:
+            self._validate_filename(filename)  # H3
             file_path = self.base_dir / filename
+            self._check_traversal(file_path)  # H2
             if not file_path.exists():
                 return {"success": False, "error": "File does not exist"}
 

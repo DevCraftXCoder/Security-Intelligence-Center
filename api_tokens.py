@@ -144,19 +144,22 @@ def _require_auth() -> str:
 _VALID_SCOPES = {"read", "write", "admin"}
 
 
-def verify_api_token(raw_token: str) -> dict | None:
-    """Return token row dict if valid (not revoked, not expired), else None.
+def verify_api_token(raw_token: str, required_scope: str | None = None) -> dict | None:
+    """Return token row dict if valid (not revoked, not expired, scope satisfied), else None.
 
     Also updates last_used_at in a best-effort background thread so the
     calling path is not blocked by a DB write.
 
     Args:
         raw_token: The raw ``sic_`` prefixed token string.
+        required_scope: If provided, the token's ``scopes`` JSON list must contain
+            this value. Returns None if the scope is missing (H4: API token scope
+            enforcement).
 
     Returns:
         Token row as a plain dict (keys: id, workspace_id, name, token_prefix,
         scopes, created_by, created_at, expires_at, last_used_at, revoked_at),
-        or None if the token is invalid, revoked, or expired.
+        or None if the token is invalid, revoked, expired, or lacks required scope.
     """
     api_tokens_init_db()
     if not raw_token:
@@ -183,6 +186,17 @@ def verify_api_token(raw_token: str) -> dict | None:
             if datetime.now(tz=timezone.utc) > exp_dt:
                 return None
         except ValueError:
+            return None
+
+    # H4: scope check — if caller requires a specific scope, verify the token grants it
+    if required_scope is not None:
+        import json as _json  # noqa: PLC0415
+        raw_scopes = token.get("scopes") or "[]"
+        try:
+            token_scopes: list = _json.loads(raw_scopes) if isinstance(raw_scopes, str) else list(raw_scopes)
+        except (ValueError, TypeError):
+            token_scopes = []
+        if required_scope not in token_scopes:
             return None
 
     # Update last_used_at asynchronously — non-blocking

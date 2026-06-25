@@ -42,6 +42,43 @@ for mod_name in STUB_MODULES:
     if mod_name not in sys.modules:
         sys.modules[mod_name] = _StubModule(mod_name)
 
+# ---------------------------------------------------------------------------
+# H7: Load .env before spawning hexstrike_server — ensures SIC_SECRET_KEY,
+# SIC_ADMIN_EMAILS, and friends are set when launched via the npx entrypoint,
+# which does not load the environment itself.
+# ---------------------------------------------------------------------------
+_ENV_PATH = os.path.join(os.path.expanduser("~"), ".sic-security", ".env")
+_FALLBACK_ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+
+def _load_dotenv() -> None:
+    """Load .env from ~/.sic-security/.env, falling back to the project .env."""
+    _candidate = _ENV_PATH if os.path.exists(_ENV_PATH) else (
+        _FALLBACK_ENV_PATH if os.path.exists(_FALLBACK_ENV_PATH) else None
+    )
+    if _candidate is None:
+        return  # No .env found — operator must pass vars via shell env
+
+    try:
+        from dotenv import load_dotenv as _ld  # type: ignore[import-untyped]
+        _ld(_candidate, override=False)  # override=False: shell env wins
+    except ImportError:
+        # python-dotenv not installed — parse manually (key=value, no spaces around =)
+        try:
+            with open(_candidate, encoding="utf-8") as _fh:
+                for _line in _fh:
+                    _line = _line.strip()
+                    if not _line or _line.startswith("#") or "=" not in _line:
+                        continue
+                    _k, _, _v = _line.partition("=")
+                    _k = _k.strip()
+                    _v = _v.strip().strip('"').strip("'")
+                    if _k and _k not in os.environ:
+                        os.environ[_k] = _v
+        except OSError:
+            pass
+
+_load_dotenv()
+
 # Stub specific names that hexstrike_server.py imports directly
 # selenium.common.exceptions exports
 _exc_stub = sys.modules["selenium.common.exceptions"]

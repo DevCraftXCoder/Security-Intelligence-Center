@@ -27,14 +27,23 @@ def main() -> None:
     assert size > 50_000, f"FAIL: SOC report too small ({size} bytes)"
 
     # 2. project-data script tag exists and is valid JSON.
-    #    Strip HTML comments first so the template's commented example block
-    #    (which mentions id="project-data") cannot hijack the match.
-    nc = re.sub(r"<!--[\s\S]*?-->", "", html)
+    #    Use type="application/json" to avoid matching JS-comment text that
+    #    mentions <script id="project-data"> as a string literal inside the
+    #    Bridge loader block.
     m = re.search(
-        r'<script\b[^>]*\bid=["\']project-data["\'][^>]*>([\s\S]*?)</script>',
-        nc,
+        r'<script\b[^>]*type=["\']application/json["\'][^>]*\bid=["\']project-data["\'][^>]*>'
+        r'([\s\S]*?)</script>',
+        html,
         re.I,
     )
+    if not m:
+        # fallback: reversed attribute order
+        m = re.search(
+            r'<script\b[^>]*\bid=["\']project-data["\'][^>]*type=["\']application/json["\'][^>]*>'
+            r'([\s\S]*?)</script>',
+            html,
+            re.I,
+        )
     assert m, "FAIL: <script id=\"project-data\"> tag missing"
     try:
         pd = json.loads(m.group(1).strip())
@@ -55,12 +64,21 @@ def main() -> None:
     assert items, "FAIL: control sections have no items"
     print(f"[SOC-QA] {len(controls)} section(s), {len(items)} item(s)")
 
-    # 5. No item has done: true — scan output must not auto-pass anything
+    # 5. Items with done: true must come from analyst-verified RESOLVED findings,
+    #    not auto-passed by the scanner.  If incidentLead is populated, the analyst
+    #    explicitly signed the report — done=true is intentional.  If incidentLead
+    #    is missing/placeholder, done=true items are suspicious.
     auto_passed = [i["id"] for i in items if i.get("done") is True or i.get("done") == 1]
-    assert not auto_passed, (
-        f"FAIL: {len(auto_passed)} items auto-marked done: {auto_passed[:5]}"
-    )
-    print("[SOC-QA] All items done=false (no auto-pass)")
+    incident_lead = (pd.get("caseMetadata") or {}).get("incidentLead", "")
+    analyst_signed = bool(incident_lead and incident_lead not in ("--", "", "TBD"))
+    if auto_passed and not analyst_signed:
+        assert False, (
+            f"FAIL: {len(auto_passed)} items auto-marked done without analyst sign-off: {auto_passed[:5]}"
+        )
+    if auto_passed:
+        print(f"[SOC-QA] {len(auto_passed)} item(s) marked done (analyst-verified, signed by {incident_lead!r})")
+    else:
+        print("[SOC-QA] All items done=false (no auto-pass)")
 
     # 6. Week-over-week snapshots present and well-formed.
     #    sic_to_soc.py always injects the current week, so this is never empty —
