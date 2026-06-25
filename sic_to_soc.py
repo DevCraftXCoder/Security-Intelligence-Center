@@ -246,7 +246,7 @@ def _load_prior_snapshots(project, slug, runs_dir, exclude=None):
         controls_sections = pd.get("controls", [])
         items = [i for s in controls_sections for i in s.get("items", [])]
         if items:
-            posture = compute_posture(controls_sections)
+            posture = compute_posture(items, controls_sections, scanned=True)
             score = posture["score"]
             return [{"score": score, "checked": [], "notes": {}, "evidence": {},
                      "timestamps": {}, "signoff": {"name": "", "role": ""}}]
