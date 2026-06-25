@@ -1,3 +1,4 @@
 name: Security Intelligence Center
 slug: sic
 asset_tier: production
+# discord_webhook: https://discord.com/api/webhooks/...  # per-project override; falls back to DISCORD_WEBHOOK_SOC env var

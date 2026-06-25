@@ -608,11 +608,24 @@ def main() -> None:
     import os
     discord_url = ""
     if args.discord:
-        discord_url = (os.environ.get("DISCORD_WEBHOOK_SOC") or "").strip()
+        # 1. Per-project webhook from .sic.yaml takes priority
+        try:
+            from project_config import load_config
+            cfg = load_config(args.path)
+            discord_url = (cfg.get("discord_webhook") or "").strip()
+            if discord_url:
+                print(f"[soc_pipeline] Using per-project Discord webhook from .sic.yaml")
+        except Exception:
+            pass
+
+        # 2. Fall back to global env var
+        if not discord_url:
+            discord_url = (os.environ.get("DISCORD_WEBHOOK_SOC") or "").strip()
+
         if not discord_url:
             print(
-                "[soc_pipeline] WARNING: --discord requested but neither "
-                "DISCORD_WEBHOOK_SOC nor DROPSTREAM_SOC_DISCORD_WEBHOOK is set",
+                "[soc_pipeline] WARNING: --discord requested but no webhook found "
+                "(set discord_webhook in .sic.yaml or DISCORD_WEBHOOK_SOC env var)",
                 file=sys.stderr,
             )
 
