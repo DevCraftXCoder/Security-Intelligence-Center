@@ -520,7 +520,7 @@ document.getElementById('importinput').onchange=function(e){
   reader.onload=function(ev){
     try{
       var d=JSON.parse(ev.target.result);
-      if(Array.isArray(d.checked))checked=new Set(d.checked.filter(function(id){return ITEM_IDS.has(id);}));
+      if(Array.isArray(d.checked)){checked=new Set(d.checked.filter(function(id){return ITEM_IDS.has(id);}));window._analystEdited=true;}
       if(d.notes&&typeof d.notes==='object')notes=d.notes;
       if(d.snapshots&&typeof d.snapshots==='object')snapshots=d.snapshots;
       if(d.itemText&&typeof d.itemText==='object')itemText=d.itemText;
@@ -1186,7 +1186,7 @@ const PD=(()=>{
     return el?JSON.parse(el.textContent):{};
   }catch(e){return {};}
 })();
-const DATA=(PD.controls&&PD.controls.length)?PD.controls:DATA_FALLBACK;
+const DATA=Array.isArray(PD.controls)?PD.controls:DATA_FALLBACK;
 /* DEFAULT_DONE base: controls flagged done in the injected data take priority;
    otherwise fall back to the static DEFAULT_DONE list defined below. */
 const DEFAULT_DONE_BASE=Array.isArray(PD.controls)
@@ -1194,7 +1194,7 @@ const DEFAULT_DONE_BASE=Array.isArray(PD.controls)
   : [];
 
 /* ─── engine (3SIXTYCO v1.2 — DOM via createElement/textContent, no markup injection) ─── */
-const W={p0:4,p1:3,p2:2,p3:1};
+const W={p0:40,p1:15,p2:5,p3:1};
 const RC=2*Math.PI*62;
 const SK=PD.reportKey||'ds-soc-handoff-blank';
 const DEFAULT_DONE=(DEFAULT_DONE_BASE&&DEFAULT_DONE_BASE.length)?DEFAULT_DONE_BASE:[];
@@ -1243,14 +1243,13 @@ function wstr(off){
 function sc(n){
   if(n>=90)return 'var(--pass)';
   if(n>=70)return 'var(--p2)';
-  if(n>=50)return 'var(--p1)';
+  if(n>=40)return 'var(--p1)';
   return 'var(--p0)';
 }
 function sg(n){
-  if(n>=95)return '✓ CURRENT BUILD HARDENED';
-  if(n>=85)return '◐ STRONG — MINOR GAPS';
+  if(n>=90)return '✓ CURRENT BUILD HARDENED';
   if(n>=70)return '◑ SOLID — TRACK THE GAPS';
-  if(n>=50)return '◒ GAPS NEED WORK';
+  if(n>=40)return '◒ GAPS NEED WORK';
   if(n>0)  return '✗ CRITICAL';
   return 'START CHECKING';
 }

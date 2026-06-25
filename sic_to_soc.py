@@ -241,13 +241,14 @@ def _load_prior_snapshots(project, slug, runs_dir, exclude=None):
         snapshots = pd.get("snapshots")
         if isinstance(snapshots, list) and snapshots:
             return snapshots
-        # No snapshots array yet — derive a single prior entry from the score
-        controls = pd.get("controls", [])
-        items = [i for s in controls for i in s.get("items", [])]
+        # No snapshots array yet — derive a single prior entry using severity-weighted
+        # compute_posture() so the baseline score matches the current scoring model.
+        controls_sections = pd.get("controls", [])
+        items = [i for s in controls_sections for i in s.get("items", [])]
         if items:
-            done = sum(1 for i in items if i.get("done"))
-            score = round(done / len(items) * 100)
-            return [{"score": score, "checked": {}, "notes": {}, "evidence": {},
+            posture = compute_posture(controls_sections)
+            score = posture["score"]
+            return [{"score": score, "checked": [], "notes": {}, "evidence": {},
                      "timestamps": {}, "signoff": {"name": "", "role": ""}}]
     return []
 
@@ -301,6 +302,7 @@ VERDICT_COLORS = {
     "ATTENTION": 0xF59E0B,
     "BLOCK": 0xFF3B3B,
     "NET": 0xB89100,
+    "EMPTY": 0x666666,
 }
 
 
@@ -335,6 +337,17 @@ def compute_posture(all_items, net_sections, scanned, score_override=None):
 
     if score_override is not None:
         score = int(score_override)
+    elif not all_items:
+        # Empty item list — scanner ran but collected nothing (tool failure / scope mismatch)
+        return {
+            "score": 0,
+            "verdict": "EMPTY",
+            "model": "inverse-risk",
+            "scanned": True,
+            "weights": weights,
+            "counts": counts,
+            "rationale": "Empty scan — no findings collected. Scanner may not have run or returned 0 results.",
+        }
     elif max_risk == 0:
         score = 100
     else:
@@ -376,9 +389,9 @@ def stamp_score(html, posture):
     html = re.sub(r'<!--soc-verdict:\w+-->', verdict_comment, html)
 
     # If no existing comment, insert after <head>
-    if score_comment not in html:
+    if not re.search(r'<!--soc-score:', html):
         html = html.replace('<head>', f'<head>\n{score_comment}\n{verdict_comment}', 1)
-    elif verdict_comment not in html:
+    elif not re.search(r'<!--soc-verdict:', html):
         html = html.replace(score_comment, f'{score_comment}\n{verdict_comment}', 1)
 
     return html
@@ -390,7 +403,7 @@ def compute_maturity(project_data: dict, prior_snapshots: list[dict]) -> dict:
     Stage thresholds (cumulative):
       1 LITE             — any controls present
       2 HARDENED         — attackMapping populated OR detectionCoverage populated
-      3 VALIDATED        — >=2 snapshots exist (baseline + current)
+      3 VALIDATED        — prior snapshot exists (baseline + current = >=2 total)
       4 SOC-OBSERVABLE   — attackMapping AND detectionCoverage both populated
       5 ENTERPRISE SOC   — riskAcceptance + incidentLinkage + slaSummary all present
 
@@ -725,9 +738,16 @@ def build_project_data(findings, project, slug, scan_path, now_iso, runs_dir=Non
     }
     _snap_counts = maturity.get("_snapshot_counts", {})
 
+    done_ids = [
+        item["id"]
+        for sec in project_data.get("controls", [])
+        for item in sec.get("items", [])
+        if item.get("done") and item.get("id")
+    ]
+
     current_snapshot = {
         "score":      current_score,
-        "checked":    {},
+        "checked":    done_ids,
         "notes":      {},
         "evidence":   {},
         "timestamps": {},
