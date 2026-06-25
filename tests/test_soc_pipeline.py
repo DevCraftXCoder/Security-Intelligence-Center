@@ -322,3 +322,46 @@ def test_stage2_refine_counts_zero_when_no_net_controls(tmp_path: Path) -> None:
 
     assert result["proven_count"] == 0
     assert result["untested_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# sic_siemen_bridge — enrichment surfacing
+# ---------------------------------------------------------------------------
+
+def test_to_siemen_finding_surfaces_enrichment() -> None:
+    """to_siemen_finding lifts enrichment fields to top level + keeps them in metadata."""
+    import sic_siemen_bridge
+
+    finding = {
+        "name": "XSS in /search",
+        "enrichment": {
+            "cwe": "CWE-79",
+            "owasp_category": "A03:2021",
+            "cvss_v3": "6.1",
+            "epss": 0.42,
+            "kev": True,
+        },
+    }
+    result = sic_siemen_bridge.to_siemen_finding(finding, "e1")
+
+    assert result["engagement_id"] == "e1"
+    assert result["cwe"] == "CWE-79"
+    assert result["owasp_category"] == "A03:2021"
+    assert result["cvss_v3"] == 6.1
+    assert result["epss"] == 0.42
+    assert result["kev"] == 1
+    # enrichment must remain in metadata as a fallback (exclusion dropped)
+    assert result["metadata"]["enrichment"]["cwe"] == "CWE-79"
+
+
+def test_to_siemen_finding_no_enrichment_defaults() -> None:
+    """Missing enrichment block yields None/0 defaults, never raises."""
+    import sic_siemen_bridge
+
+    result = sic_siemen_bridge.to_siemen_finding({"name": "Plain finding"}, "e2")
+
+    assert result["cwe"] is None
+    assert result["owasp_category"] is None
+    assert result["cvss_v3"] is None
+    assert result["epss"] is None
+    assert result["kev"] == 0

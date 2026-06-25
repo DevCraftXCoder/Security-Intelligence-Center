@@ -14,7 +14,12 @@ Field mapping (SIC → SIEMen):
   external_id ← CVE id extracted from title/template-id/checkID (for dedup)
   asset       ← host / url / target / affected_component
   tags        ← [scanner, category] if available
-  metadata    ← full raw finding dict
+  cwe         ← enrichment.cwe (e.g. "CWE-79")
+  owasp_category ← enrichment.owasp_category (e.g. "A03:2021")
+  cvss_v3     ← enrichment.cvss_v3 (float or None)
+  epss        ← enrichment.epss (float or None)
+  kev         ← 1 if enrichment.kev is truthy else 0
+  metadata    ← full raw finding dict (enrichment block included)
 
 CLI usage:
     python sic_siemen_bridge.py \\
@@ -149,6 +154,50 @@ def _external_id(f: dict[str, Any]) -> str | None:
     return None
 
 
+def _cwe(f: dict[str, Any]) -> str | None:
+    """CWE id from the enrichment block (e.g. "CWE-79"). None if absent."""
+    enrichment = f.get("enrichment") or {}
+    val = enrichment.get("cwe")
+    return str(val) if val else None
+
+
+def _owasp_category(f: dict[str, Any]) -> str | None:
+    """OWASP category from the enrichment block (e.g. "A03:2021"). None if absent."""
+    enrichment = f.get("enrichment") or {}
+    val = enrichment.get("owasp_category")
+    return str(val) if val else None
+
+
+def _cvss_v3(f: dict[str, Any]) -> float | None:
+    """CVSS v3 base score from enrichment as float. None if absent/unparseable."""
+    enrichment = f.get("enrichment") or {}
+    val = enrichment.get("cvss_v3")
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _epss(f: dict[str, Any]) -> float | None:
+    """EPSS probability from enrichment as float. None if absent/unparseable."""
+    enrichment = f.get("enrichment") or {}
+    val = enrichment.get("epss")
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _kev(f: dict[str, Any]) -> int:
+    """1 if the finding is in CISA KEV (enrichment.kev truthy), else 0."""
+    enrichment = f.get("enrichment") or {}
+    return 1 if enrichment.get("kev") else 0
+
+
 def _asset(f: dict[str, Any]) -> str | None:
     return (
         f.get("host")
@@ -189,7 +238,12 @@ def to_siemen_finding(f: dict[str, Any], engagement_id: str) -> dict[str, Any]:
         "asset": _asset(f),
         "external_id": _external_id(f),
         "tags": _tags(f),
-        "metadata": {k: v for k, v in f.items() if k not in ("enrichment",)},
+        "cwe": _cwe(f),
+        "owasp_category": _owasp_category(f),
+        "cvss_v3": _cvss_v3(f),
+        "epss": _epss(f),
+        "kev": _kev(f),
+        "metadata": dict(f),
     }
 
 

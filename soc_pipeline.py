@@ -387,6 +387,9 @@ def stage2_refine(
         "slug":           slug,
         "proven_count":   len(proven),
         "untested_count": len(untested),
+        # Enriched in place by build_project_data → enrichment.enrich_findings.
+        # Reused by the --siemen push so we never re-scan.
+        "findings":       findings,
     }
 
 
@@ -600,6 +603,18 @@ def main() -> None:
         action="store_true",
         help="Run qa_soc.py against the generated Refined Verdict and fail the command on QA error",
     )
+    parser.add_argument(
+        "--siemen",
+        action="store_true",
+        help="After Stage 2, push the refined findings to SIEMen "
+             "(reads SIEMEN_URL/SIEMEN_API_KEY from env; no-op if API key unset). Off by default.",
+    )
+    parser.add_argument(
+        "--engagement-id",
+        default=None,
+        help="Reuse an existing SIEMen engagement ID for the --siemen push "
+             "(default: open a new engagement named after the project)",
+    )
     args = parser.parse_args()
 
     if not (args.net or args.refine or args.auto):
@@ -682,6 +697,41 @@ def main() -> None:
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(result2["output_path"], dest)
             print(f"[soc_pipeline] Report copied to: {dest}")
+
+        # SIEMen push — reuse the already-enriched findings (no re-scan).
+        # No-op when SIEMEN_API_KEY is unset: warn and skip, never fail the pipeline.
+        if args.siemen:
+            if not (os.environ.get("SIEMEN_API_KEY") or "").strip():
+                print(
+                    "[soc_pipeline] WARNING: --siemen requested but SIEMEN_API_KEY is unset "
+                    "— skipping SIEMen push",
+                    file=sys.stderr,
+                )
+            else:
+                try:
+                    from sic_siemen_bridge import SIEMenClient
+                    findings = result2.get("findings") or []
+                    client = SIEMenClient()  # SIEMEN_URL/SIEMEN_API_KEY from env
+                    if args.engagement_id:
+                        eid = args.engagement_id
+                    else:
+                        eid = client.open_engagement(
+                            args.project_name or result2["slug"],
+                            client=args.project_name,
+                        )
+                    push_result = client.push_findings(eid, findings)
+                    print(
+                        f"[soc_pipeline] SIEMen push: engagement={eid} "
+                        f"stored={push_result.get('stored', 0)} "
+                        f"duplicates={push_result.get('duplicates', 0)} "
+                        f"errors={len(push_result.get('errors', []))} "
+                        f"/ {push_result.get('total_pushed', 0)} total"
+                    )
+                except Exception as exc:
+                    print(
+                        f"[soc_pipeline] WARNING: SIEMen push failed (non-fatal): {exc}",
+                        file=sys.stderr,
+                    )
 
 
 if __name__ == "__main__":
