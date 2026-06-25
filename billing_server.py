@@ -106,6 +106,18 @@ def _production_startup_guards() -> None:
             "production. Unset SIC_WAITLIST_MODE or set it to 'off'."
         )
 
+    # Guard 4: SIC_BASE_URL must be set so provisioning emails contain a
+    # reachable activation link. Without it the link would fall back to
+    # http://localhost:9888 — an address that is meaningless to the customer.
+    if not os.environ.get("SIC_BASE_URL", "").strip():
+        errors.append(
+            "SIC_BASE_URL is not set. In production this must be the publicly "
+            "accessible origin of the local SIC instance so provisioning emails "
+            "contain a reachable activation link "
+            "(e.g. SIC_BASE_URL=http://localhost:9888 for single-machine, or a "
+            "tunnel URL for remote deployments)."
+        )
+
     if errors:
         sys.stderr.write(
             "[billing FATAL] Refusing to start in production — "

@@ -571,7 +571,22 @@ def _send_provisioning_email(email: str, session_obj: dict) -> None:  # noqa: AR
         # locally, then activates their license via the magic link below against
         # this hosted billing server. SIC_BASE_URL is the customer's local install
         # origin used to build the activation link.
-        _base = os.environ.get("SIC_BASE_URL", "http://localhost:9888")
+        _base = os.environ.get("SIC_BASE_URL", "").rstrip("/")
+        if not _base:
+            logger.error(
+                "_send_provisioning_email: SIC_BASE_URL is not set — cannot build a "
+                "reachable activation link for customer %.6s***. "
+                "Set SIC_BASE_URL to the publicly accessible origin of the local SIC "
+                "instance (e.g. http://localhost:9888 for single-machine, or a customer "
+                "tunnel URL for remote deployments). Aborting provisioning email.",
+                email[:6],
+            )
+            _discord_billing_alert(
+                f"**Provisioning email ABORTED** — `SIC_BASE_URL` is not set. "
+                f"Customer `{email[:6]}***` paid but no activation link can be generated. "
+                f"Set `SIC_BASE_URL` on the billing server and manually re-trigger provisioning."
+            )
+            return
         # SIC_DOWNLOAD_URL is the operator-hosted installer / Docker artifact the
         # customer downloads to run SIC on their own machine. Optional: if unset,
         # the email still sends the magic link and notes the download will follow.
