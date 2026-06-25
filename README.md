@@ -58,20 +58,24 @@ magic-link.
 ### Manual path
 
 ```bash
-# 1. Create + activate a virtual environment
+# 1. Clone the repository
+git clone https://github.com/DevCraftXCoder/Security-Intelligence-Center.git
+cd Security-Intelligence-Center
+
+# 2. Create + activate a virtual environment
 python -m venv .venv
 # Windows:  .venv\Scripts\activate     Linux/macOS:  source .venv/bin/activate
 
-# 2. Install dependencies
+# 3. Install dependencies
 #    Windows  → use the core set (skips Linux-only tools: angr, pwntools, mitmproxy)
 pip install -r requirements-core.txt
 #    Linux / Docker → full set
 #    pip install -r requirements.txt
 
-# 3. Configure environment (see First-Run Setup below)
+# 4. Configure environment (see First-Run Setup below)
 cp .env.example .env        # then edit .env
 
-# 4. Start the server
+# 5. Start the server
 python start_server.py      # loads .env, then runs the Flask app (hexstrike_server.py)
 
 # MCP-only mode
