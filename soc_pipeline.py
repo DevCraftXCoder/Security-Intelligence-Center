@@ -614,7 +614,7 @@ def main() -> None:
             cfg = load_config(args.path)
             discord_url = (cfg.get("discord_webhook") or "").strip()
             if discord_url:
-                print(f"[soc_pipeline] Using per-project Discord webhook from .sic.yaml")
+                print("[soc_pipeline] Using per-project Discord webhook from .sic.yaml")
         except Exception:
             pass
 
