@@ -210,6 +210,7 @@ class SIEMenClient:
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "sic-siemen-bridge/1.0",
         }
 
     def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -353,6 +354,9 @@ def push_scan_to_siemen(
     logger.info("[siemen-bridge] loaded %d findings from %s", len(findings), scan_path)
 
     client = SIEMenClient(url=siemen_url, api_key=api_key)
+    if dry_run:
+        logger.info("[siemen-bridge] dry-run: skipping engagement open + push")
+        return {"engagement_id": engagement_id or "dry-run", "push_result": {"stored": 0, "duplicates": 0, "errors": [], "total_pushed": len(findings), "dry_run": True}}
     eid = client.open_engagement(engagement_name, client=client_name, engagement_id=engagement_id)
     push_result = client.push_findings(eid, findings, dry_run=dry_run)
 
