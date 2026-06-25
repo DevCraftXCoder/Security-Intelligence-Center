@@ -810,6 +810,13 @@ _PROJECT_DATA_RE = re.compile(
 
 
 def inject_project_data(html, project_data):
+    # Replace static template placeholders with actual project identity first
+    proj = project_data.get("project") or {}
+    proj_name = proj.get("name") or "SIC Security"
+    proj_slug = proj.get("slug") or proj_name.lower().replace(" ", "-")
+    html = html.replace("{{PROJECT_NAME}}", proj_name)
+    html = html.replace("{{PROJECT_SLUG}}", proj_slug)
+
     replacement = (
         '<script type="application/json" id="project-data">\n'
         + json.dumps(project_data, indent=2)

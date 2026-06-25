@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   3SIXTYCO. Design System v1.2
-  PROJECT   : DROPSTREAM.GG
+  PROJECT   : {{PROJECT_NAME}}
   REPORT    : SOC HANDOFF V1
   BASIS     : repo @ commit f5d2c0c (render-token S012); every control is code-traceable.
   SOC FRAME : NIST SP 800-61 Rev 3 Senior Analyst Handoff + MITRE ATT&CK TTP Mapping
@@ -12,7 +12,7 @@
 <!--soc-score:100-->
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>DROPSTREAM.GG — SOC HANDOFF V1</title>
+<title>{{PROJECT_NAME}} — SOC HANDOFF V1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -645,7 +645,7 @@ document.getElementById('importinput').onchange=function(e){
     </div>
     <div class="wg">
       <span class="wm">3SIXTYCO.</span>
-      <span class="sm">SOC Handoff · dropstream.gg · NIST SP 800-61 + MITRE ATT&CK</span>
+      <span class="sm">SOC Handoff · {{PROJECT_SLUG}} · NIST SP 800-61 + MITRE ATT&CK</span>
     </div>
   </div>
   <div class="ctrls">
@@ -692,7 +692,7 @@ document.getElementById('importinput').onchange=function(e){
 <!-- BANNER -->
 <div class="banner">
   <div>
-    <div class="b-proj">DROPSTREAM.GG — SOC HANDOFF</div>
+    <div class="b-proj">{{PROJECT_NAME}} — SOC HANDOFF</div>
     <div class="b-meta" id="bmeta">Senior Analyst handoff · NIST SP 800-61 + MITRE ATT&CK · repo @ f5d2c0c · —</div>
   </div>
   <div class="b-tags">
@@ -1125,7 +1125,7 @@ const DATA_FALLBACK=[
     {id:'rt09',p:'p1',done:1,name:'Responses strip hash + issuer; logs strip raw + hash',desc:'publicTokenView omits hashHex/issuer from API responses; sanitizeForLog returns only id/status/scene fields.',ref:'CWE-200 · CWE-312 · renderToken.ts'},
     {id:'rt10',p:'p1',done:1,name:'Revoke reason is control-char stripped (log-injection guard)',desc:'CONTROL_CHARS_RE strips C0/DEL before the reason is capped and written to the audit log / future R2 dump.',ref:'CWE-117 · renderToken.ts'},
     {id:'rt11',p:'p1',done:1,name:'No client-to-client messaging — send/broadcast removed; attach-only',desc:'handleSend/handleBroadcast dropped at S010 (audit HIGH: unattached broadcast + cross-token send). Not in contract sec 5. Harness regression-locks their absence.',ref:'OWASP A01:2021 · session.ts · AUDIT-S010-ADVERSARIAL.md'},
-    {id:'rt12',p:'p2',done:1,name:'Render plane is sandbox-only — endpoints hostname-gated to workers.dev',desc:'isSandboxLiveSurfacePath + url.hostname check; prod hosts (dropstream.gg / 3sixtyco.dev) return 404 for the livesurface endpoints.',ref:'OWASP A05:2021 · server.ts'},
+    {id:'rt12',p:'p2',done:1,name:'Render plane is sandbox-only — endpoints hostname-gated to workers.dev',desc:'isSandboxLiveSurfacePath + url.hostname check; prod hosts return 404 for the livesurface endpoints.',ref:'OWASP A05:2021 · server.ts'},
     {id:'rt13',p:'p1',name:'Rate-limiting on mint / attach',desc:'GAP: no per-IP/per-token rate limit on token creation or attach. verify-audit events are deferred until this exists (contract sec 11 Q4 flood risk).',ref:'OWASP API4:2023 · contract sec 11'},
     {id:'rt14',p:'p2',name:'Rotate / supersede lifecycle (active to superseded)',desc:'GAP (S013): rotateToken not implemented. checkTokenLifecycle already denies superseded, so the gate is ready for it.',ref:'NIST IA-5 · contract sec 5 · HANDOFF-S012.md'},
     {id:'rt15',p:'p2',name:'Token GC + audit-log size cap',desc:'GAP (S013): no alarm-based purge of expired/revoked records; audit-log size cap (sec 7) not yet enforced.',ref:'NIST AU-4 · contract sec 7'},
@@ -1135,7 +1135,7 @@ const DATA_FALLBACK=[
   ]},
   {id:'s02',tag:'#EDGE',title:'Worker edge — headers, TLS & host isolation',items:[
     {id:'ed01',p:'p0',done:1,name:'Security headers on every non-WebSocket response',desc:'withSecurityHeaders sets CSP, HSTS, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy on all SSR/asset/error responses (101 upgrades correctly bypass).',ref:'OWASP A05:2021 · server.ts'},
-    {id:'ed02',p:'p0',done:1,name:'TLS 1.2 minimum; worker-emitted HSTS (1y, includeSubDomains)',desc:'dropstream.gg min TLS set to 1.2 (2026-05-25); Strict-Transport-Security max-age 31536000 includeSubDomains. Zone HSTS off — worker is the source of truth.',ref:'PCI DSS 4.2.1 · CWE-319 · server.ts'},
+    {id:'ed02',p:'p0',done:1,name:'TLS 1.2 minimum; worker-emitted HSTS (1y, includeSubDomains)',desc:'Domain min TLS set to 1.2; Strict-Transport-Security max-age 31536000 includeSubDomains. Zone HSTS off — worker is the source of truth.',ref:'PCI DSS 4.2.1 · CWE-319 · server.ts'},
     {id:'ed03',p:'p0',done:1,name:'CSP: frame-ancestors none, object-src none, base-uri self, upgrade-insecure-requests',desc:'Anti-clickjacking (frame-ancestors none), no plugins (object-src none), no base-tag hijack (base-uri self), http subresources upgraded to https.',ref:'CWE-1021 · OWASP CSP Cheatsheet · server.ts'},
     {id:'ed04',p:'p1',done:1,name:'Sandbox routes gated on url.hostname, not the forwarded Host header',desc:'The sandbox gate trusts only the URL parser, so a spoofed X-Forwarded-Host / Host cannot reach the livesurface endpoints on a prod host.',ref:'CWE-290 · Host-header trust · server.ts'},
     {id:'ed05',p:'p1',done:1,name:'Prod worker has no workers.dev surface; sandbox worker has no routes',desc:'wrangler.jsonc workers_dev false in prod; the only workers_dev true surface is drop-pane-sandbox, which carries no routes — the two never cross.',ref:'OWASP A05:2021 · wrangler.jsonc · wrangler.sandbox.jsonc'},
@@ -1177,7 +1177,7 @@ const DATA_FALLBACK=[
    sic_to_soc.py injects a <script id="project-data"> JSON block carrying the
    server-computed `controls`, `posture` (authoritative score/verdict), and
    week-over-week `snapshots`. When present we drive the report from that data
-   instead of the hardcoded DATA_FALLBACK sample (the old DropStream demo).
+   instead of the hardcoded DATA_FALLBACK sample (blank template demo).
    The blank template has no project-data block → falls back cleanly. ──────── */
 const PD=(()=>{
   try{
@@ -1723,7 +1723,7 @@ function buildTimeline(){
     {ts:'2026-05-22 16:50 ET',evt:'contain',cls:'contain',desc:'Containment: handleSend + handleBroadcast deleted from session.ts. Harness tests added to regression-lock absence.'},
     {ts:'2026-05-24 09:00 ET',evt:'detect',cls:'detect',desc:'S011 adversarial MEDIUM A3.1: off-spec expiresAt (NaN/undefined/string) accepted by attach handler. Lifecycle gate split.'},
     {ts:'2026-05-24 13:20 ET',evt:'contain',cls:'contain',desc:'Unified lifecycle gate implemented. handleAttach and verifyRenderTokenAgainstRecord share one checkTokenLifecycle predicate. Fail-closed on all off-spec values.'},
-    {ts:'2026-05-25 11:00 ET',evt:'remediate',cls:'remediate',desc:'S012 multi-pass adversarial audit: SAFE-TO-COMMIT, 0 findings. TLS 1.2 minimum set on dropstream.gg zone. Commit f5d2c0c signed and verified. Handoff to monitoring posture.'},
+    {ts:'2026-05-25 11:00 ET',evt:'remediate',cls:'remediate',desc:'S012 multi-pass adversarial audit: SAFE-TO-COMMIT, 0 findings. TLS 1.2 minimum enforced. Commit f5d2c0c signed and verified. Handoff to monitoring posture.'},
   ];
   const tl=E('div',{class:'tl'});
   rows.forEach(r=>{
@@ -1745,7 +1745,7 @@ function buildActions(){
     'S011: Live sandbox smoke test — mint, attach, revoke, re-attach-denied sequence verified.',
     'S012: Multi-pass DFE/security/adversarial audits completed. 0 findings. Commit f5d2c0c.',
     'S012 prep: op-ssh-sign-session1 scheduled task fixed; all commits now signed (G).',
-    'TLS 1.2 minimum enforced on dropstream.gg zone (2026-05-25).',
+    'TLS 1.2 minimum enforced on production zone (2026-05-25).',
   ];
   const ul=E('ul',{class:'exit-list'});
   actions.forEach(a=>{
@@ -2057,11 +2057,11 @@ buildSparkline();
 updateSignoffPrompt();
 </script>
 
-<script>/* soc-runner pre-seed (DropStream demo sample) ──────────────────────────────
-   GUARDED (Bridge integration): this block hardcodes the 37-control DropStream
-   sample into localStorage. It must ONLY run for the raw blank template demo,
-   never for a sic_to_soc.py-generated report — otherwise DropStream samples
-   bleed over the server-injected controls/posture. We skip it whenever a
+<script>/* soc-runner pre-seed (blank template demo sample) ─────────────────────────
+   GUARDED (Bridge integration): this block seeds localStorage with sample
+   controls for the raw blank template demo only. It must NEVER run for a
+   sic_to_soc.py-generated report — otherwise sample data bleed over the
+   server-injected controls/posture. We skip it whenever a
    <script id="project-data"> block is present (i.e. a real generated report).
    The original unconditional seed is preserved verbatim inside the guard. */
 (function(){
