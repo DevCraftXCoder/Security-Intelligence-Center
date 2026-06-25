@@ -257,6 +257,7 @@ def stage2_refine(
     analyst_role: str = "",
     output_path_override: str | None = None,
     asset_tier: str = "production",
+    project_name: str | None = None,
 ) -> dict:
     """Stage 2: Run SIC scanner, adjudicate net, produce Refined Verdict report.
 
@@ -340,7 +341,7 @@ def stage2_refine(
     # Build project_data with net-adjudication
     project_data = sic_to_soc.build_project_data(
         findings=findings,
-        project=slug,
+        project=project_name or slug,
         slug=slug,
         scan_path=merged_path,
         now_iso=now,
@@ -578,6 +579,12 @@ def main() -> None:
         help="Asset tier for SLA calculation (default: production)",
     )
     parser.add_argument(
+        "--project-name",
+        default=None,
+        help="Project display name shown in the report (e.g. 'Security Intelligence Center'). "
+             "Defaults to the directory name slug.",
+    )
+    parser.add_argument(
         "--qa",
         action="store_true",
         help="Run qa_soc.py against the generated Refined Verdict and fail the command on QA error",
@@ -626,6 +633,7 @@ def main() -> None:
             analyst_role=args.analyst_role,
             output_path_override=args.output,
             asset_tier=args.asset_tier,
+            project_name=args.project_name,
         )
         print(f"Stage 2 complete: {result2['output_path']}")
         print(f"  Proven: {result2['proven_count']}  Untested: {result2['untested_count']}")
