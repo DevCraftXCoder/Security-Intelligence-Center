@@ -10955,6 +10955,7 @@ def create_comprehensive_bugbounty_assessment():
 # ============================================================================
 
 @app.route("/api/tools/nmap", methods=["POST"])
+@require_tier("team")
 def nmap():
     """Execute nmap scan with enhanced logging, caching, and intelligent error handling"""
     try:
@@ -11005,6 +11006,7 @@ def nmap():
         }), 500
 
 @app.route("/api/tools/gobuster", methods=["POST"])
+@require_tier("team")
 def gobuster():
     """Execute gobuster with enhanced logging and intelligent error handling"""
     try:
@@ -11057,6 +11059,7 @@ def gobuster():
         }), 500
 
 @app.route("/api/tools/nuclei", methods=["POST"])
+@require_tier("team")
 def nuclei():
     """Execute Nuclei vulnerability scanner with enhanced logging and intelligent error handling"""
     try:
@@ -11117,6 +11120,7 @@ def nuclei():
 # ============================================================================
 
 @app.route("/api/tools/prowler", methods=["POST"])
+@require_tier("team")
 def prowler():
     """Execute Prowler for AWS security assessment"""
     try:
@@ -11161,6 +11165,7 @@ def prowler():
         }), 500
 
 @app.route("/api/tools/trivy", methods=["POST"])
+@require_tier("team")
 def trivy():
     """Execute Trivy for container/filesystem vulnerability scanning"""
     try:
@@ -11209,6 +11214,7 @@ def trivy():
 # ============================================================================
 
 @app.route("/api/tools/scout-suite", methods=["POST"])
+@require_tier("team")
 def scout_suite():
     """Execute Scout Suite for multi-cloud security assessment"""
     try:
@@ -11249,6 +11255,7 @@ def scout_suite():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/cloudmapper", methods=["POST"])
+@require_tier("team")
 def cloudmapper():
     """Execute CloudMapper for AWS network visualization and security analysis"""
     try:
@@ -11282,6 +11289,7 @@ def cloudmapper():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/pacu", methods=["POST"])
+@require_tier("team")
 def pacu():
     """Execute Pacu for AWS exploitation framework"""
     try:
@@ -11334,6 +11342,7 @@ def pacu():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/kube-hunter", methods=["POST"])
+@require_tier("team")
 def kube_hunter():
     """Execute kube-hunter for Kubernetes penetration testing"""
     try:
@@ -11378,6 +11387,7 @@ def kube_hunter():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/kube-bench", methods=["POST"])
+@require_tier("team")
 def kube_bench():
     """Execute kube-bench for CIS Kubernetes benchmark checks"""
     try:
@@ -11414,6 +11424,7 @@ def kube_bench():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/docker-bench-security", methods=["POST"])
+@require_tier("team")
 def docker_bench_security():
     """Execute Docker Bench for Security for Docker security assessment"""
     try:
@@ -11447,6 +11458,7 @@ def docker_bench_security():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/clair", methods=["POST"])
+@require_tier("team")
 def clair():
     """Execute Clair for container vulnerability analysis"""
     try:
@@ -11481,6 +11493,7 @@ def clair():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/falco", methods=["POST"])
+@require_tier("team")
 def falco():
     """Execute Falco for runtime security monitoring"""
     try:
@@ -11514,6 +11527,7 @@ def falco():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/checkov", methods=["POST"])
+@require_tier("team")
 def checkov():
     """Execute Checkov for infrastructure as code security scanning"""
     try:
@@ -11551,6 +11565,7 @@ def checkov():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/terrascan", methods=["POST"])
+@require_tier("team")
 def terrascan():
     """Execute Terrascan for infrastructure as code security scanning"""
     try:
@@ -11585,6 +11600,7 @@ def terrascan():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/dirb", methods=["POST"])
+@require_tier("team")
 def dirb():
     """Execute dirb with enhanced logging"""
     try:
@@ -11615,6 +11631,7 @@ def dirb():
         }), 500
 
 @app.route("/api/tools/nikto", methods=["POST"])
+@require_tier("team")
 def nikto():
     """Execute nikto with enhanced logging"""
     try:
@@ -11644,6 +11661,7 @@ def nikto():
         }), 500
 
 @app.route("/api/tools/sqlmap", methods=["POST"])
+@require_tier("team")
 def sqlmap():
     """Execute sqlmap with enhanced logging"""
     try:
@@ -11677,6 +11695,7 @@ def sqlmap():
         }), 500
 
 @app.route("/api/tools/metasploit", methods=["POST"])
+@require_tier("team")
 def metasploit():
     """Execute metasploit module with enhanced logging"""
     try:
@@ -11721,6 +11740,7 @@ def metasploit():
         }), 500
 
 @app.route("/api/tools/hydra", methods=["POST"])
+@require_tier("team")
 def hydra():
     """Execute hydra with enhanced logging"""
     try:
@@ -11773,6 +11793,7 @@ def hydra():
         }), 500
 
 @app.route("/api/tools/john", methods=["POST"])
+@require_tier("team")
 def john():
     """Execute john with enhanced logging"""
     try:
@@ -11812,6 +11833,7 @@ def john():
         }), 500
 
 @app.route("/api/tools/wpscan", methods=["POST"])
+@require_tier("team")
 def wpscan():
     """Execute wpscan with enhanced logging"""
     try:
@@ -11841,6 +11863,7 @@ def wpscan():
         }), 500
 
 @app.route("/api/tools/enum4linux", methods=["POST"])
+@require_tier("team")
 def enum4linux():
     """Execute enum4linux with enhanced logging"""
     try:
@@ -11867,6 +11890,7 @@ def enum4linux():
         }), 500
 
 @app.route("/api/tools/ffuf", methods=["POST"])
+@require_tier("team")
 def ffuf():
     """Execute FFuf web fuzzer with enhanced logging"""
     try:
@@ -11910,6 +11934,7 @@ def ffuf():
         }), 500
 
 @app.route("/api/tools/netexec", methods=["POST"])
+@require_tier("team")
 def netexec():
     """Execute NetExec (formerly CrackMapExec) with enhanced logging"""
     try:
@@ -11956,6 +11981,7 @@ def netexec():
         }), 500
 
 @app.route("/api/tools/amass", methods=["POST"])
+@require_tier("team")
 def amass():
     """Execute Amass for subdomain enumeration with enhanced logging"""
     try:
@@ -11991,6 +12017,7 @@ def amass():
         }), 500
 
 @app.route("/api/tools/hashcat", methods=["POST"])
+@require_tier("team")
 def hashcat():
     """Execute Hashcat for password cracking with enhanced logging"""
     try:
@@ -12035,6 +12062,7 @@ def hashcat():
         }), 500
 
 @app.route("/api/tools/subfinder", methods=["POST"])
+@require_tier("team")
 def subfinder():
     """Execute Subfinder for passive subdomain enumeration with enhanced logging"""
     try:
@@ -12072,6 +12100,7 @@ def subfinder():
         }), 500
 
 @app.route("/api/tools/smbmap", methods=["POST"])
+@require_tier("team")
 def smbmap():
     """Execute SMBMap for SMB share enumeration with enhanced logging"""
     try:
@@ -12117,6 +12146,7 @@ def smbmap():
 # ============================================================================
 
 @app.route("/api/tools/rustscan", methods=["POST"])
+@require_tier("team")
 def rustscan():
     """Execute Rustscan for ultra-fast port scanning with enhanced logging"""
     try:
@@ -12153,6 +12183,7 @@ def rustscan():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/masscan", methods=["POST"])
+@require_tier("team")
 def masscan():
     """Execute Masscan for high-speed Internet-scale port scanning with intelligent rate limiting"""
     try:
@@ -12196,6 +12227,7 @@ def masscan():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/nmap-advanced", methods=["POST"])
+@require_tier("team")
 def nmap_advanced():
     """Execute advanced Nmap scans with custom NSE scripts and optimized timing"""
     try:
@@ -12251,6 +12283,7 @@ def nmap_advanced():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/autorecon", methods=["POST"])
+@require_tier("team")
 def autorecon():
     """Execute AutoRecon for comprehensive automated reconnaissance"""
     try:
@@ -12287,6 +12320,7 @@ def autorecon():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/enum4linux-ng", methods=["POST"])
+@require_tier("team")
 def enum4linux_ng():
     """Execute Enum4linux-ng for advanced SMB enumeration with enhanced logging"""
     try:
@@ -12342,6 +12376,7 @@ def enum4linux_ng():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/rpcclient", methods=["POST"])
+@require_tier("team")
 def rpcclient():
     """Execute rpcclient for RPC enumeration with enhanced logging"""
     try:
@@ -12386,6 +12421,7 @@ def rpcclient():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/nbtscan", methods=["POST"])
+@require_tier("team")
 def nbtscan():
     """Execute nbtscan for NetBIOS name scanning with enhanced logging"""
     try:
@@ -12418,6 +12454,7 @@ def nbtscan():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/arp-scan", methods=["POST"])
+@require_tier("team")
 def arp_scan():
     """Execute arp-scan for network discovery with enhanced logging"""
     try:
@@ -12455,6 +12492,7 @@ def arp_scan():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/responder", methods=["POST"])
+@require_tier("team")
 def responder():
     """Execute Responder for credential harvesting with enhanced logging"""
     try:
@@ -12497,6 +12535,7 @@ def responder():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/volatility", methods=["POST"])
+@require_tier("team")
 def volatility():
     """Execute Volatility for memory forensics with enhanced logging"""
     try:
@@ -12539,6 +12578,7 @@ def volatility():
         }), 500
 
 @app.route("/api/tools/msfvenom", methods=["POST"])
+@require_tier("team")
 def msfvenom():
     """Execute MSFVenom to generate payloads with enhanced logging"""
     try:
@@ -12588,6 +12628,7 @@ def msfvenom():
 # ============================================================================
 
 @app.route("/api/tools/gdb", methods=["POST"])
+@require_tier("team")
 def gdb():
     """Execute GDB for binary analysis and debugging with enhanced logging"""
     try:
@@ -12637,6 +12678,7 @@ def gdb():
         }), 500
 
 @app.route("/api/tools/radare2", methods=["POST"])
+@require_tier("team")
 def radare2():
     """Execute Radare2 for binary analysis and reverse engineering with enhanced logging"""
     try:
@@ -12680,6 +12722,7 @@ def radare2():
         }), 500
 
 @app.route("/api/tools/binwalk", methods=["POST"])
+@require_tier("team")
 def binwalk():
     """Execute Binwalk for firmware and file analysis with enhanced logging"""
     try:
@@ -12715,6 +12758,7 @@ def binwalk():
         }), 500
 
 @app.route("/api/tools/ropgadget", methods=["POST"])
+@require_tier("team")
 def ropgadget():
     """Search for ROP gadgets in a binary using ROPgadget with enhanced logging"""
     try:
@@ -12748,6 +12792,7 @@ def ropgadget():
         }), 500
 
 @app.route("/api/tools/checksec", methods=["POST"])
+@require_tier("team")
 def checksec():
     """Check security features of a binary with enhanced logging"""
     try:
@@ -12773,6 +12818,7 @@ def checksec():
         }), 500
 
 @app.route("/api/tools/xxd", methods=["POST"])
+@require_tier("team")
 def xxd():
     """Create a hex dump of a file using xxd with enhanced logging"""
     try:
@@ -12809,6 +12855,7 @@ def xxd():
         }), 500
 
 @app.route("/api/tools/strings", methods=["POST"])
+@require_tier("team")
 def strings():
     """Extract strings from a binary file with enhanced logging"""
     try:
@@ -12841,6 +12888,7 @@ def strings():
         }), 500
 
 @app.route("/api/tools/objdump", methods=["POST"])
+@require_tier("team")
 def objdump():
     """Analyze a binary using objdump with enhanced logging"""
     try:
@@ -12882,6 +12930,7 @@ def objdump():
 # ============================================================================
 
 @app.route("/api/tools/ghidra", methods=["POST"])
+@require_tier("team")
 def ghidra():
     """Execute Ghidra for advanced binary analysis and reverse engineering"""
     try:
@@ -12922,6 +12971,7 @@ def ghidra():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/pwntools", methods=["POST"])
+@require_tier("team")
 def pwntools():
     """Execute Pwntools for exploit development and automation"""
     try:
@@ -12997,6 +13047,7 @@ p.interactive()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/one-gadget", methods=["POST"])
+@require_tier("team")
 def one_gadget():
     """Execute one_gadget to find one-shot RCE gadgets in libc"""
     try:
@@ -13023,6 +13074,7 @@ def one_gadget():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/libc-database", methods=["POST"])
+@require_tier("team")
 def libc_database():
     """Execute libc-database for libc identification and offset lookup"""
     try:
@@ -13064,6 +13116,7 @@ def libc_database():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/gdb-peda", methods=["POST"])
+@require_tier("team")
 def gdb_peda():
     """Execute GDB with PEDA for enhanced debugging and exploitation"""
     try:
@@ -13126,6 +13179,7 @@ quit
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/angr", methods=["POST"])
+@require_tier("team")
 def angr():
     """Execute angr for symbolic execution and binary analysis"""
     try:
@@ -13217,6 +13271,7 @@ for func_addr, func in cfg.functions.items():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/ropper", methods=["POST"])
+@require_tier("team")
 def ropper():
     """Execute ropper for advanced ROP/JOP gadget searching"""
     try:
@@ -13264,6 +13319,7 @@ def ropper():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/pwninit", methods=["POST"])
+@require_tier("team")
 def pwninit():
     """Execute pwninit for CTF binary exploitation setup"""
     try:
@@ -13305,6 +13361,7 @@ def pwninit():
 # ============================================================================
 
 @app.route("/api/tools/feroxbuster", methods=["POST"])
+@require_tier("team")
 def feroxbuster():
     """Execute Feroxbuster for recursive content discovery with enhanced logging"""
     try:
@@ -13336,6 +13393,7 @@ def feroxbuster():
         }), 500
 
 @app.route("/api/tools/dotdotpwn", methods=["POST"])
+@require_tier("team")
 def dotdotpwn():
     """Execute DotDotPwn for directory traversal testing with enhanced logging"""
     try:
@@ -13368,6 +13426,7 @@ def dotdotpwn():
         }), 500
 
 @app.route("/api/tools/xsser", methods=["POST"])
+@require_tier("team")
 def xsser():
     """Execute XSSer for XSS vulnerability testing with enhanced logging"""
     try:
@@ -13401,6 +13460,7 @@ def xsser():
         }), 500
 
 @app.route("/api/tools/wfuzz", methods=["POST"])
+@require_tier("team")
 def wfuzz():
     """Execute Wfuzz for web application fuzzing with enhanced logging"""
     try:
@@ -13435,6 +13495,7 @@ def wfuzz():
 # ============================================================================
 
 @app.route("/api/tools/dirsearch", methods=["POST"])
+@require_tier("team")
 def dirsearch():
     """Execute Dirsearch for advanced directory and file discovery with enhanced logging"""
     try:
@@ -13467,6 +13528,7 @@ def dirsearch():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/katana", methods=["POST"])
+@require_tier("team")
 def katana():
     """Execute Katana for next-generation crawling and spidering with enhanced logging"""
     try:
@@ -13505,6 +13567,7 @@ def katana():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/gau", methods=["POST"])
+@require_tier("team")
 def gau():
     """Execute Gau (Get All URLs) for URL discovery from multiple sources with enhanced logging"""
     try:
@@ -13542,6 +13605,7 @@ def gau():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/waybackurls", methods=["POST"])
+@require_tier("team")
 def waybackurls():
     """Execute Waybackurls for historical URL discovery with enhanced logging"""
     try:
@@ -13575,6 +13639,7 @@ def waybackurls():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/arjun", methods=["POST"])
+@require_tier("team")
 def arjun():
     """Execute Arjun for HTTP parameter discovery with enhanced logging"""
     try:
@@ -13614,6 +13679,7 @@ def arjun():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/paramspider", methods=["POST"])
+@require_tier("team")
 def paramspider():
     """Execute ParamSpider for parameter mining from web archives with enhanced logging"""
     try:
@@ -13648,6 +13714,7 @@ def paramspider():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/x8", methods=["POST"])
+@require_tier("team")
 def x8():
     """Execute x8 for hidden parameter discovery with enhanced logging"""
     try:
@@ -13683,6 +13750,7 @@ def x8():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/jaeles", methods=["POST"])
+@require_tier("team")
 def jaeles():
     """Execute Jaeles for advanced vulnerability scanning with custom signatures"""
     try:
@@ -13718,6 +13786,7 @@ def jaeles():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/dalfox", methods=["POST"])
+@require_tier("team")
 def dalfox():
     """Execute Dalfox for advanced XSS vulnerability scanning with enhanced logging"""
     try:
@@ -13763,6 +13832,7 @@ def dalfox():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/httpx", methods=["POST"])
+@require_tier("team")
 def httpx():
     """Execute httpx for fast HTTP probing and technology detection"""
     try:
@@ -13813,6 +13883,7 @@ def httpx():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/anew", methods=["POST"])
+@require_tier("team")
 def anew():
     """Execute anew for appending new lines to files (useful for data processing)"""
     try:
@@ -13842,6 +13913,7 @@ def anew():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/qsreplace", methods=["POST"])
+@require_tier("team")
 def qsreplace():
     """Execute qsreplace for query string parameter replacement"""
     try:
@@ -13868,6 +13940,7 @@ def qsreplace():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/uro", methods=["POST"])
+@require_tier("team")
 def uro():
     """Execute uro for filtering out similar URLs"""
     try:
@@ -14670,6 +14743,7 @@ http_framework = HTTPTestingFramework()
 browser_agent = BrowserAgent()
 
 @app.route("/api/tools/http-framework", methods=["POST"])
+@require_tier("team")
 def http_framework_endpoint():
     """Enhanced HTTP testing framework (Burp Suite alternative)"""
     try:
@@ -14766,6 +14840,7 @@ def http_framework_endpoint():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/browser-agent", methods=["POST"])
+@require_tier("team")
 def browser_agent_endpoint():
     """AI-powered browser agent for web application inspection"""
     try:
@@ -14855,6 +14930,7 @@ def browser_agent_endpoint():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/tools/burpsuite-alternative", methods=["POST"])
+@require_tier("team")
 def burpsuite_alternative():
     """Comprehensive Burp Suite alternative combining HTTP framework and browser agent"""
     try:
@@ -14949,6 +15025,7 @@ def burpsuite_alternative():
         }), 500
 
 @app.route("/api/tools/zap", methods=["POST"])
+@require_tier("team")
 def zap():
     """Execute OWASP ZAP with enhanced logging"""
     try:
@@ -14999,6 +15076,7 @@ def zap():
         }), 500
 
 @app.route("/api/tools/wafw00f", methods=["POST"])
+@require_tier("team")
 def wafw00f():
     """Execute wafw00f to identify and fingerprint WAF products with enhanced logging"""
     try:
@@ -15028,6 +15106,7 @@ def wafw00f():
         }), 500
 
 @app.route("/api/tools/fierce", methods=["POST"])
+@require_tier("team")
 def fierce():
     """Execute fierce for DNS reconnaissance with enhanced logging"""
     try:
@@ -15061,6 +15140,7 @@ def fierce():
         }), 500
 
 @app.route("/api/tools/dnsenum", methods=["POST"])
+@require_tier("team")
 def dnsenum():
     """Execute dnsenum for DNS enumeration with enhanced logging"""
     try:
@@ -15481,6 +15561,7 @@ def ai_test_payload():
 # ============================================================================
 
 @app.route("/api/tools/api_fuzzer", methods=["POST"])
+@require_tier("team")
 def api_fuzzer():
     """Advanced API endpoint fuzzing with intelligent parameter discovery"""
     try:
@@ -15538,6 +15619,7 @@ def api_fuzzer():
         }), 500
 
 @app.route("/api/tools/graphql_scanner", methods=["POST"])
+@require_tier("team")
 def graphql_scanner():
     """Advanced GraphQL security scanning and introspection"""
     try:
@@ -15645,6 +15727,7 @@ def graphql_scanner():
         }), 500
 
 @app.route("/api/tools/jwt_analyzer", methods=["POST"])
+@require_tier("team")
 def jwt_analyzer():
     """Advanced JWT token analysis and vulnerability testing"""
     try:
@@ -15763,6 +15846,7 @@ def jwt_analyzer():
         }), 500
 
 @app.route("/api/tools/api_schema_analyzer", methods=["POST"])
+@require_tier("team")
 def api_schema_analyzer():
     """Analyze API schemas and identify potential security issues"""
     try:
@@ -15875,6 +15959,7 @@ def api_schema_analyzer():
 # ============================================================================
 
 @app.route("/api/tools/volatility3", methods=["POST"])
+@require_tier("team")
 def volatility3():
     """Execute Volatility3 for advanced memory forensics with enhanced logging"""
     try:
@@ -15915,6 +16000,7 @@ def volatility3():
         }), 500
 
 @app.route("/api/tools/foremost", methods=["POST"])
+@require_tier("team")
 def foremost():
     """Execute Foremost for file carving with enhanced logging"""
     try:
@@ -15955,6 +16041,7 @@ def foremost():
         }), 500
 
 @app.route("/api/tools/steghide", methods=["POST"])
+@require_tier("team")
 def steghide():
     """Execute Steghide for steganography analysis with enhanced logging"""
     try:
@@ -16004,6 +16091,7 @@ def steghide():
         }), 500
 
 @app.route("/api/tools/exiftool", methods=["POST"])
+@require_tier("team")
 def exiftool():
     """Execute ExifTool for metadata extraction with enhanced logging"""
     try:
@@ -16043,6 +16131,7 @@ def exiftool():
         }), 500
 
 @app.route("/api/tools/hashpump", methods=["POST"])
+@require_tier("team")
 def hashpump():
     """Execute HashPump for hash length extension attacks with enhanced logging"""
     try:
@@ -16079,6 +16168,7 @@ def hashpump():
 # ============================================================================
 
 @app.route("/api/tools/hakrawler", methods=["POST"])
+@require_tier("team")
 def hakrawler():
     """
     Execute Hakrawler for web endpoint discovery with enhanced logging

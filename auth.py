@@ -700,12 +700,11 @@ def get_session_role(workspace_id: str | None = None) -> str | None:
         if admin_emails:
             return "admin" if email.lower() in admin_emails else "viewer"
         logger.warning(
-            "get_session_role: SIC_ADMIN_EMAILS not set — granting admin to "
-            "authenticated user %s via single-tenant fallback; set SIC_ADMIN_EMAILS "
-            "to enforce least privilege.",
+            "get_session_role: SIC_ADMIN_EMAILS not set — denying admin to "
+            "authenticated user %s; set SIC_ADMIN_EMAILS to grant access.",
             email,
         )
-        return "admin"
+        return "viewer"
 
     try:
         import sqlite3  # noqa: PLC0415
