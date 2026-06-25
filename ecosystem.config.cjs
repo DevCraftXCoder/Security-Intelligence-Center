@@ -79,7 +79,12 @@ module.exports = {
       interpreter: PYTHON,
       windowsHide: true,
       env: {
-        SIC_ENV: "development",
+        // SIC_ENV intentionally omitted — billing_server.py reads it from sic/.env
+        // (where it is "production"). Setting it here to "development" would override
+        // the .env value via os.environ.setdefault and cause billing to use test Stripe
+        // price IDs and skip production startup guards.
+        STATS_SERVER_URL: process.env.STATS_SERVER_URL || "https://stats.frxncois.com",
+        STATS_SECRET: process.env.STATS_SECRET || "",
       },
       max_memory_restart: "512M",
       error_file: "logs/billing-error.log",
