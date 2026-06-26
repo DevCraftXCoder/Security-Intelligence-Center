@@ -27,14 +27,16 @@ logger = logging.getLogger(__name__)
 
 TIER_LIMITS: dict[str, dict[str, Any]] = {
     "community": {
-        # Existing limits
+        # Core limits
         "scan_history_days": 7,
         "max_seats": 1,
+        "viewer_seats": 0,                  # no read-only viewers on community
         "pdf_export": False,
         "sso": False,
         "shareable_reports": False,
         "concurrent_scans": 1,
         "api_tokens": 1,
+        "api_rate_limit_rpm": 30,           # requests per minute on scan/tools endpoints
         # Extended limits
         "workspace_count": 1,
         "scans_per_day": 10,
@@ -47,15 +49,31 @@ TIER_LIMITS: dict[str, dict[str, Any]] = {
         "enrichment": False,
         "mcp_tool_slots": 10,               # of 85 tools
         "scan_depth": "basic",
+        # Alert channels — scan lifecycle Discord/Slack webhooks
+        "discord_alerts": False,
+        "slack_alerts": False,
+        # Branding
+        "custom_branding": False,           # custom logo + accent color
+        "white_label": False,               # custom domain + white-label UI
+        # Compliance exports
+        "audit_log_export": False,
+        "soc_compliance_export": False,     # SOC-ready compliance PDF (Studio only)
+        # Scheduled scans
+        "scheduled_scans": False,
+        # Network detection tiers
+        "network_anomaly_detection": True,  # basic anomaly monitoring (all tiers)
+        "arp_detection": False,             # ARP spoofing + MITM detection
     },
     "team": {
         "scan_history_days": 90,
         "max_seats": 5,
+        "viewer_seats": -1,                 # unlimited read-only viewers
         "pdf_export": True,
         "sso": False,
         "shareable_reports": True,
         "concurrent_scans": 5,
         "api_tokens": 10,
+        "api_rate_limit_rpm": 120,
         # Extended limits
         "workspace_count": 10,
         "scans_per_day": 100,
@@ -68,15 +86,31 @@ TIER_LIMITS: dict[str, dict[str, Any]] = {
         "enrichment": True,
         "mcp_tool_slots": -1,               # unlimited
         "scan_depth": "full",
+        # Alert channels
+        "discord_alerts": True,
+        "slack_alerts": True,
+        # Branding
+        "custom_branding": True,
+        "white_label": False,
+        # Compliance exports
+        "audit_log_export": False,
+        "soc_compliance_export": False,
+        # Scheduled scans
+        "scheduled_scans": True,
+        # Network detection
+        "network_anomaly_detection": True,
+        "arp_detection": True,
     },
     "studio": {
         "scan_history_days": -1,            # unlimited
-        "max_seats": -1,                     # unlimited
+        "max_seats": -1,                    # unlimited
+        "viewer_seats": -1,                 # unlimited
         "pdf_export": True,
         "sso": True,
         "shareable_reports": True,
         "concurrent_scans": -1,
         "api_tokens": -1,
+        "api_rate_limit_rpm": 600,
         # Extended limits
         "workspace_count": -1,              # unlimited
         "scans_per_day": -1,                # unlimited
@@ -89,6 +123,20 @@ TIER_LIMITS: dict[str, dict[str, Any]] = {
         "enrichment": True,
         "mcp_tool_slots": -1,
         "scan_depth": "full",
+        # Alert channels
+        "discord_alerts": True,
+        "slack_alerts": True,
+        # Branding
+        "custom_branding": True,
+        "white_label": True,
+        # Compliance exports
+        "audit_log_export": True,
+        "soc_compliance_export": True,
+        # Scheduled scans
+        "scheduled_scans": True,
+        # Network detection
+        "network_anomaly_detection": True,
+        "arp_detection": True,
     },
 }
 

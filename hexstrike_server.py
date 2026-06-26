@@ -127,6 +127,8 @@ from incidents import incidents_bp  # noqa: E402
 from workspaces import workspaces_bp  # noqa: E402
 from api_tokens import api_tokens_bp  # noqa: E402
 from scan_history import scan_history_bp  # noqa: E402
+from audit_log import audit_log_export_bp  # noqa: E402
+from scheduled_scans import scheduled_scans_bp, scheduled_scans_init_db  # noqa: E402
 
 try:
     from sso import sso_bp  # noqa: E402
@@ -138,6 +140,9 @@ app.register_blueprint(incidents_bp)
 app.register_blueprint(workspaces_bp)
 app.register_blueprint(api_tokens_bp)
 app.register_blueprint(scan_history_bp)
+app.register_blueprint(audit_log_export_bp)
+app.register_blueprint(scheduled_scans_bp)
+scheduled_scans_init_db()
 
 # A4: AI grading blueprint (POST /api/ai/grade) — was defined but never registered.
 try:
@@ -228,26 +233,52 @@ except ImportError:
 import collections as _collections  # noqa: E402
 
 _scan_rl_window = 60   # 1 minute
-_scan_rl_max = 30      # 30 requests per minute
+_scan_rl_max = 30      # community default — overridden per-tier at check time
 _scan_rl_counters: dict[str, _collections.deque] = {}
 _scan_rl_lock = threading.Lock()
 
 _SCAN_RATE_LIMITED_PATHS = frozenset({"/api/command", "/api/intelligence/smart-scan"})
 _TOOLS_RATE_LIMITED_PREFIX = "/api/tools/"
 
+# Per-tier RPM caps — populated lazily from TIER_LIMITS so feature_gates.py
+# is the single source of truth.
+_TIER_RPM_CACHE: dict[str, int] = {}
 
-def _scan_rate_check(key: str) -> bool:
-    """Return True if the caller is within the 30/min scan limit."""
+
+def _tier_rpm(tier: str) -> int:
+    """Return requests-per-minute cap for *tier* from TIER_LIMITS."""
+    if tier not in _TIER_RPM_CACHE:
+        try:
+            from feature_gates import get_tier_limit as _gtl  # noqa: PLC0415
+            val = _gtl(tier, "api_rate_limit_rpm")
+            _TIER_RPM_CACHE[tier] = int(val) if val and int(val) > 0 else 30
+        except Exception:
+            _TIER_RPM_CACHE[tier] = 30
+    return _TIER_RPM_CACHE[tier]
+
+
+def _scan_rate_check(key: str, rpm_limit: int | None = None) -> bool:
+    """Return True if the caller is within the per-tier rpm scan limit.
+
+    *rpm_limit* overrides the default when the caller already resolved the tier.
+    Falls back to _scan_rl_max (30) when None.
+    """
+    limit = rpm_limit if rpm_limit is not None else _scan_rl_max
     now = time.time()
     cutoff = now - _scan_rl_window
     with _scan_rl_lock:
         dq = _scan_rl_counters.get(key)
         if dq is None:
-            dq = _collections.deque(maxlen=_scan_rl_max)
+            dq = _collections.deque(maxlen=limit)
             _scan_rl_counters[key] = dq
+        # Resize deque if tier changed since it was created
+        if dq.maxlen != limit:
+            new_dq = _collections.deque(dq, maxlen=limit)
+            _scan_rl_counters[key] = new_dq
+            dq = new_dq
         while dq and dq[0] < cutoff:
             dq.popleft()
-        if len(dq) >= _scan_rl_max:
+        if len(dq) >= limit:
             return False
         dq.append(now)
         return True
@@ -375,7 +406,10 @@ def enforce_target_scope() -> None:  # type: ignore[return-value]
 
 @app.before_request
 def scan_rate_limit() -> None:  # type: ignore[return-value]
-    """P1: Enforce 30 req/min per-email (or per-IP) on high-risk scan endpoints."""
+    """P1: Enforce per-tier req/min on high-risk scan endpoints.
+
+    RPM caps: community=30, team=120, studio=600 (from TIER_LIMITS.api_rate_limit_rpm).
+    """
     if request.path not in _SCAN_RATE_LIMITED_PATHS and not request.path.startswith(_TOOLS_RATE_LIMITED_PREFIX):
         return None  # type: ignore[return-value]
     try:
@@ -384,8 +418,9 @@ def scan_rate_limit() -> None:  # type: ignore[return-value]
     except ImportError:
         from flask import session as _s_rl  # noqa: PLC0415
         key = _s_rl.get("email") or request.remote_addr or "unknown"
-    if not _scan_rate_check(key):
-        logger.warning("[rate_limit] scan endpoint %s exceeded for key %s", request.path, key)
+    rpm = _tier_rpm(current_user_tier())
+    if not _scan_rate_check(key, rpm_limit=rpm):
+        logger.warning("[rate_limit] scan endpoint %s exceeded for key %s (limit=%d rpm)", request.path, key, rpm)
         return jsonify({"error": "rate_limit_exceeded", "retry_after": _scan_rl_window}), 429  # type: ignore[return-value]
     return None  # type: ignore[return-value]
 

@@ -454,22 +454,40 @@ def invite_member_route(workspace_id: str):
     if role not in _VALID_ROLES:
         return jsonify({"error": "role_invalid", "valid": sorted(_VALID_ROLES)}), 400
 
-    # Seat limit check before INSERT — skip for existing members (re-invite is not a new seat)
+    # Seat limit check before INSERT — skip for existing members (re-invite is not a new seat).
+    # Admins and incident-owners count against max_seats; viewers count against viewer_seats.
     tier = current_user_tier()
-    max_seats = TIER_LIMITS.get(tier, TIER_LIMITS["community"])["max_seats"]
-    if max_seats != -1:
-        with _connect() as conn:
-            already_member = conn.execute(
-                "SELECT 1 FROM workspace_members WHERE workspace_id = ? AND email = ?",
-                (workspace_id, invite_email),
-            ).fetchone()
-            if not already_member:
-                current_count = conn.execute(
-                    "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = ?",
-                    (workspace_id,),
-                ).fetchone()[0]
-                if current_count >= max_seats:
-                    return jsonify({"error": "seat_limit_reached", "limit": max_seats, "tier": tier}), 403
+    tier_def = TIER_LIMITS.get(tier, TIER_LIMITS["community"])
+    if role == "viewer":
+        viewer_cap = tier_def.get("viewer_seats", 0)
+        if viewer_cap != -1:  # -1 = unlimited
+            with _connect() as conn:
+                already_member = conn.execute(
+                    "SELECT 1 FROM workspace_members WHERE workspace_id = ? AND email = ?",
+                    (workspace_id, invite_email),
+                ).fetchone()
+                if not already_member:
+                    current_viewers = conn.execute(
+                        "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = ? AND role = 'viewer'",
+                        (workspace_id,),
+                    ).fetchone()[0]
+                    if current_viewers >= viewer_cap:
+                        return jsonify({"error": "viewer_seat_limit_reached", "limit": viewer_cap, "tier": tier}), 403
+    else:
+        max_seats = tier_def["max_seats"]
+        if max_seats != -1:
+            with _connect() as conn:
+                already_member = conn.execute(
+                    "SELECT 1 FROM workspace_members WHERE workspace_id = ? AND email = ?",
+                    (workspace_id, invite_email),
+                ).fetchone()
+                if not already_member:
+                    current_count = conn.execute(
+                        "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = ? AND role != 'viewer'",
+                        (workspace_id,),
+                    ).fetchone()[0]
+                    if current_count >= max_seats:
+                        return jsonify({"error": "seat_limit_reached", "limit": max_seats, "tier": tier}), 403
 
     now = _iso_now()
     try:

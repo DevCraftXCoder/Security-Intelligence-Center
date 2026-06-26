@@ -514,13 +514,25 @@ def send_scan_alert(event: str, details: dict[str, Any] | None = None) -> None:
             logger.debug("Suppressed duplicate alert for finding %s", fid)
             return
 
+    # Tier gate: check which alert channels the caller's subscription permits.
+    # feature_gates is imported lazily so scan_alerts can be used standalone.
+    _discord_allowed = True
+    _slack_allowed = True
+    try:
+        from feature_gates import feature_enabled as _fe  # noqa: PLC0415
+        _discord_allowed = _fe("discord_alerts")
+        _slack_allowed = _fe("slack_alerts")
+    except Exception:
+        # No Flask context or feature_gates unavailable — allow (dev/test mode)
+        pass
+
     dispatched = False
     try:
-        if _get_discord_url():
+        if _discord_allowed and _get_discord_url():
             t = threading.Thread(target=_fire_webhook, args=(event, dict(payload)), daemon=True)
             t.start()
             dispatched = True
-        if _get_slack_url():
+        if _slack_allowed and _get_slack_url():
             t = threading.Thread(target=_fire_slack, args=(event, dict(payload)), daemon=True)
             t.start()
             dispatched = True
