@@ -14,12 +14,6 @@
 
 ---
 
-## Overview
-
-SIC runs as a local server exposing an MCP interface for integration with any MCP-compatible client (Claude Code, Copilot, Cursor). All scan operations are IP-allowlisted to the home network. Scan output flows through a reporting pipeline that produces both a detailed security audit report and a SOC handoff HTML — with week-over-week posture tracking built in.
-
----
-
 ## Quick Start
 
 ### Fastest path (paying customers) — one command
@@ -101,6 +95,12 @@ Add to your MCP client config:
   }
 }
 ```
+
+---
+
+## Overview
+
+SIC runs as a local server exposing an MCP interface for integration with any MCP-compatible client (Claude Code, Copilot, Cursor). All scan operations are IP-allowlisted to the home network. Scan output flows through a reporting pipeline that produces both a detailed security audit report and a SOC handoff HTML — with week-over-week posture tracking built in.
 
 ---
 
