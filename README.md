@@ -16,45 +16,28 @@
 
 ## Quick Start
 
-### Fastest path (paying customers) — one command
+### Free scanner — zero setup
 
 ```bash
-# Run this from the root of the codebase you want SIC to inspect:
-cd /path/to/your-project
-npx sic-security          # launch the full dashboard / MCP server
-npx sic-security scan     # instant code scan — no external tools required
+# From the root of any project you want to scan:
+npx sic-security scan
 ```
 
-**`npx sic-security scan`** runs SIC's built-in, zero-dependency code scanner
-against your project and prints findings immediately — hardcoded secrets,
-dangerous patterns (`eval`, `shell=True`, SQL string-building, unsafe YAML/pickle,
-CORS wildcards, …), and dependency CVEs (when `pip-audit` is present). It needs no
-nmap/nuclei/external binaries, so it works on a fresh install on any machine.
+`npx sic-security scan` runs the built-in, zero-dependency code scanner —
+hardcoded secrets, dangerous patterns (`eval`, `shell=True`, SQL string-building,
+unsafe YAML/pickle, CORS wildcards, …), and dependency CVEs (when `pip-audit` is
+present). Stdlib-only Python, no external binaries, no account required.
 
-`npx sic-security` (the `bin/sic.js` launcher) creates an isolated Python venv
-under `~/.sic-security/venv`, installs the core dependencies (first run only),
-and starts the server for you. It detects the project type of the directory you
-run it from (Node.js, Python, Go, Rust, Docker, …) and points SIC's inspect /
-Claude Code actions at **that** codebase via `SIC_PROJECT_DIR` — not at SIC's own
-files. This is the recommended install path after you subscribe and receive your
-magic-link.
+> The public `sic-security` npm package (v7.0.0+) is the scanner only. The full
+> platform (dashboard, MCP 85-tool suite, reporting pipeline, billing, auth) runs
+> from this private repo via `python start_server.py` — not via npx.
 
-> **Tailored to your codebase:** SIC scans and INSPECT operations are confined to
-> the directory you launched from (or an explicit `SIC_PROJECT_DIR`). Run it from
-> your repo root for the best results.
->
-> **Prerequisites:** a system Python 3.8+ must be on `PATH` (used once to create
-> the venv). If it is missing, the launcher prints an actionable error and exits.
-> Before first use, copy `.env.example` to `.env` and set the required variables
-> (see First-Run Setup below). Re-run with `npx sic-security --reinstall` to force
-> a dependency refresh.
-
-### Manual path
+### Full platform — private install
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/DevCraftXCoder/Security-Intelligence-Center.git
-cd Security-Intelligence-Center
+# 1. Clone the private repository
+git clone https://github.com/DevCraftXCoder/SIC-private.git
+cd SIC-private
 
 # 2. Create + activate a virtual environment
 python -m venv .venv

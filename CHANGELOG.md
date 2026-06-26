@@ -1,5 +1,23 @@
 # SIC Changelog
 
+## 7.0.0 — 2026-06-26
+
+### Changed
+- **Distribution split:** `sic-security` npm package is now scanner-only (free, MIT).
+  The full platform (dashboard, MCP 85-tool suite, reporting pipeline, billing, auth)
+  remains private — delivered from this repo, not from npm.
+- `bin/sic.js` in the public package no longer launches the server. `npx sic-security`
+  and `npx sic-security scan` both invoke the static scanner only.
+- `scan_python.py` published verbatim to the public repo as the canonical free scanner.
+- `package.json` `files` manifest trimmed to 7 entries — no server code ships in the
+  public npm tarball.
+
+### Fixed
+- Prior npm release (`6.0.6`) shipped the full server codebase in its tarball.
+  v7.0.0 closes the leak.
+
+---
+
 ## 6.0.1 — 2026-06-06
 
 ### Fixed

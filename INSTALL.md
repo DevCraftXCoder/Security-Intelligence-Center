@@ -20,7 +20,7 @@ SIC (Security Intelligence Center) is a self-hosted Python Flask security platfo
 ### Linux / macOS
 
 ```bash
-git clone https://github.com/DevCraftXCoder/SIC && cd SIC
+git clone https://github.com/DevCraftXCoder/SIC-private && cd SIC-private
 chmod +x install.sh
 ./install.sh
 ```
@@ -28,8 +28,8 @@ chmod +x install.sh
 ### Windows (PowerShell)
 
 ```powershell
-git clone https://github.com/DevCraftXCoder/SIC
-cd SIC
+git clone https://github.com/DevCraftXCoder/SIC-private
+cd SIC-private
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
@@ -110,7 +110,7 @@ pm2 logs sic-billing
 A healthy response from `/health` looks like:
 
 ```json
-{"status": "ok", "version": "6.0.0"}
+{"status": "ok", "version": "6.0.1"}
 ```
 
 ---
