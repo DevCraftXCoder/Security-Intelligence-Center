@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 TIER_LIMITS: dict[str, dict[str, Any]] = {
     "community": {
+        # Existing limits
         "scan_history_days": 7,
         "max_seats": 1,
         "pdf_export": False,
@@ -34,6 +35,18 @@ TIER_LIMITS: dict[str, dict[str, Any]] = {
         "shareable_reports": False,
         "concurrent_scans": 1,
         "api_tokens": 1,
+        # Extended limits
+        "workspace_count": 1,
+        "scans_per_day": 10,
+        "export_formats": ["json"],          # csv/pdf blocked
+        "ctf_tools": False,
+        "intelligence_engine": False,
+        "vuln_intel": False,
+        "ai_payloads": False,
+        "soc_pipeline": False,
+        "enrichment": False,
+        "mcp_tool_slots": 10,               # of 85 tools
+        "scan_depth": "basic",
     },
     "team": {
         "scan_history_days": 90,
@@ -43,15 +56,39 @@ TIER_LIMITS: dict[str, dict[str, Any]] = {
         "shareable_reports": True,
         "concurrent_scans": 5,
         "api_tokens": 10,
+        # Extended limits
+        "workspace_count": 10,
+        "scans_per_day": 100,
+        "export_formats": ["json", "csv", "pdf"],
+        "ctf_tools": True,
+        "intelligence_engine": True,
+        "vuln_intel": True,
+        "ai_payloads": True,
+        "soc_pipeline": True,
+        "enrichment": True,
+        "mcp_tool_slots": -1,               # unlimited
+        "scan_depth": "full",
     },
     "studio": {
-        "scan_history_days": -1,   # unlimited
-        "max_seats": -1,            # unlimited
+        "scan_history_days": -1,            # unlimited
+        "max_seats": -1,                     # unlimited
         "pdf_export": True,
         "sso": True,
         "shareable_reports": True,
         "concurrent_scans": -1,
         "api_tokens": -1,
+        # Extended limits
+        "workspace_count": -1,              # unlimited
+        "scans_per_day": -1,                # unlimited
+        "export_formats": ["json", "csv", "pdf", "html", "sarif"],
+        "ctf_tools": True,
+        "intelligence_engine": True,
+        "vuln_intel": True,
+        "ai_payloads": True,
+        "soc_pipeline": True,
+        "enrichment": True,
+        "mcp_tool_slots": -1,
+        "scan_depth": "full",
     },
 }
 

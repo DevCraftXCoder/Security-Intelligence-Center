@@ -10142,6 +10142,7 @@ def format_tool_output():
 # ============================================================================
 
 @app.route("/api/intelligence/analyze-target", methods=["POST"])
+@require_tier("team")
 def analyze_target():
     """Analyze target and create comprehensive profile using Intelligent Decision Engine"""
     try:
@@ -10169,6 +10170,7 @@ def analyze_target():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/intelligence/select-tools", methods=["POST"])
+@require_tier("team")
 def select_optimal_tools():
     """Select optimal tools based on target profile and objective"""
     try:
@@ -10204,6 +10206,7 @@ def select_optimal_tools():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/intelligence/optimize-parameters", methods=["POST"])
+@require_tier("team")
 def optimize_tool_parameters():
     """Optimize tool parameters based on target profile and context"""
     try:
@@ -10663,6 +10666,7 @@ def execute_subfinder_scan(target, params):
         return {"success": False, "error": str(e)}
 
 @app.route("/api/intelligence/technology-detection", methods=["POST"])
+@require_tier("team")
 def detect_technologies():
     """Detect technologies and create technology-specific testing recommendations"""
     try:
@@ -15469,6 +15473,7 @@ class AIPayloadGenerator:
 ai_payload_generator = AIPayloadGenerator()
 
 @app.route("/api/ai/generate_payload", methods=["POST"])
+@require_tier("team")
 def ai_generate_payload():
     """Generate AI-powered contextual payloads for security testing"""
     try:
@@ -15499,6 +15504,7 @@ def ai_generate_payload():
         }), 500
 
 @app.route("/api/ai/test_payload", methods=["POST"])
+@require_tier("team")
 def ai_test_payload():
     """Test generated payload against target with AI analysis"""
     try:
@@ -16354,6 +16360,7 @@ def exploit_generate():
         }), 500
 
 @app.route("/api/vuln-intel/attack-chains", methods=["POST"])
+@require_tier("team")
 def discover_attack_chains():
     """Discover multi-stage attack possibilities"""
     try:
@@ -16431,6 +16438,7 @@ def discover_attack_chains():
         }), 500
 
 @app.route("/api/vuln-intel/threat-feeds", methods=["POST"])
+@require_tier("team")
 def threat_intelligence_feeds():
     """Aggregate and correlate threat intelligence from multiple sources"""
     try:
@@ -16849,6 +16857,7 @@ def advanced_payload_generation():
 # ============================================================================
 
 @app.route("/api/ctf/create-challenge-workflow", methods=["POST"])
+@require_tier("team")
 def create_ctf_challenge_workflow():
     """Create specialized workflow for CTF challenge"""
     try:
@@ -16889,6 +16898,7 @@ def create_ctf_challenge_workflow():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/ctf/auto-solve-challenge", methods=["POST"])
+@require_tier("team")
 def auto_solve_ctf_challenge():
     """Attempt to automatically solve a CTF challenge"""
     try:
@@ -16929,6 +16939,7 @@ def auto_solve_ctf_challenge():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/ctf/team-strategy", methods=["POST"])
+@require_tier("team")
 def create_ctf_team_strategy():
     """Create optimal team strategy for CTF competition"""
     try:
@@ -16969,6 +16980,7 @@ def create_ctf_team_strategy():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/ctf/suggest-tools", methods=["POST"])
+@require_tier("community")
 def suggest_ctf_tools():
     """Suggest optimal tools for CTF challenge based on description and category"""
     try:
@@ -17006,6 +17018,7 @@ def suggest_ctf_tools():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/ctf/cryptography-solver", methods=["POST"])
+@require_tier("team")
 def ctf_cryptography_solver():
     """Advanced cryptography challenge solver with multiple attack methods"""
     try:
@@ -17104,6 +17117,7 @@ def ctf_cryptography_solver():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/ctf/forensics-analyzer", methods=["POST"])
+@require_tier("team")
 def ctf_forensics_analyzer():
     """Advanced forensics challenge analyzer with multiple investigation techniques"""
     try:
@@ -17247,6 +17261,7 @@ def ctf_forensics_analyzer():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/ctf/binary-analyzer", methods=["POST"])
+@require_tier("team")
 def ctf_binary_analyzer():
     """Advanced binary analysis for reverse engineering and pwn challenges"""
     try:
@@ -17635,6 +17650,7 @@ def configure_auto_scaling():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/process/scale-pool", methods=["POST"])
+@require_tier("studio")
 def manual_scale_pool():
     """Manually scale the process pool"""
     try:
