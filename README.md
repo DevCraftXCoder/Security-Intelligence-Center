@@ -54,23 +54,28 @@ accidentally committed and then live in git history forever.
 
 | Pattern | Examples caught |
 |---------|----------------|
-| Generic API keys | `api_key = "sk-..."`, `API_KEY="abc123"` |
+| Generic API keys | `api_key = "..."`, `API_KEY="abc123"` (16+ char values) |
+| Secret keys | `secret_key = "..."`, `app_secret = "..."` |
 | Passwords in code | `password = "hunter2"`, `db_pass = "..."` |
-| Bearer tokens | `Authorization: Bearer <literal token>` |
+| Auth / access tokens | `auth_token = "..."`, `access_token = "..."` |
 | JWT strings | Long `eyJ...` base64 blobs hardcoded in source |
-| AWS credentials | `AKIA...` access keys, secret keys |
-| Stripe keys | `sk_live_...`, `rk_live_...` |
-| GitHub tokens | `ghp_...`, `github_pat_...` |
-| Private key blocks | `-----BEGIN RSA PRIVATE KEY-----` and variants |
-| Database URLs | `postgres://user:password@host/db`, `mongodb+srv://...` |
+| AWS credentials | `AKIA...` access keys |
+| Stripe keys | `sk_live_...`, `sk_test_...`, `pk_live_...`, `rk_live_...` |
+| GitHub tokens | `ghp_...`, `gho_...`, `ghu_...`, `ghs_...`, `ghr_...` |
+| Cloudflare API tokens | `cf_token = "..."`, `cf_api_token = "..."` (30+ chars) |
+| Wrangler secrets | `wrangler_secret = "..."` (CF Workers deploy credentials) |
+| Private key blocks | `-----BEGIN RSA PRIVATE KEY-----` and EC / OPENSSH variants |
+| PostgreSQL URLs | `postgres://user:password@host/db` with embedded credentials |
+| MySQL URLs | `mysql://user:password@host/db` with embedded credentials |
+| Generic database URLs | `DATABASE_URL = "..."`, `DB_URL = "..."`, `CONNECTION_STRING = "..."` |
 
-It uses whole-word regex matching to minimize false positives — a variable named
-`api_key_description` won't trigger, but `api_key = "..."` will.
+Matching uses targeted regexes — a variable named `api_key_description` won't
+trigger, but `api_key = "abc..."` will.
 
 ### Dangerous code patterns
 
 Beyond secrets, the scanner flags patterns that are technically valid but commonly
-exploited, misused, or simply wrong in production code.
+exploited, misused, or wrong in production code.
 
 | Pattern | Why it matters |
 |---------|---------------|
@@ -78,18 +83,18 @@ exploited, misused, or simply wrong in production code.
 | `subprocess` with `shell=True` | Shell expansion enables command injection |
 | SQL built by string concat | Classic SQL injection — use parameterized queries |
 | `yaml.load()` without `Loader` | Unsafe deserialization; use `yaml.safe_load()` |
-| `pickle.loads()` on untrusted data | Arbitrary code execution on deserialization |
-| `DEBUG = True` in production configs | Exposes stack traces, internal state, and admin panels |
-| MD5 for cryptographic use | Broken hash algorithm — use SHA-256 or better |
+| `pickle.loads()` | Arbitrary code execution on deserialization of untrusted data |
+| `DEBUG = True` | Exposes stack traces, internal state, and admin panels in production |
+| MD5 for hashing | Broken algorithm — use SHA-256 or better |
 | `assert` for validation | Stripped by Python's `-O` flag; use explicit checks |
-| Open redirect patterns | Unvalidated `next=` / `redirect=` parameters |
-| CORS wildcard (`Access-Control-Allow-Origin: *`) | Allows any origin to read credentialed responses |
+| Open redirect via request params | Unvalidated `request.args` / `request.params` in a redirect call |
+| CORS wildcard | `Access-Control-Allow-Origin: *` lets any origin read credentialed responses |
 
 ### Dependency CVEs
 
 When `pip-audit` is installed, the scanner checks every `requirements*.txt` in the
 project against the Python Advisory Database. It reports package name, installed
-version, and CVE IDs for any known vulnerabilities.
+version, CVE ID, and fix version for any known vulnerabilities.
 
 ```bash
 pip install pip-audit   # enable dependency CVE scanning
@@ -102,55 +107,64 @@ skipped with a note in the output.
 
 ## Output
 
-Findings are grouped by severity and printed with file path and line number:
+Findings are grouped by severity and printed with file path and line number. Up to
+50 findings are shown in the terminal; the rest appear in the JSON report.
 
 ```
-SIC Code Scanner v7.0.0
-Scanning /path/to/your-project ...
-
+SIC code scan - /path/to/your-project
 6 findings  (2 critical  2 high  1 medium  1 low)
 
-  CRITICAL  aws_access_key          config/settings.py:14
-  CRITICAL  private_key_block       certs/deploy.pem:1
-  HIGH      hardcoded_password      app/db.py:30
-  HIGH      shell_true              scripts/deploy.py:88
-  MEDIUM    cors_wildcard           api/server.py:140
-  LOW       md5_usage               utils/hash.py:22
+  CRITICAL aws_access_key  config/settings.py:14
+  CRITICAL private_key_block  certs/deploy.pem:1
+  HIGH     hardcoded_password  app/db.py:30
+  HIGH     shell_true  scripts/deploy.py:88
+  MEDIUM   cors_wildcard  api/server.py:140
+  LOW      md5_usage  utils/hash.py:22
 
-Full report → /tmp/sic-scan-1234567890.json
+Full report: /tmp/soc_python_scan_abc123/python-scan.json
 ```
 
-Each finding includes:
-- **Severity** — critical / high / medium / low
-- **Pattern ID** — machine-readable name for filtering
-- **File + line** — jump directly to the source
-
-A full JSON report is written for every run, suitable for downstream tooling,
-dashboards, or diff-against-baseline workflows.
+A full JSON report (a flat array of findings) is written for every run, suitable
+for downstream tooling, dashboards, or diff-against-baseline workflows.
 
 ### JSON report format
 
+The report file is a flat JSON array — one object per finding:
+
 ```json
-{
-  "scan_target": "/path/to/project",
-  "timestamp": "2026-01-01T00:00:00",
-  "total_findings": 6,
-  "findings": [
-    {
-      "severity": "critical",
-      "pattern": "aws_access_key",
-      "file": "config/settings.py",
-      "line": 14,
-      "match": "AKIA..."
-    }
-  ],
-  "summary": {
-    "critical": 2,
-    "high": 2,
-    "medium": 1,
-    "low": 1
+[
+  {
+    "name": "aws_access_key",
+    "severity": "critical",
+    "description": "Potential hardcoded secret (aws_access_key) in config/settings.py:14",
+    "file": "config/settings.py",
+    "line": 14
+  },
+  {
+    "name": "shell_true",
+    "severity": "high",
+    "description": "subprocess with shell=True enables shell injection — scripts/deploy.py:88",
+    "file": "scripts/deploy.py",
+    "line": 88
   }
-}
+]
+```
+
+Each finding has:
+- `name` — machine-readable pattern ID for filtering
+- `severity` — `critical` / `high` / `medium` / `low`
+- `description` — human-readable summary with location
+- `file` — relative path from the scan root
+- `line` — line number (0 for dependency CVEs)
+
+### Programmatic use
+
+Pass `--json-only` to suppress the human-readable report and print only the JSON
+file path — useful in scripts that parse the output directly:
+
+```bash
+python scan_python.py /path/to/project --json-only
+# prints: /tmp/soc_python_scan_abc123/python-scan.json
 ```
 
 ---
@@ -158,8 +172,8 @@ dashboards, or diff-against-baseline workflows.
 ## Use in CI
 
 Drop into any pipeline — the scanner exits 0 whether or not findings are present,
-so it never blocks your build by default. Pipe the JSON report to your preferred
-alert or ticketing system.
+so it never blocks your build by default. Pipe the JSON report path to your
+preferred alert or ticketing system.
 
 **GitHub Actions:**
 ```yaml
@@ -188,17 +202,20 @@ npx --yes sic-security scan .
 ## How it works
 
 The scanner is a single Python file (`scan_python.py`) with no third-party
-dependencies. It walks your project tree, skips common non-code directories
-(`node_modules`, `.git`, `__pycache__`, `dist`, `build`, `.venv`), and runs three
-independent passes:
+dependencies. It walks your project tree, skips non-code directories, and runs
+three independent passes:
 
-1. **Secret scan** — regex matching against 14 patterns across all text files
-2. **Pattern scan** — AST-aware and regex matching for 10 dangerous code constructs
+1. **Secret scan** — 14 regex patterns across all text files (`.ts`, `.tsx`, `.js`,
+   `.jsx`, `.py`, `.env`, `.yaml`, `.yml`, `.json`, `.toml`, `.sh`, `.bash`)
+2. **Pattern scan** — 10 dangerous code constructs checked line by line
 3. **Dependency scan** — delegates to `pip-audit` if installed; skips gracefully if not
 
-Findings from all three passes are merged, deduplicated, and sorted by severity
-before output. The JSON report is written atomically to a temp file and the path
-is printed at the end of the run.
+Skipped directories: `node_modules`, `.git`, `dist`, `.next`, `__pycache__`,
+`.venv`, `venv`, `env`, `build`, `out`, `.cache`, `coverage`, `.turbo`,
+`.wrangler`, `_runs`, `_archive`, `tests`.
+
+Findings from all three passes are merged, deduplicated, sorted by severity, and
+written to a temp JSON file. The file path is printed at the end of every run.
 
 **No network calls. No file modifications. No telemetry.**
 Everything runs locally and stays on your machine.
