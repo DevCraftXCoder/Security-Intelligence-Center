@@ -1,16 +1,22 @@
 <div align="center">
 
-# SIC — Security Intelligence Center
+<img src="assets/sic-logo.png" alt="SIC — Security Intelligence Center" width="180" />
 
-### Penetration Testing & SOC Reporting Framework for Authorized Security Testing
+# Security Intelligence Center
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](#mcp-integration)
+### Penetration Testing & SOC Reporting Framework
 
-**A penetration testing MCP framework with specialized agents for authorized security testing, CTF challenges, defensive research, and automated SOC reporting.**
+[![Python](https://img.shields.io/badge/Python-3.8%2B-3572A5?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-7c3aed?style=flat-square)](#mcp-integration)
+[![Tools](https://img.shields.io/badge/Security_Tools-85-e94560?style=flat-square)](#mcp-integration)
+[![Agents](https://img.shields.io/badge/Agents-12%2B-e94560?style=flat-square)](#mcp-integration)
+
+**MCP framework with 85 security tools and 12+ specialized agents for authorized penetration testing, CTF challenges, defensive research, and automated SOC reporting.**
 
 </div>
+
+---
 
 ---
 
