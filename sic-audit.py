@@ -58,14 +58,14 @@ port = env.get("SIC_PORT", "9888")
 try:
     urllib.request.urlopen(f"http://localhost:{port}/health", timeout=3)
     results.append(check(f"SIC server reachable (:{port})", True))
-except:
+except Exception:
     results.append(check(f"SIC server reachable (:{port})", False, "Run: python server.py"))
 
 billing_port = env.get("BILLING_PORT", "9015")
 try:
     urllib.request.urlopen(f"http://localhost:{billing_port}/health", timeout=3)
     results.append(check(f"Billing server reachable (:{billing_port})", True))
-except:
+except Exception:
     results.append(check(f"Billing server reachable (:{billing_port})", False, "Run: python billing_server.py"))
 
 results.append(check("logs/ directory writable", os.access("logs", os.W_OK) or not os.path.exists("logs"), "Run: mkdir logs"))
