@@ -189,6 +189,7 @@ def get_tier(email: str) -> str:
         "incomplete", "incomplete_expired",
         "paused", "pending_review",
         "refunded", "disputed",
+        "pending",
     ):
         return "community"
     # past_due: retain tier for 7-day grace period, then downgrade.

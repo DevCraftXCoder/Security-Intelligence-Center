@@ -27,6 +27,9 @@ import time
 from datetime import datetime
 
 from mcp.server.fastmcp import FastMCP
+from guards import run_production_startup_guards
+
+run_production_startup_guards("mcp-server")
 
 class HexStrikeColors:
     """Enhanced color palette matching the server's ModernVisualEngine.COLORS"""

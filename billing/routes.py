@@ -1325,12 +1325,19 @@ def public_trial():
     try:
         init_db()
         existing = get_subscription(email_raw)
-        if existing and existing.get("tier") in ("team", "studio"):
-            # Already on a paid tier — don't downgrade, just re-send magic link
+        if existing:
+            if existing.get("tier") in ("team", "studio"):
+                # Already on a paid tier — don't downgrade, just re-send magic link
+                threading.Thread(
+                    target=_send_provisioning_email, args=(email_raw, {}), daemon=True
+                ).start()
+                return jsonify({"ok": True, "note": "existing_subscription"}), 200
+            # Already community — idempotent re-send; no upsert needed
             threading.Thread(
                 target=_send_provisioning_email, args=(email_raw, {}), daemon=True
             ).start()
-            return jsonify({"ok": True, "note": "existing_subscription"}), 200
+            logger.info("community trial re-send for %.6s***", email_raw[:6])
+            return jsonify({"ok": True, "note": "already_registered"}), 200
 
         upsert_subscription(
             email=email_raw,

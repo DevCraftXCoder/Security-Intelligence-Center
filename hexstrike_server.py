@@ -69,6 +69,9 @@ try:
 except ImportError:
     HAS_MITMPROXY = False
 from scope_enforcer import get_enforcer
+from guards import run_production_startup_guards
+
+run_production_startup_guards("hexstrike")
 
 # ============================================================================
 # LOGGING CONFIGURATION (MUST BE FIRST)
@@ -396,10 +399,10 @@ def enforce_tools_tier() -> None:  # type: ignore[return-value]
     if not email:
         return jsonify({"error": "auth_required", "message": "Authentication required to use security tools"}), 401  # type: ignore[return-value]
     user_tier = current_user_tier()
-    if tier_rank(user_tier) < tier_rank("community"):
+    if tier_rank(user_tier) < tier_rank("team"):
         return jsonify({  # type: ignore[return-value]
             "error": "tier_required",
-            "required_tier": "community",
+            "required_tier": "team",
             "current_tier": user_tier,
             "upgrade_url": "/api/billing/checkout",
         }), 402
@@ -9501,7 +9504,7 @@ def _is_loopback_target(target: str) -> bool:
 
 
 @app.route("/api/command", methods=["POST"])
-@require_tier("community")
+@require_tier("team")
 def generic_command():
     """Execute any command provided in the request with enhanced logging.
 
@@ -10279,7 +10282,7 @@ def create_attack_chain():
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/intelligence/smart-scan", methods=["POST"])
-@require_tier("community")
+@require_tier("team")
 def intelligent_smart_scan():
     """Execute an intelligent scan using AI-driven tool selection and parameter optimization with parallel execution.
 
