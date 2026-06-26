@@ -1112,6 +1112,20 @@ def public_checkout():
         402  {"error": "billing_unavailable"}
         500  {"error": "internal_error"}
     """
+    # Validate request shape before auth — malformed input is rejected regardless
+    # of key presence (leaking "email is invalid" is not a security risk and avoids
+    # a confusing 503 when BILLING_API_KEY is absent in test / dev environments).
+    body = request.get_json(silent=True) or {}
+    tier = body.get("tier")
+    email_raw = (body.get("email") or "").strip().lower()
+    # An empty email is allowed (anonymous checkout — Stripe collects it on the
+    # hosted page). But if a caller *provides* an email, it must be well-formed;
+    # silently nulling a malformed address would proceed to Stripe and surface as
+    # an opaque 500. Reject up front with 400 (consistent with portal_by_email /
+    # public_trial validation).
+    if email_raw and not _EMAIL_RE.match(email_raw):
+        return jsonify({"error": "missing_email", "detail": "A valid email is required."}), 400
+
     # Bug 4: Machine-to-machine auth — always require BILLING_API_KEY.
     # When the key is unset in production, the endpoint must refuse traffic rather
     # than silently accept all requests (previous behaviour when env var was empty).
@@ -1131,16 +1145,6 @@ def public_checkout():
             return jsonify({"error": "unauthorized"}), 401
 
     init_db()
-    body = request.get_json(silent=True) or {}
-    tier = body.get("tier")
-    email_raw = (body.get("email") or "").strip().lower()
-    # An empty email is allowed (anonymous checkout — Stripe collects it on the
-    # hosted page). But if a caller *provides* an email, it must be well-formed;
-    # silently nulling a malformed address would proceed to Stripe and surface as
-    # an opaque 500. Reject up front with 400 (consistent with portal_by_email /
-    # public_trial validation).
-    if email_raw and not _EMAIL_RE.match(email_raw):
-        return jsonify({"error": "missing_email", "detail": "A valid email is required."}), 400
     email: str | None = email_raw or None
     interval = (body.get("interval") or "month").strip().lower()
 
