@@ -152,6 +152,18 @@ function detectProjectType(dir) {
   return found;
 }
 
+// ── update check (fire-and-forget, never blocks) ────────────────────────────────
+async function checkForUpdate(currentVersion) {
+  try {
+    const res = await fetch("https://registry.npmjs.org/sic-security/latest", { signal: AbortSignal.timeout(2000) });
+    const { version } = await res.json();
+    if (version !== currentVersion) {
+      process.stderr.write(`\n  ${dim}[sic] Update available: v${currentVersion} → v${version}${reset}\n`);
+      process.stderr.write(`  ${dim}Run: npm i sic-security@latest${reset}\n\n`);
+    }
+  } catch {} // silent — never block on this
+}
+
 // ── main ────────────────────────────────────────────────────────────────────────
 let pkg;
 try {
@@ -162,6 +174,7 @@ try {
 }
 
 printBanner();
+checkForUpdate(pkg.version);
 
 const PROJECT_DIR = resolveProjectDir();
 const detected = detectProjectType(PROJECT_DIR);
@@ -174,35 +187,32 @@ if (detected.length) {
 }
 log("Run `npx sic-security scan` for an instant code scan (secrets, unsafe patterns, dep CVEs) — no extra tools needed.");
 
-ensureVenv();
-ensureDeps(pkg.version);
-
 // Strip our own flags before handing argv to the launcher.
 const args = process.argv.slice(2).filter((a) => a !== "--reinstall");
 
-// `npx sic-security scan` runs the zero-dependency Python code scanner against the
-// user's codebase and prints findings immediately — no server, no external binaries.
-// Bare `npx sic-security` launches the full dashboard / MCP server.
+// `npx sic-security scan` — runs the zero-dependency Python code scanner against
+// the user's codebase and prints findings immediately (no server, no extra tools).
+// Any other subcommand — direct user to the hosted dashboard.
 const isScan = args[0] === "scan";
 
-let result;
-if (isScan) {
-  log(`Scanning ${PROJECT_DIR} ...`);
-  result = spawnSync(VENV_PYTHON, [SCANNER, PROJECT_DIR, ...args.slice(1)], {
-    cwd: ROOT,
-    stdio: "inherit",
-    env: { ...process.env, SIC_NPX: "1", SIC_PROJECT_DIR: PROJECT_DIR },
-  });
-} else {
-  // The server resolves `dashboard/`, `assets/`, and its sibling modules via
-  // `Path(__file__).parent`, so cwd MUST stay at ROOT for imports to work. The
-  // user's codebase is passed explicitly via SIC_PROJECT_DIR — the server confines
-  // all inspect/spawn-claude operations to that root (see _resolve_spawn_cwd).
-  result = spawnSync(VENV_PYTHON, [LAUNCHER, ...args], {
-    cwd: ROOT,
-    stdio: "inherit",
-    env: { ...process.env, SIC_NPX: "1", SIC_PROJECT_DIR: PROJECT_DIR },
-  });
+if (!isScan) {
+  process.stdout.write(
+    `\n  ${bold}SIC Dashboard${reset}  →  ${red}https://sic.frxncois.com${reset}\n\n` +
+    `  Sign in at the link above to access the full dashboard,\n` +
+    `  85-tool MCP suite, SOC reports, and team features.\n\n` +
+    `  ${dim}To scan your codebase locally:${reset}  npx sic-security scan\n\n`
+  );
+  process.exit(0);
 }
+
+ensureVenv();
+ensureDeps(pkg.version);
+
+log(`Scanning ${PROJECT_DIR} ...`);
+const result = spawnSync(VENV_PYTHON, [SCANNER, PROJECT_DIR, ...args.slice(1)], {
+  cwd: ROOT,
+  stdio: "inherit",
+  env: { ...process.env, SIC_NPX: "1", SIC_PROJECT_DIR: PROJECT_DIR },
+});
 
 process.exit(result.status ?? 1);
