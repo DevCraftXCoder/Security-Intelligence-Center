@@ -1,12 +1,14 @@
 <div align="center">
 
+<img src="assets/sic-logo.png" alt="SIC — Security Intelligence Center" width="180" />
+
 # SIC — Codebase Scanner
 
 ### Free, read-only static analysis for your codebase
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![npm](https://img.shields.io/badge/npx-sic--security-red.svg)](https://www.npmjs.com/package/sic-security)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-3572A5?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
+[![npm](https://img.shields.io/badge/npx-sic--security-e94560?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/sic-security)
 
 **Scan any codebase in one command. No setup, no account, no external tools.**
 
@@ -138,14 +140,17 @@ npx --yes sic-security scan .
 
 ---
 
-## What it skips
+## How it works
 
-The scanner ignores directories that aren't your code: `node_modules`, `.git`,
-`dist`, `.next`, `__pycache__`, `venv`, `build`, `out`, `.cache`, `coverage`,
-`.turbo`, `.wrangler`, `_runs`, `_archive`, and `tests`.
+The scanner is a single Python file (`scan_python.py`) with no third-party
+dependencies. It walks your project tree, skips non-code directories, and runs
+three independent passes. Findings from all passes are merged, deduplicated,
+sorted by severity, and written to a temp JSON file. The path is printed at the
+end of every run.
 
-It also skips its own source file to avoid false positives from its own pattern
-definitions.
+Skipped directories: `node_modules`, `.git`, `dist`, `.next`, `__pycache__`,
+`venv`, `build`, `out`, `.cache`, `coverage`, `.turbo`, `.wrangler`, `_runs`,
+`_archive`, `tests`.
 
 ---
 
