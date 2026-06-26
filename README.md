@@ -2,14 +2,13 @@
 
 # SIC — Codebase Scanner
 
-### Free, read-only static analysis for secrets, unsafe patterns, and dependency CVEs
+### Free, read-only static analysis for your codebase
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![npm](https://img.shields.io/badge/npx-sic--security-red.svg)](https://www.npmjs.com/package/sic-security)
 
-**Scan any codebase for hardcoded secrets, dangerous code patterns, and known
-dependency vulnerabilities — in one command, with zero setup.**
+**Scan any codebase in one command. No setup, no account, no external tools.**
 
 </div>
 
@@ -22,9 +21,7 @@ dependency vulnerabilities — in one command, with zero setup.**
 npx sic-security scan
 ```
 
-That's it. No config file. No account. No API key. The scanner reads your source
-files and prints findings immediately — hardcoded secrets, dangerous patterns, and
-dependency CVEs (when `pip-audit` is available).
+That's it. The scanner walks your source files and prints findings immediately.
 
 ```bash
 # Scan a specific directory:
@@ -45,122 +42,52 @@ python scan_python.py /path/to/your-project
 
 ---
 
-## What it checks
+## What it does
 
-### Hardcoded secrets
+SIC runs three independent passes over your codebase and reports everything it
+finds in one shot:
 
-The scanner looks for secrets embedded directly in source code — the kind that get
-accidentally committed and then live in git history forever.
+**Static code analysis** — flags patterns in your source that are commonly
+exploited, misused, or dangerous in production. Covers injection vectors,
+unsafe deserialization, weak cryptography, debug flags left on, and more. Checks
+`.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.env`, `.yaml`, `.yml`, `.json`, `.toml`,
+`.sh`, and `.bash` files.
 
-| Pattern | Examples caught |
-|---------|----------------|
-| Generic API keys | `api_key = "..."`, `API_KEY="abc123"` (16+ char values) |
-| Secret keys | `secret_key = "..."`, `app_secret = "..."` |
-| Passwords in code | `password = "hunter2"`, `db_pass = "..."` |
-| Auth / access tokens | `auth_token = "..."`, `access_token = "..."` |
-| JWT strings | Long `eyJ...` base64 blobs hardcoded in source |
-| AWS credentials | `AKIA...` access keys |
-| Stripe keys | `sk_live_...`, `sk_test_...`, `pk_live_...`, `rk_live_...` |
-| GitHub tokens | `ghp_...`, `gho_...`, `ghu_...`, `ghs_...`, `ghr_...` |
-| Cloudflare API tokens | `cf_token = "..."`, `cf_api_token = "..."` (30+ chars) |
-| Wrangler secrets | `wrangler_secret = "..."` (CF Workers deploy credentials) |
-| Private key blocks | `-----BEGIN RSA PRIVATE KEY-----` and EC / OPENSSH variants |
-| PostgreSQL URLs | `postgres://user:password@host/db` with embedded credentials |
-| MySQL URLs | `mysql://user:password@host/db` with embedded credentials |
-| Generic database URLs | `DATABASE_URL = "..."`, `DB_URL = "..."`, `CONNECTION_STRING = "..."` |
+**Dependency vulnerability scan** — checks every `requirements*.txt` in your
+project against the Python Advisory Database and reports known CVEs with fix
+versions. Requires `pip-audit` (free, one-line install — see below).
 
-Matching uses targeted regexes — a variable named `api_key_description` won't
-trigger, but `api_key = "abc..."` will.
-
-### Dangerous code patterns
-
-Beyond secrets, the scanner flags patterns that are technically valid but commonly
-exploited, misused, or wrong in production code.
-
-| Pattern | Why it matters |
-|---------|---------------|
-| `eval()` | Executes arbitrary code — common injection vector |
-| `subprocess` with `shell=True` | Shell expansion enables command injection |
-| SQL built by string concat | Classic SQL injection — use parameterized queries |
-| `yaml.load()` without `Loader` | Unsafe deserialization; use `yaml.safe_load()` |
-| `pickle.loads()` | Arbitrary code execution on deserialization of untrusted data |
-| `DEBUG = True` | Exposes stack traces, internal state, and admin panels in production |
-| MD5 for hashing | Broken algorithm — use SHA-256 or better |
-| `assert` for validation | Stripped by Python's `-O` flag; use explicit checks |
-| Open redirect via request params | Unvalidated `request.args` / `request.params` in a redirect call |
-| CORS wildcard | `Access-Control-Allow-Origin: *` lets any origin read credentialed responses |
-
-### Dependency CVEs
-
-When `pip-audit` is installed, the scanner checks every `requirements*.txt` in the
-project against the Python Advisory Database. It reports package name, installed
-version, CVE ID, and fix version for any known vulnerabilities.
-
-```bash
-pip install pip-audit   # enable dependency CVE scanning
-```
-
-Without it, secrets and pattern scanning still run — the dependency check is simply
-skipped with a note in the output.
+**Read-only, local, no telemetry** — the scanner never modifies your files,
+makes network requests, or phones home. Findings stay on your machine.
 
 ---
 
 ## Output
 
-Findings are grouped by severity and printed with file path and line number. Up to
-50 findings are shown in the terminal; the rest appear in the JSON report.
+Findings are grouped by severity and printed with file path and line number.
+Up to 50 findings are shown in the terminal; the rest appear in the JSON report.
 
 ```
 SIC code scan - /path/to/your-project
 6 findings  (2 critical  2 high  1 medium  1 low)
 
-  CRITICAL aws_access_key  config/settings.py:14
-  CRITICAL private_key_block  certs/deploy.pem:1
-  HIGH     hardcoded_password  app/db.py:30
-  HIGH     shell_true  scripts/deploy.py:88
-  MEDIUM   cors_wildcard  api/server.py:140
-  LOW      md5_usage  utils/hash.py:22
+  CRITICAL <pattern>  config/settings.py:14
+  CRITICAL <pattern>  certs/deploy.pem:1
+  HIGH     <pattern>  app/db.py:30
+  HIGH     <pattern>  scripts/deploy.py:88
+  MEDIUM   <pattern>  api/server.py:140
+  LOW      <pattern>  utils/hash.py:22
 
 Full report: /tmp/soc_python_scan_abc123/python-scan.json
 ```
 
-A full JSON report (a flat array of findings) is written for every run, suitable
-for downstream tooling, dashboards, or diff-against-baseline workflows.
-
-### JSON report format
-
-The report file is a flat JSON array — one object per finding:
-
-```json
-[
-  {
-    "name": "aws_access_key",
-    "severity": "critical",
-    "description": "Potential hardcoded secret (aws_access_key) in config/settings.py:14",
-    "file": "config/settings.py",
-    "line": 14
-  },
-  {
-    "name": "shell_true",
-    "severity": "high",
-    "description": "subprocess with shell=True enables shell injection — scripts/deploy.py:88",
-    "file": "scripts/deploy.py",
-    "line": 88
-  }
-]
-```
-
-Each finding has:
-- `name` — machine-readable pattern ID for filtering
-- `severity` — `critical` / `high` / `medium` / `low`
-- `description` — human-readable summary with location
-- `file` — relative path from the scan root
-- `line` — line number (0 for dependency CVEs)
+A full JSON report is written for every run — a flat array of findings, each with
+`name`, `severity`, `description`, `file`, and `line`. Suitable for dashboards,
+ticketing integrations, or diff-against-baseline workflows.
 
 ### Programmatic use
 
-Pass `--json-only` to suppress the human-readable report and print only the JSON
-file path — useful in scripts that parse the output directly:
+Pass `--json-only` to print only the JSON file path — useful in scripts:
 
 ```bash
 python scan_python.py /path/to/project --json-only
@@ -169,11 +96,23 @@ python scan_python.py /path/to/project --json-only
 
 ---
 
+## Optional: dependency CVE scanning
+
+Install `pip-audit` to enable the dependency-vulnerability pass:
+
+```bash
+pip install pip-audit
+```
+
+Without it, the static analysis still runs in full — the dependency check is
+simply skipped with a note in the output.
+
+---
+
 ## Use in CI
 
-Drop into any pipeline — the scanner exits 0 whether or not findings are present,
-so it never blocks your build by default. Pipe the JSON report path to your
-preferred alert or ticketing system.
+The scanner exits 0 whether or not findings are present, so it never blocks your
+build by default.
 
 **GitHub Actions:**
 ```yaml
@@ -199,47 +138,31 @@ npx --yes sic-security scan .
 
 ---
 
-## How it works
+## What it skips
 
-The scanner is a single Python file (`scan_python.py`) with no third-party
-dependencies. It walks your project tree, skips non-code directories, and runs
-three independent passes:
+The scanner ignores directories that aren't your code: `node_modules`, `.git`,
+`dist`, `.next`, `__pycache__`, `venv`, `build`, `out`, `.cache`, `coverage`,
+`.turbo`, `.wrangler`, `_runs`, `_archive`, and `tests`.
 
-1. **Secret scan** — 14 regex patterns across all text files (`.ts`, `.tsx`, `.js`,
-   `.jsx`, `.py`, `.env`, `.yaml`, `.yml`, `.json`, `.toml`, `.sh`, `.bash`)
-2. **Pattern scan** — 10 dangerous code constructs checked line by line
-3. **Dependency scan** — delegates to `pip-audit` if installed; skips gracefully if not
-
-Skipped directories: `node_modules`, `.git`, `dist`, `.next`, `__pycache__`,
-`.venv`, `venv`, `env`, `build`, `out`, `.cache`, `coverage`, `.turbo`,
-`.wrangler`, `_runs`, `_archive`, `tests`.
-
-Findings from all three passes are merged, deduplicated, sorted by severity, and
-written to a temp JSON file. The file path is printed at the end of every run.
-
-**No network calls. No file modifications. No telemetry.**
-Everything runs locally and stays on your machine.
+It also skips its own source file to avoid false positives from its own pattern
+definitions.
 
 ---
 
 ## What it doesn't replace
 
-The scanner is fast and zero-setup — it is not a substitute for:
-
 - **A full SAST tool** (Semgrep, Bandit, CodeQL) for deep dataflow analysis
-- **Secret rotation** — finding a secret in code doesn't revoke it; rotate immediately
 - **Runtime security** — the scanner only sees static source, not runtime behavior
 - **Manual code review** — context matters; some flagged patterns are intentional
 
-Use it as a first-pass filter and a CI guardrail, not as a complete security program.
+Use it as a first-pass filter and a CI guardrail, not a complete security program.
 
 ---
 
 ## Authorized Use
 
-This scanner is read-only and non-destructive. Run it against code you own or are
-authorized to review. Scan output may surface sensitive values (such as hardcoded
-secrets) — treat reports as sensitive and handle them accordingly.
+Run this scanner against code you own or are authorized to review. Scan output
+may surface sensitive values — handle reports accordingly.
 
 See [SECURITY.md](SECURITY.md) for the security policy and responsible-disclosure
 contact.
