@@ -22,7 +22,7 @@ import requests as _requests
 
 from flask import Blueprint, jsonify, redirect, request
 
-from auth import get_session_email, require_auth
+from auth import get_session_email, require_auth, verify_auth_token
 
 from .db import (
     event_already_processed,
@@ -1191,13 +1191,22 @@ def public_checkout():
 
 @billing_bp.post("/portal-by-email")
 def portal_by_email():
-    """Create a Stripe Customer Portal session for a customer identified by email.
+    """Create a Stripe Customer Portal session for the authenticated customer.
 
-    Called from the Next.js proxy (POST /api/sic/portal) — does not require a
-    Flask session. Requires X-Billing-Key header matching BILLING_API_KEY.
+    Called from the Next.js proxy (POST /api/sic/portal). Requires X-Billing-Key
+    header matching BILLING_API_KEY (M2M gate).
+
+    IDOR fix (P1-C): the customer identity is derived ONLY from a verified source —
+    never from a client-supplied body ``email`` (which was an unverified object
+    reference letting any caller open another customer's Stripe portal).  Resolution
+    order, fail-closed:
+        1. An authenticated SIC session (``get_session_email`` — same-origin calls).
+        2. A cryptographically-signed magic-link / session ``token`` in the body,
+           verified via ``verify_auth_token``; the email is taken from its payload.
+    A body ``email`` is ignored entirely.
 
     Body JSON:
-        {"email": "user@example.com", "return_url": "https://..."}
+        {"token": "<signed-token>", "return_url": "https://..."}
 
     Returns:
         200  {"portal_url": "https://billing.stripe.com/..."}
@@ -1217,9 +1226,19 @@ def portal_by_email():
 
     init_db()
     body = request.get_json(silent=True) or {}
-    email = (body.get("email") or "").strip().lower()
+
+    # Derive identity from a verified source only — never the body email.
+    email = (get_session_email() or "").strip().lower()
+    if not email:
+        token = (body.get("token") or "").strip()
+        if token:
+            payload = verify_auth_token(token)
+            if payload:
+                email = (payload.get("email") or "").strip().lower()
     if not email or not _EMAIL_RE.match(email):
-        return jsonify({"error": "missing_email", "detail": "A valid email is required."}), 400
+        return jsonify(
+            {"error": "unauthorized", "detail": "A valid session or token is required."}
+        ), 401
 
     return_url = body.get("return_url") or f"{_base_url()}/sic-payment-success"
     # Restrict return_url to allowed origins to prevent open redirect

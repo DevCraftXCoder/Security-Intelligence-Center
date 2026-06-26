@@ -465,3 +465,79 @@ class TestMissingSicTierDefaultsToCommunity:
         assert sub["status"] == "pending_review", (
             f"Expected status='pending_review' for manual review, got status='{sub['status']}'"
         )
+
+
+# ---------------------------------------------------------------------------
+# 9. Portal IDOR fix (P1-C) — email derived from session/token, never the body
+# ---------------------------------------------------------------------------
+
+
+class TestPortalIdor:
+    """portal-by-email must never mint a Stripe portal from a client body email."""
+
+    _KEY = "test-billing-key"
+    _HDR = {"X-Billing-Key": "test-billing-key"}
+
+    def test_body_email_alone_is_rejected(self, client) -> None:
+        """No session + no token + a victim email in the body -> 401, no portal."""
+        c, _db, _env = client
+        with patch("billing.routes._BILLING_API_KEY", self._KEY), \
+             patch("billing.routes.get_session_email", return_value=""), \
+             patch("billing.routes.create_portal_session") as mock_portal:
+            resp = c.post(
+                "/api/billing/portal-by-email",
+                json={"email": "victim@example.com"},
+                headers=self._HDR,
+            )
+        assert resp.status_code == 401, "body email must not authorize a portal session"
+        mock_portal.assert_not_called()
+
+    def test_token_email_used_body_email_ignored(self, client) -> None:
+        """A valid token mints the portal for the TOKEN's email, not the body email."""
+        c, _db, _env = client
+        with patch("billing.routes._BILLING_API_KEY", self._KEY), \
+             patch("billing.routes.get_session_email", return_value=""), \
+             patch("billing.routes.verify_auth_token", return_value={"email": "owner@example.com"}), \
+             patch("billing.routes.get_subscription", return_value={"stripe_customer_id": "cus_owner"}) as mock_sub, \
+             patch("billing.routes.create_portal_session", return_value=MagicMock(url="https://billing.stripe.com/session/ok")) as mock_portal:
+            resp = c.post(
+                "/api/billing/portal-by-email",
+                json={"token": "valid-token", "email": "victim@example.com"},
+                headers=self._HDR,
+            )
+        assert resp.status_code == 200
+        assert resp.get_json()["portal_url"] == "https://billing.stripe.com/session/ok"
+        # Subscription was looked up for the token's email — never the victim's.
+        mock_sub.assert_called_once_with("owner@example.com")
+        mock_portal.assert_called_once()
+
+    def test_session_email_used_body_email_ignored(self, client) -> None:
+        """An authenticated session mints the portal for the session email."""
+        c, _db, _env = client
+        with patch("billing.routes._BILLING_API_KEY", self._KEY), \
+             patch("billing.routes.get_session_email", return_value="session@example.com"), \
+             patch("billing.routes.get_subscription", return_value={"stripe_customer_id": "cus_sess"}) as mock_sub, \
+             patch("billing.routes.create_portal_session", return_value=MagicMock(url="https://billing.stripe.com/session/sess")) as mock_portal:
+            resp = c.post(
+                "/api/billing/portal-by-email",
+                json={"email": "victim@example.com"},
+                headers=self._HDR,
+            )
+        assert resp.status_code == 200
+        mock_sub.assert_called_once_with("session@example.com")
+        mock_portal.assert_called_once()
+
+    def test_invalid_token_no_session_rejected(self, client) -> None:
+        """An unverifiable token with no session -> 401, no portal."""
+        c, _db, _env = client
+        with patch("billing.routes._BILLING_API_KEY", self._KEY), \
+             patch("billing.routes.get_session_email", return_value=""), \
+             patch("billing.routes.verify_auth_token", return_value=None), \
+             patch("billing.routes.create_portal_session") as mock_portal:
+            resp = c.post(
+                "/api/billing/portal-by-email",
+                json={"token": "forged-token", "email": "victim@example.com"},
+                headers=self._HDR,
+            )
+        assert resp.status_code == 401
+        mock_portal.assert_not_called()

@@ -262,6 +262,17 @@ def _verify_token(token: str) -> dict | None:
         return None
 
 
+def verify_auth_token(token: str) -> dict | None:
+    """Public wrapper over ``_verify_token`` for cross-module token verification.
+
+    Used by the billing portal route to derive a customer's email from a
+    cryptographically-signed magic-link / session token instead of trusting a
+    client-supplied body parameter (IDOR fix P1-C).  Returns the verified
+    payload dict (``email``/``issued_at``/``expires_at``) or ``None``.
+    """
+    return _verify_token(token)
+
+
 # ---------------------------------------------------------------------------
 # Admin allowlist
 # ---------------------------------------------------------------------------
