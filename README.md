@@ -1,6 +1,6 @@
 <div align="center">
 
-# SIC — Code Scanner
+# SIC — Codebase Scanner
 
 ### Free, read-only static analysis for secrets, unsafe patterns, and dependency CVEs
 
