@@ -392,7 +392,7 @@ def scan_rate_limit() -> None:  # type: ignore[return-value]
 
 @app.before_request
 def enforce_tools_tier() -> None:  # type: ignore[return-value]
-    """P0: Gate all /api/tools/* routes at community tier (SIC-FREE-SUB-001)."""
+    """P0: Gate all /api/tools/* routes at team tier (SIC-FREE-SUB-001)."""
     if not request.path.startswith(_TOOLS_RATE_LIMITED_PREFIX):
         return None  # type: ignore[return-value]
     email = _hexstrike_get_session_email()

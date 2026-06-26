@@ -1,6 +1,7 @@
 """guards.py — Shared production startup guards for all SIC entrypoints.
 
-Imported by billing_server.py, hexstrike_server.py, and mcp_server.py.
+Imported by hexstrike_server.py and mcp_server.py.
+billing_server.py has an equivalent inline copy (_production_startup_guards).
 Fails hard (sys.exit(1)) if SIC_ENV=production and required safety vars are missing.
 """
 
