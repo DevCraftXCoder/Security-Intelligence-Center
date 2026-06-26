@@ -1,0 +1,9 @@
+# SIC code scanner — runtime dependencies
+#
+# The scanner runs on the Python standard library alone. There are no required
+# third-party packages.
+#
+# Optional: install pip-audit to additionally surface dependency CVEs for any
+# requirements*.txt files in the scanned project:
+#
+#   pip install pip-audit

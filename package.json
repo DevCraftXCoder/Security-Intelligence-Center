@@ -1,0 +1,41 @@
+{
+  "name": "sic-security",
+  "version": "7.0.0",
+  "description": "SIC free code scanner — read-only static analysis for hardcoded secrets, dangerous patterns, and dependency CVEs. Zero runtime dependencies.",
+  "bin": {
+    "sic": "bin/sic.js"
+  },
+  "files": [
+    "bin/",
+    "scan_python.py",
+    "requirements.txt",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "scan": "node bin/sic.js scan"
+  },
+  "keywords": [
+    "security",
+    "static-analysis",
+    "sast",
+    "secrets-detection",
+    "code-scanner",
+    "vulnerability",
+    "pip-audit"
+  ],
+  "author": "DevCraftXCoder",
+  "license": "MIT",
+  "homepage": "https://github.com/DevCraftXCoder/Security-Intelligence-Center#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DevCraftXCoder/Security-Intelligence-Center.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DevCraftXCoder/Security-Intelligence-Center/issues"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

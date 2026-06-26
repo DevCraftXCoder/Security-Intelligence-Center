@@ -1,0 +1,23 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Scanner output
+_runs/
+*-scan.json
+
+# Env / local
+.env
+.env.*
+!.env.example
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

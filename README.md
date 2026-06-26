@@ -1,115 +1,120 @@
-# Security Intelligence Center
+<div align="center">
 
-![Python](https://img.shields.io/badge/Python_3.8+-3776AB?style=flat&logo=python&logoColor=white)
-![MCP](https://img.shields.io/badge/MCP_Interface-000000?style=flat&logo=anthropic&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker_Sandboxed-2496ED?style=flat&logo=docker&logoColor=white)
-![Local First](https://img.shields.io/badge/Local--First-111111?style=flat&logo=homeassistant&logoColor=white)
+# SIC — Code Scanner
 
-**Penetration testing framework — MCP interface, 85 security tools, 12 specialized agents, Docker-sandboxed execution.**
+### Free, read-only static analysis for secrets, unsafe patterns, and dependency CVEs
 
-> Runs as a local server exposing a REST API and MCP interface for direct integration with Claude, Cursor, or any MCP-compatible client. Connect your toolchain to purpose-built security tooling — recon, exploitation, post-exploitation, bug bounty, CTF — all sandboxed in Docker with IP allowlisting.
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![npm](https://img.shields.io/badge/npx-sic--security-red.svg)](https://www.npmjs.com/package/sic-security)
 
-## Tech Stack
+**Scan any codebase for hardcoded secrets, dangerous code patterns, and known
+dependency vulnerabilities — in one command, with zero setup.**
 
-| Layer | Technology |
-|-------|-----------|
-| Runtime | Python 3.8+ |
-| API | FastAPI (REST + async) |
-| Protocol | MCP (Model Context Protocol) |
-| Sandboxing | Docker with IP allowlisting |
-| Agents | 12 specialized security agents |
-| Tools | 150+ security tools across all phases |
-| Billing | Built-in quota + usage tracking |
+</div>
 
-## Security Agents
+---
 
-| Agent | Domain |
-|-------|--------|
-| Recon Agent | Target enumeration, OSINT, asset discovery |
-| Exploit Agent | Vulnerability exploitation, payload delivery |
-| Post-Exploit Agent | Lateral movement, privilege escalation |
-| Bug Bounty Agent | Scope validation, report generation, triage |
-| CTF Agent | Capture-the-flag challenge automation |
-| Vuln Intel Agent | CVE research, exploitability scoring |
-| OSINT Agent | Open-source intelligence gathering |
-| Network Agent | Port scanning, service fingerprinting |
-| Web Scanner Agent | DAST, injection testing, auth bypass |
-| Forensics Agent | Artifact analysis, log parsing, IR support |
-| Social Engineering Agent | Phishing simulation, pretexting support |
-| Report Agent | Finding consolidation, executive summaries |
-
-## Key Features
-
-- **MCP-native** — integrates with any MCP-compatible client with zero configuration
-- **REST API** — full programmatic access for automation pipelines
-- **Docker sandboxing** — all tool execution isolated, IP allowlisted to home network
-- **12 specialized agents** — each owns a distinct phase of the engagement lifecycle
-- **85 tools** — covers recon through reporting across all engagement types
-- **Billing module** — built-in quota tracking per tool, per agent, per session
-- **Incident tracker** — log findings, track severity, export reports
-- **Local-first** — no cloud dependency, no data leaves your machine
-
-```
-
-## Tool Categories
-
-| Category | Tools | Examples |
-|----------|-------|---------|
-| Recon & OSINT | 30+ | subfinder, amass, theHarvester, shodan |
-| Web Scanning | 25+ | nuclei, nikto, sqlmap, ffuf, feroxbuster |
-| Exploitation | 20+ | metasploit, searchsploit, custom payloads |
-| Network | 20+ | nmap, masscan, nessus integrations |
-| Bug Bounty | 25+ | scope validator, report templates, CVSS calc |
-| CTF | 15+ | pwntools, crypto utils, stego, reversing |
-| Forensics | 15+ | log analysis, artifact extraction, IR tools |
-
-## Installation
-
-**Requires Python 3.8+**
+## Quick Start
 
 ```bash
-# Paying customers — fastest path
-npx sic-security
+# From the root of the project you want to scan:
+npx sic-security scan
+```
 
-# Self-hosted
+That's it. The scanner reads your source files and prints findings immediately —
+hardcoded secrets, dangerous patterns (`eval`, `shell=True`, SQL string-building,
+unsafe YAML/pickle, CORS wildcards, weak hashing, …), and dependency CVEs when
+`pip-audit` is available.
+
+- **No setup** — runs on the Python standard library alone. No build step, no
+  external binaries, no API key, no account.
+- **Read-only** — it never modifies your files, sends packets, or phones home.
+  Findings stay on your machine.
+- **Scan a specific path:**
+  ```bash
+  npx sic-security scan ./path/to/project
+  ```
+
+> **Prerequisite:** Python 3.8+ on your `PATH` (used to run the scanner). Node 14+
+> for the `npx` launcher.
+
+### Run it directly with Python
+
+The scanner is a single self-contained file — you can clone and run it without npm:
+
+```bash
 git clone https://github.com/DevCraftXCoder/Security-Intelligence-Center.git
 cd Security-Intelligence-Center
-python -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements-core.txt               # Linux/Docker: requirements.txt
-cp .env.example .env                               # fill in your values
-python start_server.py                             # → http://localhost:9888
-```
-
-### MCP Setup (Claude Code / Cursor)
-
-```json
-{
-  "mcpServers": {
-    "sic": {
-      "command": "python",
-      "args": ["/path/to/Security-Intelligence-Center/mcp_server.py"]
-    }
-  }
-}
-```
-
-### Required `.env` values
-
-| Variable | Description |
-|----------|-------------|
-| `SIC_SECRET_KEY` | Random secret (min 32 chars) |
-| `SIC_ADMIN_EMAILS` | Your email address |
-| `SIC_BASE_URL` | Public URL of your SIC instance |
-| `RESEND_API_KEY` | Email delivery for magic links |
-
-Run `python sic-audit.py` to verify your setup before starting.
-
-## Health Check
-
-```bash
-curl http://localhost:9888/health
+python scan_python.py /path/to/your-project
 ```
 
 ---
 
-> ⚠️ **Authorized use only.** For penetration testing engagements, CTF competitions, security research, and defensive security. Never use against systems you do not own or have explicit written permission to test.
+## What it checks
+
+| Category | Examples |
+|----------|----------|
+| **Hardcoded secrets** | API keys, passwords, JWTs, AWS/Stripe/GitHub tokens, private-key blocks, database connection strings |
+| **Dangerous patterns** | `eval()`, `shell=True`, SQL built by string concatenation, `yaml.load` without `SafeLoader`, `pickle` loads, `DEBUG=True`, MD5, CORS wildcards, open redirects |
+| **Dependency CVEs** | Known vulnerabilities in `requirements*.txt` (requires `pip-audit`) |
+
+Findings are grouped by severity (critical / high / medium / low) and printed with
+file and line numbers. A full JSON report is also written for programmatic use.
+
+### Optional: dependency CVE scanning
+
+Install `pip-audit` to enable the dependency-vulnerability check:
+
+```bash
+pip install pip-audit
+```
+
+Without it, the secret and dangerous-pattern scans still run — the dependency
+check is simply skipped.
+
+---
+
+## Output
+
+```
+SIC code scan - /path/to/your-project
+4 findings  (1 critical  2 high  1 medium)
+
+  CRITICAL aws_access_key        config/settings.py:12
+  HIGH     hardcoded_password     app/db.py:30
+  HIGH     shell_true             scripts/deploy.py:88
+  MEDIUM   cors_wildcard          api/server.py:140
+
+Full report: <path-to-report>.json
+```
+
+The scanner exits cleanly whether or not findings are present, so it slots into
+pre-commit hooks and CI pipelines.
+
+---
+
+## Use in CI
+
+```bash
+npx --yes sic-security scan
+```
+
+The JSON report path is printed at the end of every run for downstream tooling.
+
+---
+
+## Authorized Use
+
+This scanner is read-only and non-destructive. Run it against code you own or are
+authorized to review. Scan output may surface sensitive values (such as hardcoded
+secrets) — handle reports accordingly.
+
+See [SECURITY.md](SECURITY.md) for the security policy and responsible-disclosure
+contact.
+
+---
+
+## License
+
+[MIT](LICENSE) © DevCraftXCoder
