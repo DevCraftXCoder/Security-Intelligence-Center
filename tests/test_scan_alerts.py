@@ -161,12 +161,16 @@ class TestSendScanAlertMagicLink:
         """Ensure the early-return for auth_link_issued doesn't break other events."""
         import scan_alerts as sa  # noqa: PLC0415
 
-        with patch.dict("os.environ", {"DISCORD_WEBHOOK_URL": "https://discord.example.com/hook"}):
-            _reset_module_caches()
-            with patch("requests.post") as mock_post:
-                sa.send_scan_alert("scan_started", {"target": "example.com"})
-                # Give the daemon thread a moment to run
-                time.sleep(0.05)
+        # Simulate a Team-tier session so the discord_alerts gate opens.
+        # Without a Flask app context current_user_tier() defaults to "community"
+        # (which blocks Discord), so we patch at the feature_gates level.
+        with patch("feature_gates.current_user_tier", return_value="team"):
+            with patch.dict("os.environ", {"DISCORD_WEBHOOK_URL": "https://discord.example.com/hook"}):
+                _reset_module_caches()
+                with patch("requests.post") as mock_post:
+                    sa.send_scan_alert("scan_started", {"target": "example.com"})
+                    # Give the daemon thread a moment to run
+                    time.sleep(0.05)
 
         mock_post.assert_called()
 
