@@ -9398,6 +9398,42 @@ file_manager = FileOperationsManager()
 
 # API Routes
 
+# ---------------------------------------------------------------------------
+# Network Anomaly Detection — community tier (no @require_tier gate)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/network/anomaly/status", methods=["GET"])
+def network_anomaly_status():
+    """Return a summary of recent network anomaly detections.
+
+    Available on all tiers. Community users get 7-day retention.
+    """
+    try:
+        from network_anomaly_detector import get_detector  # noqa: PLC0415
+        return jsonify(get_detector().summary()), 200
+    except Exception as e:
+        logger.error("network_anomaly_status error: %s", e)
+        return jsonify({"error": "internal_error"}), 500
+
+
+@app.route("/api/network/anomaly/events", methods=["GET"])
+def network_anomaly_events():
+    """Return recent anomaly events (up to 50, newest first).
+
+    Available on all tiers. Community users see 7-day window.
+    Query params: ?limit=N (max 50).
+    """
+    try:
+        limit = min(int(request.args.get("limit", 50)), 50)
+        from network_anomaly_detector import get_detector  # noqa: PLC0415
+        return jsonify({"events": get_detector().recent_events(limit=limit)}), 200
+    except (ValueError, TypeError):
+        return jsonify({"error": "invalid limit parameter"}), 400
+    except Exception as e:
+        logger.error("network_anomaly_events error: %s", e)
+        return jsonify({"error": "internal_error"}), 500
+
+
 @app.route("/health", methods=["GET"])
 def health_check():
     """Health check endpoint with comprehensive tool detection"""
