@@ -580,12 +580,14 @@ SYSTEM_COMPONENTS: dict[str, list[dict[str, Any]]] = {
         {
             "id": "llm-model-dos",
             "tag": "MODEL-DOS",
-            "title": "Model Denial of Service — Token / Context Exhaustion",
+            "title": "Model Denial of Service — Context Flooding / Output Amplification / DoW",
             "priority": "p1",
             "description": (
-                "Inputs crafted to maximally consume context window, trigger recursive "
-                "generation, or cause abnormally long inference times — leading to "
-                "high API cost, service degradation, or timeout-based DoS."
+                "Inputs crafted to maximally consume context window (context flooding), "
+                "trigger recursive generation or force abnormally long outputs (output "
+                "amplification), or maximize token generation to inflate API cost "
+                "(Denial of Wallet, DoW — new in LLM04:2025). Leads to service "
+                "degradation, timeout-based DoS, or runaway API spend."
             ),
             "cwe": "CWE-400",
             "owasp": "LLM04:2025",
