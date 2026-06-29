@@ -11,9 +11,9 @@ from threat_catalog import SYSTEM_COMPONENTS, _probe_match, adjudicate_net, buil
 
 
 def test_system_components_has_thirteen_keys() -> None:
-    """SYSTEM_COMPONENTS must contain 13 component entries (12 + app-server)."""
-    assert len(SYSTEM_COMPONENTS) == 13, (
-        f"Expected 13 components, got {len(SYSTEM_COMPONENTS)}: {list(SYSTEM_COMPONENTS)}"
+    """SYSTEM_COMPONENTS must contain 14 component entries (12 + app-server + llm-api)."""
+    assert len(SYSTEM_COMPONENTS) == 14, (
+        f"Expected 14 components, got {len(SYSTEM_COMPONENTS)}: {list(SYSTEM_COMPONENTS)}"
     )
 
 
@@ -165,3 +165,33 @@ def test_adjudicate_net_marks_proven_and_untested() -> None:
     assert statuses[sql_id] == "untested", (
         f"Expected untested for {sql_id}, got {statuses[sql_id]}"
     )
+
+
+def test_llm_api_component_present() -> None:
+    """llm-api must be registered with its 6 threat sections."""
+    assert "llm-api" in SYSTEM_COMPONENTS
+    ids = {s["id"] for s in SYSTEM_COMPONENTS["llm-api"]}
+    assert ids == {
+        "llm-prompt-injection",
+        "llm-output-handling",
+        "llm-model-dos",
+        "llm-sensitive-disclosure",
+        "llm-plugin-design",
+        "llm-model-theft",
+    }
+
+
+def test_llm_api_owasp_fields() -> None:
+    """All llm-api sections must have owasp fields starting with 'LLM'."""
+    for section in SYSTEM_COMPONENTS["llm-api"]:
+        assert section.get("owasp", "").startswith("LLM"), (
+            f"Section {section['id']!r} owasp field must start with 'LLM'"
+        )
+
+
+def test_llm_api_required_fields() -> None:
+    """All llm-api sections must have id, tag, title, priority, cwe, owasp, mitre, probes."""
+    required = {"id", "tag", "title", "priority", "cwe", "owasp", "mitre", "probes"}
+    for section in SYSTEM_COMPONENTS["llm-api"]:
+        missing = required - set(section.keys())
+        assert not missing, f"Section {section.get('id')!r} missing: {missing}"

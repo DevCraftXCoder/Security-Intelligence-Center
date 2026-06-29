@@ -1010,7 +1010,10 @@ class IntelligentDecisionEngine:
                 "objdump": 0.75,
                 "binwalk": 0.8,
                 "pwninit": 0.85  # Great for CTF setup
-            }
+            },
+            "llm-api": {
+                "llm-probe": 0.95,
+            },
         }
 
     def _initialize_technology_signatures(self) -> Dict[str, Dict[str, List[str]]]:
@@ -18076,6 +18079,52 @@ def get_alternative_tools():
     except Exception as e:
         logger.error(f"Error getting alternative tools: {str(e)}")
         return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+@app.route("/api/tools/llm-probe", methods=["POST"])
+@require_tier("team")
+def llm_probe_tool():
+    """LLM security probe — OWASP LLM Top 10 active/passive checks."""
+    try:
+        from llm_probe import LLMProbeEngine, ProbeConfig
+        params = request.json or {}
+        endpoint = params.get("endpoint", "")
+        auth = params.get("auth", "")
+        categories = params.get("categories", [])
+        dry_run = params.get("dry_run", True)
+        confirm_adversarial = params.get("confirm_adversarial", False)
+        experimental = params.get("experimental", False)
+
+        if not endpoint:
+            return jsonify({"error": "endpoint parameter is required"}), 400
+        if not auth:
+            return jsonify({"error": "auth parameter is required"}), 400
+
+        # Scope enforcement — llm endpoint must be in ALLOWED_TARGETS
+        enforcer = get_enforcer()
+        if not enforcer.is_target_allowed(endpoint):
+            return jsonify({"error": f"SCOPE BLOCKED: {endpoint} not in ALLOWED_TARGETS"}), 403
+
+        cfg = ProbeConfig(
+            endpoint=endpoint,
+            auth=auth,
+            categories=categories,
+            dry_run=dry_run,
+            confirm_adversarial=confirm_adversarial,
+            experimental=experimental,
+        )
+        engine = LLMProbeEngine(cfg)
+        result = engine.run_all()
+        return jsonify({
+            "findings": result.findings,
+            "estimated_cost_usd": result.estimated_cost_usd,
+            "payloads_previewed": result.payloads_previewed,
+            "payloads_sent": result.payloads_sent,
+            "dry_run": result.dry_run,
+        })
+    except Exception as exc:
+        logger.error(f"Error in llm-probe endpoint: {exc}")
+        return jsonify({"error": f"Server error: {str(exc)}"}), 500
+
 
 # Create the banner after all classes are defined
 BANNER = ModernVisualEngine.create_banner()

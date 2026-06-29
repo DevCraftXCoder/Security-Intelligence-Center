@@ -170,6 +170,15 @@ def _call_openrouter(api_key: str, title: str, description: str, category: str, 
     if severity:
         user_content += f"Reported severity: {severity}\n"
 
+    # LLM-specific remediation context
+    if category.lower().startswith("llm") or (title or "").lower().startswith("llm"):
+        user_content += (
+            "\nContext: This is an LLM/AI security finding. Remediation should reference "
+            "OWASP LLM Top 10 2025 controls, input/output guardrails, system prompt "
+            "isolation, rate limiting per token budget, and output sanitization "
+            "before downstream sink injection."
+        )
+
     payload = {
         "model": "anthropic/claude-haiku-4-5",
         "max_tokens": 512,
@@ -209,6 +218,15 @@ def _call_anthropic_direct(api_key: str, title: str, description: str, category:
     )
     if severity:
         user_content += f"Reported severity: {severity}\n"
+
+    # LLM-specific remediation context
+    if category.lower().startswith("llm") or (title or "").lower().startswith("llm"):
+        user_content += (
+            "\nContext: This is an LLM/AI security finding. Remediation should reference "
+            "OWASP LLM Top 10 2025 controls, input/output guardrails, system prompt "
+            "isolation, rate limiting per token budget, and output sanitization "
+            "before downstream sink injection."
+        )
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251022",

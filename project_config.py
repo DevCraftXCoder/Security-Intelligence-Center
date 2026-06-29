@@ -497,6 +497,32 @@ def detect_system_profile(path: str) -> dict:
     ):
         _add_component("app-server")
 
+    # LLM / AI API usage
+    LLM_SIGNALS = [
+        r"from openai", r"import openai",
+        r"from anthropic", r"import anthropic",
+        r"langchain",
+        r"openrouter\.ai",
+        r"llm\.frxncois\.workers\.dev",
+        r"chat/completions",
+        r"OPENAI_API_KEY",
+        r"ANTHROPIC_API_KEY",
+        r"OPENROUTER_API_KEY",
+        r"LLM_GATEWAY_KEY",
+        r"model.*gpt-",
+        r"model.*claude-",
+        r"model.*anthropic/",
+    ]
+    # Also scan .env, .env.example, wrangler.toml, .dev.vars
+    _LLM_EXTRA_FILES = [".env", ".env.example", "wrangler.toml", ".dev.vars"]
+    _llm_detected = False
+    for sig in LLM_SIGNALS:
+        if _grep_any(sig) or _grep(sig, *_LLM_EXTRA_FILES):
+            _llm_detected = True
+            break
+    if _llm_detected:
+        _add_component("llm-api")
+
     return {"components": components, "scanners": scanners}
 
 

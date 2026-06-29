@@ -535,6 +535,128 @@ SYSTEM_COMPONENTS: dict[str, list[dict[str, Any]]] = {
             ],
         },
     ],
+    "llm-api": [
+        {
+            "id": "llm-prompt-injection",
+            "tag": "PROMPT-INJECTION",
+            "title": "Prompt Injection — Direct and Indirect",
+            "priority": "p0",
+            "description": (
+                "Attacker-controlled text injected into a prompt overrides the system "
+                "instruction, bypasses guardrails, or causes the model to execute "
+                "unintended actions. Direct: user input in the prompt. Indirect: "
+                "content retrieved from external sources (RAG, tool output, web fetch)."
+            ),
+            "cwe": "CWE-77",
+            "owasp": "LLM01:2025",
+            "mitre": "T1059",
+            "probes": [
+                "prompt injection", "jailbreak", "ignore previous instructions",
+                "system prompt override", "instruction leak", "role confusion",
+                "indirect injection", "rag injection",
+            ],
+            "covered_by": ["llm-probe"],
+        },
+        {
+            "id": "llm-output-handling",
+            "tag": "INSECURE-OUTPUT",
+            "title": "Insecure Output Handling — XSS / SQLi via Model Response",
+            "priority": "p0",
+            "description": (
+                "LLM output rendered directly in HTML, passed to SQL queries, or "
+                "executed as shell commands without sanitisation. An attacker who "
+                "controls the model input can craft output that exploits downstream "
+                "sinks (stored XSS, second-order SQLi, command injection)."
+            ),
+            "cwe": "CWE-116",
+            "owasp": "LLM02:2025",
+            "mitre": "T1059.007",
+            "probes": [
+                "output handling", "unsanitized output", "llm xss",
+                "model response injection", "downstream sink",
+            ],
+            "covered_by": ["llm-probe"],
+        },
+        {
+            "id": "llm-model-dos",
+            "tag": "MODEL-DOS",
+            "title": "Model Denial of Service — Token / Context Exhaustion",
+            "priority": "p1",
+            "description": (
+                "Inputs crafted to maximally consume context window, trigger recursive "
+                "generation, or cause abnormally long inference times — leading to "
+                "high API cost, service degradation, or timeout-based DoS."
+            ),
+            "cwe": "CWE-400",
+            "owasp": "LLM04:2025",
+            "mitre": "T1499.004",
+            "probes": [
+                "model dos", "token exhaustion", "context flood",
+                "recursive generation", "infinite loop prompt", "resource exhaustion",
+            ],
+            "covered_by": ["llm-probe"],
+        },
+        {
+            "id": "llm-sensitive-disclosure",
+            "tag": "SYSPROMPT-LEAK",
+            "title": "Sensitive Information Disclosure — System Prompt / Training Data Leakage",
+            "priority": "p1",
+            "description": (
+                "Model reveals contents of its system prompt, fine-tuning examples, "
+                "or confidential training data through direct request, indirect "
+                "extraction probes, or completion attacks. Verified against a corpus "
+                "of 255 real leaked system prompts."
+            ),
+            "cwe": "CWE-200",
+            "owasp": "LLM06:2025",
+            "mitre": "T1552",
+            "probes": [
+                "system prompt leak", "prompt disclosure", "training data",
+                "confidential instructions", "repeat after me", "reveal your instructions",
+            ],
+            "covered_by": ["llm-probe", "llm-corpus"],
+        },
+        {
+            "id": "llm-plugin-design",
+            "tag": "UNSAFE-PLUGIN",
+            "title": "Insecure Plugin / Tool Design — Unrestricted Tool Execution",
+            "priority": "p1",
+            "description": (
+                "LLM plugins or function-call tools accept raw user-controlled input "
+                "without parameter validation, scope restriction, or confirmation gates. "
+                "Enables an attacker to invoke sensitive operations (file I/O, HTTP "
+                "requests, DB writes) via prompt manipulation."
+            ),
+            "cwe": "CWE-20",
+            "owasp": "LLM07:2025",
+            "mitre": "T1059",
+            "probes": [
+                "unsafe plugin", "unrestricted tool", "tool call injection",
+                "function call abuse", "plugin scope", "tool parameter validation",
+            ],
+            "covered_by": ["llm-probe"],
+        },
+        {
+            "id": "llm-model-theft",
+            "tag": "MODEL-THEFT",
+            "title": "Model Theft / Extraction — Distillation via API Abuse",
+            "priority": "p2",
+            "description": (
+                "Attacker issues systematic, structured queries to replicate model "
+                "behaviour or extract fine-tuning data at scale. Detectable by "
+                "abnormal query volume, parameter sweeps, and low-variance structured "
+                "response patterns."
+            ),
+            "cwe": "CWE-1421",
+            "owasp": "LLM10:2025",
+            "mitre": "T1074",
+            "probes": [
+                "model extraction", "distillation", "api scraping",
+                "query sweep", "model theft", "systematic probing",
+            ],
+            "covered_by": ["llm-probe"],
+        },
+    ],
 }
 
 
