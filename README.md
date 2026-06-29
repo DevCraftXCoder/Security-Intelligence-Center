@@ -9,14 +9,13 @@
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3572A5?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-7c3aed?style=flat-square)](#mcp-integration)
-[![Tools](https://img.shields.io/badge/Security_Tools-85-e94560?style=flat-square)](#mcp-integration)
+[![Tools](https://img.shields.io/badge/Security_Tools-86-e94560?style=flat-square)](#mcp-integration)
 [![Agents](https://img.shields.io/badge/Agents-12%2B-e94560?style=flat-square)](#mcp-integration)
+[![OWASP LLM](https://img.shields.io/badge/OWASP_LLM_Top_10-2025-e94560?style=flat-square)](#owasp-llm-top-10-2025)
 
-**MCP framework with 85 security tools and 12+ specialized agents for authorized penetration testing, CTF challenges, defensive research, and automated SOC reporting.**
+**MCP framework with 86 security tools and 12+ specialized agents for authorized penetration testing, CTF challenges, defensive research, and automated SOC reporting — now including OWASP LLM Top 10 2025 coverage for AI/LLM infrastructure.**
 
 </div>
-
----
 
 ---
 
@@ -256,9 +255,46 @@ Events to subscribe: `checkout.session.completed`, `customer.subscription.update
 
 ---
 
+## OWASP LLM Top 10 2025
+
+SIC now includes a dedicated scanning layer for AI/LLM infrastructure, covering the OWASP LLM Top 10 2025 threat categories.
+
+### Coverage
+
+| OWASP ID | Category | Detection Method |
+|----------|----------|-----------------|
+| LLM01:2025 | Prompt Injection | Active probes — direct and indirect injection payloads |
+| LLM02:2025 | Insecure Output Handling | Output sink analysis — XSS/SQLi/shell patterns in responses |
+| LLM04:2025 | Model Denial of Service | Context flooding, output amplification, Denial of Wallet (DoW) |
+| LLM06:2025 | Sensitive Information Disclosure | Corpus-backed detection — 255 real leaked system-prompt signatures |
+| LLM07:2025 | Insecure Plugin/Tool Design | Passive function-call validation audit |
+| LLM10:2025 | Model Theft / Extraction | Passive endpoint exposure and rate-limit header audit |
+
+### How it works
+
+**Auto-detection** — if a scanned project uses any LLM provider (OpenAI, Anthropic, LangChain, OpenRouter-compatible endpoints), SIC automatically adds the `llm-api` component to the threat profile.
+
+**Active probing** — the `llm-probe` tool sends categorized payloads to LLM endpoints and analyzes responses for compliance, dangerous output patterns, and resource exhaustion signals. All active probes require explicit opt-in; adversarial payloads (LLM01) require an additional confirmation flag.
+
+**Corpus-backed disclosure detection** — LLM06 (system prompt leakage) is verified against a corpus of 255 real leaked system prompts using Jaccard similarity scoring. Marked experimental until the threshold is tuned against production data.
+
+**DoW detection** — LLM04 includes Denial of Wallet detection, a new vector in the 2025 revision: crafted inputs that maximize output token generation to inflate API costs.
+
+**Findings enrichment** — all `llm-*` findings in the SOC report are automatically enriched with OWASP LLM Top 10 2025 remediation guidance: system prompt isolation, input/output guardrails, token budget enforcement, and output sanitization before downstream sinks.
+
+### Safety contract
+
+- Dry-run mode is **on by default** — no payloads are sent without `--no-dry-run`
+- Adversarial probes (LLM01) require `--confirm-adversarial`
+- DoS probes are capped: 500 input tokens, 3 payloads per run, 15s timeout
+- Corpus detection requires `--experimental`
+- All targets must be in the ALLOWED_TARGETS scope list
+
+---
+
 ## MCP Integration
 
-SIC exposes 85 security tools and 12+ specialized agents over MCP. Example tools: `smart-scan`, `nuclei`, `trivy`, `checkov`, `nmap`, `gobuster`, `ffuf`, `sqlmap`, and dedicated CTF, bug bounty, and recon modules.
+SIC exposes 86 security tools and 12+ specialized agents over MCP. Example tools: `smart-scan`, `nuclei`, `trivy`, `checkov`, `nmap`, `gobuster`, `ffuf`, `sqlmap`, `llm-probe`, and dedicated CTF, bug bounty, and recon modules.
 
 All tool calls are sandboxed and scope-validated. Unauthorized targets are rejected at the API layer.
 
